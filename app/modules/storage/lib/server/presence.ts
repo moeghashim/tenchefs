@@ -1,11 +1,11 @@
 import { Array as Arr, Effect, Option, Order, Predicate, Schema, String as Str } from "effect";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import type { Fails } from "./errors.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
 import type { OfflineReason } from "../../../presence/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { offlineReasons } from "../../../presence/index.ts";
 import { unreadable } from "./errors.ts";
@@ -103,15 +103,33 @@ function storedPresenceOf(row: typeof PresenceRow.Type): StoredPresence {
   return { identity: row.identity_name, lastSeenAt: row.last_seen_at, online: row.online === ONLINE, ...endOf(row) };
 }
 
-function sqlitePresence(db: SqliteDatabase): PresenceSection {
+function placeholders(identities: readonly IdentityName[]): string {
+  return Arr.join(
+    Arr.map(identities, () => "?"),
+    ", ",
+  );
+}
+
+const NO_NAME = "NULL";
+
+function postgresPlaceholders(identities: readonly IdentityName[]): string {
+  if (Arr.isReadonlyArrayNonEmpty(identities)) {
+    return placeholders(identities);
+  }
+  return NO_NAME;
+}
+
+const PLACES: DialectForms<(identities: readonly IdentityName[]) => string> = {
+  postgres: postgresPlaceholders,
+  sqlite: placeholders,
+};
+
+function sqlPresence(db: SqlDatabase): PresenceSection {
   return {
     listPresence: (identities) =>
       db
         .all(
-          `SELECT * FROM presence WHERE identity_name IN (${Arr.join(
-            Arr.map(identities, () => "?"),
-            ", ",
-          )}) ORDER BY identity_name`,
+          `SELECT * FROM presence WHERE identity_name IN (${PLACES[db.dialect](identities)}) ORDER BY identity_name`,
           ...identities,
         )
         .pipe(Effect.flatMap(decodeRows), Effect.map(Arr.map(storedPresenceOf))),
@@ -130,4 +148,4 @@ function sqlitePresence(db: SqliteDatabase): PresenceSection {
   };
 }
 
-export { type PresenceSection, type StoredPresence, memoryPresence, sqlitePresence };
+export { type PresenceSection, type StoredPresence, memoryPresence, sqlPresence };

@@ -1,0 +1,3 @@
+export { ATTACHMENTS_MIGRATION, POSTGRES_ATTACHMENTS_MIGRATION } from "./attachments.ts";
+export { POSTGRES_SEARCH_MIGRATION, SEARCH_MIGRATION } from "./search-sqlite.ts";
+export { POSTGRES_TRIGGERS_MIGRATION, TRIGGERS_MIGRATION } from "./triggers.ts";

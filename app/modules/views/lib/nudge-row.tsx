@@ -40,6 +40,7 @@ export function NudgeRow(props: NudgeRowProps): ReactNode {
       displayName={displayName}
       href={hrefOf({ channel: nudge.channel.name, name: "thread", thread: parent.id })}
       level={levelOf(props.unread)}
+      menu={null}
       note={note}
       presence={presence}
       time={time}

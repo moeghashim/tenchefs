@@ -1,7 +1,7 @@
-import { ConversationPanel, ScrollArea } from "../../design-system/index.tsx";
-import { actionsOf, countOf, isMissing } from "./conversation-parts.ts";
-import { ConversationBody } from "./conversation-body.tsx";
+import { actionsOf, isMissing } from "./conversation-parts.ts";
+import { ConversationMessages } from "./conversation-messages.tsx";
 import { ConversationMissing } from "./conversation-missing.tsx";
+import { ConversationPanel } from "../../design-system/index.tsx";
 import type { ConversationProps } from "./conversation-parts.ts";
 import type { ReactNode } from "react";
 import { ReadNote } from "./read-note.tsx";
@@ -36,22 +36,24 @@ export function ConversationView(props: ConversationProps): ReactNode {
       backHref={hrefOf({ name: "inbox", selected: null })}
       backLabel={TEXT.back}
       detail={`#${channel}`}
+      edge={props.edge}
       label={TEXT.conversation}
+      message={draft.replyTo}
       openHref={hrefOf({ channel, name: "thread", thread })}
       openLabel={TEXT.open}
     >
       <ReadNote reader={reader} />
-      <ScrollArea count={countOf(state)} label={TEXT.messages}>
-        <ConversationBody
-          closing={props.board.closing}
-          me={props.me}
-          menu={props.unread.menu}
-          readPosition={readPosition}
-          reply={draft.replyTo}
-          selection={props.unread.selection(props.selected)}
-          state={state}
-        />
-      </ScrollArea>
+      <ConversationMessages
+        closing={props.board.closing}
+        label={TEXT.messages}
+        linked={props.selected.message ?? null}
+        me={props.me}
+        menu={props.unread.menu}
+        readPosition={readPosition}
+        reply={draft.replyTo}
+        selection={props.unread.selection(props.selected)}
+        state={state}
+      />
       <ReplyFooter draft={draft} field={TEXT.reply} focused={false} messages={messages} state={state} />
     </ConversationPanel>
   );

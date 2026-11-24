@@ -1,9 +1,10 @@
 import { DateTime, Effect, Schema } from "effect";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
+import { FALSE, TRUE } from "./adapters/sql-database.ts";
 import { IsoTimeSchema, isoTimeOf } from "../../../time/server.ts";
 import type { NudgeRecord, NudgeRecords, NudgeSources, NudgesSection } from "./nudges.ts";
 import { isNudgeId, nudgeKinds } from "../../../inbox/index.ts";
 import type { IsoTime } from "../../../time/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { isMessageId } from "../../../messages/index.ts";
@@ -67,10 +68,23 @@ function nudgeRows(rows: readonly unknown[]): Fails<readonly NudgeRecord[]> {
 }
 
 const ONLY_ROW = 1;
-const SINCE = `INSERT OR IGNORE INTO nudges_since (id, since) VALUES (${String(ONLY_ROW)}, ?)`;
-const INSERT = `INSERT INTO nudges (thread, recipient, kind, raised_at, read) VALUES (?, ?, ?, ?, 0) RETURNING ${COLUMNS}`;
+const SINCE: DialectForms<string> = {
+  postgres: `INSERT INTO nudges_since (id, since) VALUES (${String(ONLY_ROW)}, ?) ON CONFLICT DO NOTHING`,
+  sqlite: `INSERT OR IGNORE INTO nudges_since (id, since) VALUES (${String(ONLY_ROW)}, ?)`,
+};
+
+function insertSql(dialect: SqlDatabase["dialect"]): string {
+  return `INSERT INTO nudges (thread, recipient, kind, raised_at, read) VALUES (?, ?, ?, ?, ${FALSE[dialect]}) RETURNING ${COLUMNS}`;
+}
+
+const INSERT: DialectForms<string> = { postgres: insertSql("postgres"), sqlite: insertSql("sqlite") };
 const LATEST = `SELECT ${COLUMNS} FROM nudges WHERE id IN (SELECT max(id) FROM nudges GROUP BY thread)`;
-const MARK_READ = "UPDATE nudges SET read = 1 WHERE recipient = ? AND id = ?";
+
+function markReadSql(dialect: SqlDatabase["dialect"]): string {
+  return `UPDATE nudges SET read = ${TRUE[dialect]} WHERE recipient = ? AND id = ?`;
+}
+
+const MARK_READ: DialectForms<string> = { postgres: markReadSql("postgres"), sqlite: markReadSql("sqlite") };
 const OF_RECIPIENT = `SELECT ${COLUMNS} FROM nudges WHERE recipient = ? ORDER BY id`;
 
 function decodeSince(row: unknown): Fails<IsoTime> {
@@ -79,35 +93,35 @@ function decodeSince(row: unknown): Fails<IsoTime> {
   );
 }
 
-function sinceOn(db: SqliteDatabase): Fails<IsoTime> {
+function sinceOn(db: SqlDatabase): Fails<IsoTime> {
   return Effect.gen(function* beginNudges() {
     const now = yield* DateTime.now;
-    yield* db.run(SINCE, isoTimeOf(now));
+    yield* db.run(SINCE[db.dialect], isoTimeOf(now));
     return yield* Effect.flatMap(db.get("SELECT since FROM nudges_since"), decodeSince);
   });
 }
 
-function sqliteRecords(db: SqliteDatabase, since: IsoTime): NudgeRecords {
+function sqlRecords(db: SqlDatabase, since: IsoTime): NudgeRecords {
   return {
     insert: ({ kind, raisedAt, recipient, thread }) =>
-      Effect.flatMap(db.get(INSERT, thread, recipient, kind, raisedAt), nudgeRow),
+      Effect.flatMap(db.get(INSERT[db.dialect], thread, recipient, kind, raisedAt), nudgeRow),
     latestPerThread: Effect.flatMap(db.all(LATEST), nudgeRows),
     markRead: (recipient, ids) =>
-      Effect.forEach(ids, (id) => db.run(MARK_READ, recipient, id), { concurrency: 1, discard: true }),
+      Effect.forEach(ids, (id) => db.run(MARK_READ[db.dialect], recipient, id), { concurrency: 1, discard: true }),
     ofRecipient: (recipient) => Effect.flatMap(db.all(OF_RECIPIENT, recipient), nudgeRows),
     since: Effect.succeed(since),
   };
 }
 
-interface SqliteSources {
-  readonly db: SqliteDatabase;
+interface SqlSources {
+  readonly db: SqlDatabase;
   readonly sources: NudgeSources;
 }
 
-function sqliteNudges({ db, sources }: SqliteSources): Fails<NudgesSection> {
+function sqlNudges({ db, sources }: SqlSources): Fails<NudgesSection> {
   return Effect.map(sinceOn(db), (since) =>
-    nudgesOn({ atomically: db.transaction, identities: sources, messages: sources, records: sqliteRecords(db, since) }),
+    nudgesOn({ atomically: db.transaction, identities: sources, messages: sources, records: sqlRecords(db, since) }),
   );
 }
 
-export { NUDGES_MIGRATION, sqliteNudges };
+export { NUDGES_MIGRATION, sqlNudges };

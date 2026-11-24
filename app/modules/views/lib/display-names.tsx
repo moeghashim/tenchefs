@@ -4,6 +4,7 @@ import { AuthorList } from "./author-list.ts";
 import type { Composer } from "../../composer/index.ts";
 import { DisplayNameField } from "./display-name-field.tsx";
 import type { ReactNode } from "react";
+import { identityList } from "../../board/index.ts";
 
 const TEXT = { own: "Your display name" } as const;
 
@@ -27,8 +28,8 @@ function savedOf(listed: readonly Identity[], name: IdentityName): string | null
 
 export function DisplayNames(props: DisplayNamesProps): ReactNode {
   const { composer, me } = props;
-  const identities = useContext(AuthorList);
-  const listed = useSyncExternalStore(identities.subscribe, identities.snapshot);
+  const store = useContext(AuthorList);
+  const listed = useSyncExternalStore(store.subscribeShowing("identities"), () => identityList(store.snapshot()));
   return (
     <>
       <DisplayNameField

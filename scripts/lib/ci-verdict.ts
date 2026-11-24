@@ -2,6 +2,7 @@ import type { Command, Step } from "./merge-steps.ts";
 import { DONE, run, stop, tail } from "./merge-steps.ts";
 import { field, list, parseJson, text } from "./json.ts";
 import type { CheckRun } from "./check-run.ts";
+import { redJobs } from "./check-run.ts";
 
 interface Polled {
   readonly reran: boolean;
@@ -76,9 +77,7 @@ function othersOn(options: SameCommit, sha: string): readonly Listed[] {
 }
 
 function notGreenJobs(checkRun: CheckRun): readonly string[] {
-  return checkRun.jobs
-    .filter((job) => job.status === COMPLETED && job.conclusion !== GREEN)
-    .map((job) => job.conclusion);
+  return redJobs(checkRun).map((job) => job.conclusion);
 }
 
 function stopped(reason: string): Verdict {

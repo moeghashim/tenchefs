@@ -22,6 +22,7 @@ const HASH_LENGTH = 64;
 const GRILL = channel("grill").name;
 const PAGE = { limit: 10 } as const;
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
+const ONE_WINNER = 1;
 const firstClosing = { closedAt: isoTime("2026-01-02T00:00:00.000Z"), closedBy: identityName("ada") };
 const reopenedAt = isoTime("2026-01-04T00:00:00.000Z");
 const laterClosing = { closedAt: isoTime("2026-01-03T00:00:00.000Z"), closedBy: identityName("grace") };
@@ -76,6 +77,26 @@ it.effect.each(storageLayers)(
       expect(closed).toMatchObject({ changed: true, parent: { ...firstClosing, id: parent.id, replyCount: 1 } });
       expect(again).toStrictEqual({ changed: false, parent: closed.parent });
       expect([thread.parent, page.messages]).toStrictEqual([closed.parent, [closed.parent]]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): two closes of one thread at once, exactly one wins",
+  ({ layer }) =>
+    Effect.gen(function* closesRace() {
+      const { storage } = yield* openStore(layer);
+      yield* storage.createChannel(channel("grill"));
+      const parent = yield* appendTo(storage)(newMessage("grill", "parent"));
+      const reply = yield* appendTo(storage)(newMessage("grill", "reply", { replyTo: parent.id }));
+      const closes = yield* Effect.all(
+        [present(storage.closeThread(parent.id, firstClosing)), present(storage.closeThread(reply.id, laterClosing))],
+        { concurrency: "unbounded" },
+      );
+      const winners = Arr.filter(closes, ({ changed }) => changed);
+      const thread = yield* present(storage.getThread(parent.id));
+
+      expect(winners).toHaveLength(ONE_WINNER);
+      expect(Arr.map(closes, (close) => close.parent)).toStrictEqual([thread.parent, thread.parent]);
     }),
 );
 

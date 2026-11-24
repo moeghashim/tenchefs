@@ -8,6 +8,7 @@ import { useCallback } from "react";
 interface ItemShape {
   readonly asChild: true;
   readonly onSelect?: () => void;
+  readonly disabled?: boolean;
   readonly children: ReactNode;
 }
 
@@ -38,7 +39,7 @@ export function MenuChoice(parts: MenuChoiceParts): ReactNode {
     );
   }
   const item = (
-    <RadixItem asChild onSelect={handleSelect}>
+    <RadixItem asChild disabled={choice.disabled ?? false} onSelect={handleSelect}>
       <div className={MENU_ITEM}>
         {menuIcon(choice.icon)}
         {choice.label}

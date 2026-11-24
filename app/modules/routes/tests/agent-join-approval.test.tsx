@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import type { StartAgentJoinRequest } from "../../sdk/index.ts";
 import { alertSaying } from "./alerts.ts";
-import { createAgentJoinApprovals } from "../../session/index.ts";
+import { createAgentJoinApprovals } from "../../board/index.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
 

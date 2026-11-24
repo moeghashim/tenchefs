@@ -32,6 +32,7 @@ function countingSecrets(live: SecretsService): Effect.Effect<SecretsService> {
     return {
       digest: live.digest,
       hashToken: (issued: Token) => Effect.succeed(tokenHash(`hash:${issued}`)),
+      newAttachmentId: live.newAttachmentId,
       newCallId: Effect.map(next("call_test_"), callId),
       newCommandSecret: Effect.map(next("hmac_test_"), commandSecret),
       newCommandToken: Effect.map(next("cookout_test_"), token),

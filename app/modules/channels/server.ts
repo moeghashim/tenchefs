@@ -3,6 +3,8 @@
  * routes that create, list, get and delete channels. Any identity can create a
  * channel, which subscribes it; only an admin can delete one. The routes sit behind the server's token gate.
  */
+import { Array as Arr, Context, DateTime, Effect, Layer, PubSub } from "effect";
+import { AssetStore, Storage } from "../storage/server.ts";
 import { Caller, requireAdmin } from "../identities/server.ts";
 import {
   ChannelResponseSchema,
@@ -10,7 +12,7 @@ import {
   ListChannelsQuerySchema,
   ListChannelsResponseSchema,
 } from "./lib/server/wire.ts";
-import { Context, DateTime, Effect, Layer, PubSub } from "effect";
+import type { DeletedChannel, StorageUnavailable } from "../storage/server.ts";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { channelPath, channelsPath, isChannelName } from "./index.ts";
 import type { Channel } from "./index.ts";
@@ -18,8 +20,6 @@ import type { IsoTime } from "../time/index.ts";
 import type { Refusal } from "../http/index.ts";
 import type { Route } from "../http/server.ts";
 import type { Scope } from "effect";
-import { Storage } from "../storage/server.ts";
-import type { StorageUnavailable } from "../storage/server.ts";
 import { echoed } from "../http/index.ts";
 import { isoTimeOf } from "../time/server.ts";
 
@@ -55,7 +55,29 @@ interface Publishers {
   readonly deleted: (channel: Channel) => Effect.Effect<boolean>;
 }
 
-function channelsOn(storage: Storage["Service"], publish: Publishers): Omit<ChannelsService, "created" | "deleted"> {
+interface Removal extends DeletedChannel {
+  readonly assets: AssetStore["Service"];
+}
+
+function removeBytes({ assets, attachments, channel }: Removal): Effect.Effect<void> {
+  if (Arr.isReadonlyArrayEmpty(attachments)) {
+    return Effect.void;
+  }
+  function logFailure({ message }: { readonly message: string }): Effect.Effect<void> {
+    return Effect.logError(
+      `The bytes of ${String(attachments.length)} attachments of the deleted channel ${channel.name} couldn't be removed from the asset store (${Arr.join(attachments, ", ")}): ${message}`,
+    );
+  }
+  return assets.remove(attachments).pipe(Effect.catchTag("StorageUnavailable", logFailure));
+}
+
+interface ChannelsNeeds {
+  readonly assets: AssetStore["Service"];
+  readonly publish: Publishers;
+  readonly storage: Storage["Service"];
+}
+
+function channelsOn({ assets, publish, storage }: ChannelsNeeds): Omit<ChannelsService, "created" | "deleted"> {
   return {
     create: (creator, fields) =>
       Effect.gen(function* createChannel() {
@@ -87,10 +109,11 @@ function channelsOn(storage: Storage["Service"], publish: Publishers): Omit<Chan
           return yield* Effect.fail(missingChannel(name));
         }
         const deleted = yield* storage.deleteChannel(name);
-        if (typeof deleted === "object") {
-          return yield* Effect.as(publish.deleted(deleted), deleted);
+        if (typeof deleted !== "object") {
+          return yield* Effect.fail(missingChannel(name));
         }
-        return yield* Effect.fail(missingChannel(name));
+        yield* removeBytes({ assets, ...deleted });
+        return yield* Effect.as(publish.deleted(deleted.channel), deleted.channel);
       }),
   };
 }
@@ -125,7 +148,8 @@ export interface ChannelsService {
   readonly get: (name: string) => Effect.Effect<Channel, Refusal | StorageUnavailable>;
   /**
    * Deletes the channel named `name` and everything in it: its messages and threads, their mentions, follows,
-   * subscriptions, read positions, command calls and pending deliveries. Refuses with 404 `channel_not_found`
+   * attachments, subscriptions, read positions, command calls and pending deliveries. Once that has committed, it
+   * removes the attachments' bytes from the asset store, and only logs a failure to, so the delete stands. Refuses with 404 `channel_not_found`
    * when there is none. Answers the deleted channel.
    */
   readonly remove: (name: string) => Effect.Effect<Channel, Refusal | StorageUnavailable>;
@@ -135,11 +159,12 @@ export class Channels extends Context.Service<Channels, ChannelsService>()(
   "@ai-hero/cookout/channels/server/Channels",
 ) {}
 
-/** `Channels` on the running `Storage`. */
-export const channelsLayer: Layer.Layer<Channels, never, Storage> = Layer.effect(
+/** `Channels` on the running `Storage` and `AssetStore`. */
+export const channelsLayer: Layer.Layer<Channels, never, Storage | AssetStore> = Layer.effect(
   Channels,
   Effect.gen(function* channelsOnStorage() {
     const storage = yield* Storage;
+    const assets = yield* AssetStore;
     const createdHub = yield* PubSub.unbounded<CreatedChannel>();
     const deletedHub = yield* PubSub.unbounded<Channel>();
     const publish: Publishers = {
@@ -147,7 +172,7 @@ export const channelsLayer: Layer.Layer<Channels, never, Storage> = Layer.effect
       deleted: (channel) => PubSub.publish(deletedHub, channel),
     };
     return {
-      ...channelsOn(storage, publish),
+      ...channelsOn({ assets, publish, storage }),
       created: PubSub.subscribe(createdHub),
       deleted: PubSub.subscribe(deletedHub),
     };

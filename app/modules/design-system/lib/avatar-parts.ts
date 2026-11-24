@@ -1,13 +1,14 @@
 interface PresenceShown {
   readonly online: boolean;
   readonly warning: boolean;
+  readonly unreachable: boolean;
   readonly label: string;
   readonly spoken: string;
 }
 
 interface PresenceDotParts extends PresenceShown {
   readonly name: string;
-  readonly place?: "avatar" | "inline";
+  readonly place?: "avatar" | "card" | "inline";
 }
 
 interface AvatarParts {

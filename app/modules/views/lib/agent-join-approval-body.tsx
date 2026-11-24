@@ -1,5 +1,5 @@
 import { Alert, CardBody, Skeleton } from "../../design-system/index.tsx";
-import type { AgentJoinApproval } from "../../session/index.ts";
+import type { AgentJoinApproval } from "../../board/index.ts";
 import { AgentJoinRequestShown } from "./agent-join-request-shown.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

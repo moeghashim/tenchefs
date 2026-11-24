@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect";
 import type { Identity, IdentityName } from "../../../identities/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { nameFitsOwner } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
@@ -54,7 +54,7 @@ function memoryCreateRefusal(
   };
 }
 
-function sqliteCreateRefusal(db: SqliteDatabase): (identity: Identity) => Fails<Option.Option<CreateRefusal>> {
+function sqlCreateRefusal(db: SqlDatabase): (identity: Identity) => Fails<Option.Option<CreateRefusal>> {
   return (identity) =>
     db.get(COUNT_EXISTING, identity.name, ownerOf(identity)).pipe(
       Effect.flatMap((row) => Effect.mapError(Schema.decodeUnknownEffect(ExistingRow)(row), unreadable)),
@@ -64,13 +64,13 @@ function sqliteCreateRefusal(db: SqliteDatabase): (identity: Identity) => Fails<
     );
 }
 
-export { memoryDeactivations, sqliteDeactivations } from "./identity-deactivations.ts";
+export { memoryDeactivations, sqlDeactivations } from "./identity-deactivations.ts";
 
 export {
   type DeleteIdentityResult,
   type IdentityDeletesSection,
   memoryRemoveIdentity,
-  sqliteIdentityDeletes,
+  sqlIdentityDeletes,
 } from "./identity-deletes.ts";
 
-export { type CreateRefusal, memoryCreateRefusal, sqliteCreateRefusal };
+export { type CreateRefusal, memoryCreateRefusal, sqlCreateRefusal };

@@ -12,7 +12,7 @@ const ADMIN = 1;
 const ACTIVE = 0;
 const DEACTIVATED = 1;
 
-const IDENTITY_COLUMNS = "name, kind, owner, admin, created_at, display_name, description, deactivated";
+const IDENTITY_COLUMNS = "name, kind, owner, admin, created_at, display_name, description, deactivated, brought_in_by";
 
 const OwnerColumn = Schema.String.pipe(Schema.refine(isOwner));
 
@@ -20,16 +20,19 @@ const DisplayNameColumn = Schema.String.pipe(Schema.refine(isDisplayName));
 
 const DescriptionColumn = Schema.String.pipe(Schema.refine(isDescription));
 
+const IdentityNameColumn = Schema.String.pipe(Schema.refine(isIdentityName));
+
 const sharedColumns = {
   admin: Schema.Literals([NOT_ADMIN, ADMIN]),
   created_at: IsoTimeSchema,
   deactivated: Schema.Literals([ACTIVE, DEACTIVATED]),
   display_name: Schema.NullOr(DisplayNameColumn),
-  name: Schema.String.pipe(Schema.refine(isIdentityName)),
+  name: IdentityNameColumn,
 };
 
 const HumanRow = Schema.Struct({
   ...sharedColumns,
+  brought_in_by: Schema.optionalKey(Schema.Null),
   description: Schema.optionalKey(Schema.Null),
   kind: Schema.Literal("human"),
   owner: Schema.Null,
@@ -37,6 +40,7 @@ const HumanRow = Schema.Struct({
 
 const AgentRow = Schema.Struct({
   ...sharedColumns,
+  brought_in_by: Schema.NullOr(IdentityNameColumn),
   description: Schema.NullOr(DescriptionColumn),
   kind: Schema.Literal("agent"),
   owner: OwnerColumn,
@@ -58,6 +62,13 @@ function descriptionOf(description: Description | null): { readonly description?
   return { description };
 }
 
+function broughtInByOf(broughtInBy: IdentityName | null): { readonly broughtInBy?: IdentityName } {
+  if (broughtInBy === null) {
+    return {};
+  }
+  return { broughtInBy };
+}
+
 function deactivatedOf(row: typeof IdentityRow.Type): { readonly deactivated?: true } {
   if (row.deactivated === DEACTIVATED) {
     return { deactivated: true };
@@ -76,7 +87,8 @@ function toIdentity(row: typeof IdentityRow.Type): Identity {
   if (row.kind === "human") {
     return { ...fields, kind: "human" };
   }
-  return { ...fields, ...descriptionOf(row.description), kind: "agent", owner: row.owner };
+  const described = { ...fields, ...descriptionOf(row.description) };
+  return { ...described, ...broughtInByOf(row.brought_in_by), kind: "agent", owner: row.owner };
 }
 
 export { AgentRow, type FindIdentity, IDENTITY_COLUMNS, IdentityRow, toIdentity };

@@ -11,6 +11,7 @@ interface Thread {
   readonly poster: CookoutClient;
   readonly reader: CookoutClient;
   readonly parent: Message;
+  readonly mention: Message;
 }
 
 async function threadWithNews(channel: string): Promise<Thread> {
@@ -18,9 +19,13 @@ async function threadWithNews(channel: string): Promise<Thread> {
   const { message: parent } = await poster.createMessage({ channel, text: "Deploy at noon?" });
   await reader.follow(parent.id);
   await reader.ack(parent.id);
-  await poster.createMessage({ channel, replyTo: parent.id, text: `@${channel}-reader look` });
+  const { message: mention } = await poster.createMessage({
+    channel,
+    replyTo: parent.id,
+    text: `@${channel}-reader look`,
+  });
   await poster.createMessage({ channel, replyTo: parent.id, text: "Two" });
-  return { channel, parent, poster, reader };
+  return { channel, mention, parent, poster, reader };
 }
 
 async function openInbox(reader: CookoutClient, hash = "#/inbox"): Promise<() => Promise<void>> {
@@ -53,10 +58,10 @@ interface Look {
 const OPEN: Look = { marker: "", marks: 0 };
 const MARKED: Look = { marker: CLOSED, marks: 1 };
 
-function shownWith({ channel, parent }: Thread, { marker }: Look): readonly unknown[] {
+function shownWith({ channel, mention, parent }: Thread, { marker }: Look): readonly unknown[] {
   return [
     [
-      `#/inbox/${channel}/${String(parent.id)} Mentioned you${channel}-posterreplied in a thread in#${channel}${marker}2 newjust nowre: Deploy at noon?Two`,
+      `#/inbox/${channel}/${String(parent.id)}/messages/${String(mention.id)} Mentioned you${channel}-posterreplied in a thread in#${channel}${marker}2 newjust nowre: Deploy at noon?Two`,
     ],
     ["1 unread", "1 for you"],
   ];

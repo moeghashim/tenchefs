@@ -1,11 +1,17 @@
 import type { LinkParts } from "./parts.ts";
 import type { ReactNode } from "react";
 
-export function HoverAction(parts: LinkParts): ReactNode {
+interface HoverActionParts extends LinkParts {
+  readonly name: string;
+}
+
+export function HoverAction(parts: HoverActionParts): ReactNode {
   return (
     <a
-      className="block rounded-md border bg-background px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm hover:text-foreground focus-visible:text-foreground"
+      aria-label={parts.name}
+      className="block rounded-md border bg-background px-1.5 py-0.5 text-muted-foreground shadow-sm hover:text-foreground focus-visible:text-foreground"
       href={parts.href}
+      title={parts.name}
     >
       {parts.children}
     </a>

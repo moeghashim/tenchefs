@@ -1,4 +1,4 @@
-import type { Channel, ChannelName, CookoutClient, CreateChannelRequest, Refusal } from "../../sdk/index.ts";
+import type { Channel, ChannelName, CreateChannelRequest, Refusal } from "../../sdk/index.ts";
 import { CookoutError, refusalOf } from "../../sdk/index.ts";
 
 type CreationField = "name" | "description";
@@ -25,11 +25,8 @@ interface ChannelCreation {
   readonly create: (created: (name: ChannelName) => void) => void;
 }
 
-type CreationClient = Pick<CookoutClient, "createChannel">;
-
 interface CreationOptions {
-  readonly client: CreationClient;
-  readonly put: (channel: Channel) => void;
+  readonly createChannel: (request: CreateChannelRequest) => Promise<Channel>;
 }
 
 const CLOSED: ChannelCreationSnapshot = { create: { status: "idle" }, description: "", name: "", open: false };
@@ -65,8 +62,7 @@ async function sendAfter(sending: Sending): Promise<void> {
   await sending.previous;
   const { publish, typed } = sending;
   try {
-    const { channel } = await sending.client.createChannel(requestOf(typed));
-    sending.put(channel);
+    const channel = await sending.createChannel(requestOf(typed));
     publish(CLOSED);
     sending.created(channel.name);
   } catch (error: unknown) {
@@ -93,11 +89,10 @@ function createChannelCreation(options: CreationOptions): ChannelCreation {
     create: (created) => {
       publish({ ...current, create: { status: "creating" } });
       queue = sendAfter({
-        client: options.client,
+        createChannel: options.createChannel,
         created,
         previous: queue,
         publish,
-        put: options.put,
         typed: current,
       });
     },

@@ -1,7 +1,7 @@
+import { Array as Arr, Effect } from "effect";
 import type { Storage, StorageUnavailable } from "../../server.ts";
 import { expect, it } from "@effect/vitest";
 import { identityFixture as identity, isoTime, openStore, storageLayers } from "../../../testing/server.ts";
-import { Effect } from "effect";
 import { tokenHash } from "../../../identities/index.ts";
 
 const created = isoTime("2026-01-01T00:00:00.000Z");
@@ -83,5 +83,32 @@ it.effect.each(storageLayers)(
         { identity: agent.name, status: "deactivated" },
         { expiresAt: sessionExpiry, identity: agent.name, issuedAt: before, status: "redeemed" },
       ]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): a join code redeemed twice at once is redeemed once",
+  ({ layer }) =>
+    Effect.gen(function* redeemedOnce() {
+      const { storage } = yield* openStore(layer);
+      yield* withCode(storage);
+      const other = tokenHash("hash:other");
+      const redemptions = yield* Effect.all(
+        [storage.redeemJoinCode(redeem), storage.redeemJoinCode({ ...redeem, sessionHash: other })],
+        { concurrency: "unbounded" },
+      );
+      const uses = yield* Effect.all(
+        [
+          storage.useAgentSession({ hash: sessionHash, now: before }),
+          storage.useAgentSession({ hash: other, now: before }),
+        ],
+        { concurrency: 1 },
+      );
+
+      expect(redemptions).toStrictEqual([
+        { expiresAt: sessionExpiry, identity: agent.name, issuedAt: before, status: "redeemed" },
+        { status: "gone" },
+      ]);
+      expect(Arr.map(uses, ({ status }) => status)).toStrictEqual(["active", "unknown"]);
     }),
 );

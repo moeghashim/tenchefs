@@ -10,7 +10,7 @@ import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
 const NOBODY = 0;
 
-type PresenceClient = Pick<CookoutClient, "presence">;
+type PresenceClient = CookoutClient;
 
 interface Agent {
   readonly name: IdentityName;
@@ -58,6 +58,7 @@ function counting(): Counting {
   const reads: string[] = [];
   return {
     client: {
+      ...adminClient(),
       presence: async () => {
         reads.push("presence");
         const answer = await adminClient().presence();
@@ -70,7 +71,7 @@ function counting(): Counting {
 
 function opened(client: PresenceClient = adminClient()): Opened {
   const hand = handLive();
-  const store = createBoardStore({ client, live: createLive(hand.adapter) });
+  const store = createBoardStore({ client, live: createLive(hand.adapter), url: webTestCookout().url });
   show(store);
   return { hand, store };
 }
@@ -140,13 +141,14 @@ it("a presence event heard while the presence is being read wins over the value 
   const agent = await agentNamed("store-presence-during-bot");
   const during = handLive();
   const client: PresenceClient = {
+    ...adminClient(),
     presence: async () => {
       const answer = await adminClient().presence();
       during.send({ presence: { identity: agent.name, online: true }, type: "presence" });
       return answer;
     },
   };
-  const store = createBoardStore({ client, live: createLive(during.adapter) });
+  const store = createBoardStore({ client, live: createLive(during.adapter), url: webTestCookout().url });
   show(store);
 
   await expect(shown(store, { name: agent.name, online: true })).resolves.toStrictEqual({
@@ -159,7 +161,7 @@ it("presence is read only once a view shows it, and once for any number of reade
   expect.hasAssertions();
 
   const { client, reads } = counting();
-  const store = createBoardStore({ client, live: null });
+  const store = createBoardStore({ client, live: null, url: webTestCookout().url });
   onTestFinished(store.subscribe(vi.fn<() => void>()));
   const before = reads();
   show(store);
@@ -203,6 +205,7 @@ it("a presence read the server refuses leaves nobody's presence known", { timeou
   const refused = createCookoutClient({ env: {}, token: "cookout_not_a_token", url: webTestCookout().url });
   const answered = Promise.withResolvers<null>();
   const client: PresenceClient = {
+    ...adminClient(),
     presence: async () => {
       try {
         const answer = await refused.presence();
@@ -225,7 +228,7 @@ it("a link back while nobody shows presence reads it again only once a view show
 
   const { client, reads } = counting();
   const hand = handLive();
-  const store = createBoardStore({ client, live: createLive(hand.adapter) });
+  const store = createBoardStore({ client, live: createLive(hand.adapter), url: webTestCookout().url });
   store.subscribeShowing("presence")(vi.fn<() => void>())();
   hand.report("down");
   hand.report("up");

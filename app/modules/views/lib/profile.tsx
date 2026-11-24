@@ -17,7 +17,7 @@ interface ProfileProps {
 export function ProfileView(props: ProfileProps): ReactNode {
   useEscapeTo(props.closeHref);
   return (
-    <SidePanel closeHref={props.closeHref} closeLabel={TEXT.close} detail={props.name} label={TEXT.profile}>
+    <SidePanel closeHref={props.closeHref} closeLabel={TEXT.close} detail={props.name} edge={null} label={TEXT.profile}>
       <ProfileBody composer={props.composer} me={props.me} name={props.name} />
     </SidePanel>
   );

@@ -1,13 +1,13 @@
 import type { IdentitySections, SectionsBesideIdentities } from "./identity-section-types.ts";
-import { memoryIdentities, sqliteIdentities } from "./identities.ts";
-import { memoryOfflineAlerts, sqliteOfflineAlerts } from "./offline-alerts.ts";
-import { memoryPresence, sqlitePresence } from "./presence.ts";
+import { memoryIdentities, sqlIdentities } from "./identities.ts";
+import { memoryOfflineAlerts, sqlOfflineAlerts } from "./offline-alerts.ts";
+import { memoryReach, sqlReach } from "./reach-sections.ts";
 import { Effect } from "effect";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { memoryLoginRequests } from "./login-requests-memory.ts";
-import { sqliteIdentityDeletes } from "./identity-owners.ts";
-import { sqliteLoginRequests } from "./login-requests-sqlite.ts";
+import { sqlIdentityDeletes } from "./identity-owners.ts";
+import { sqlLoginRequests } from "./login-requests-sqlite.ts";
 
 type MemoryIdentitySections = ReturnType<typeof memoryIdentities> & SectionsBesideIdentities;
 
@@ -17,7 +17,7 @@ function memoryIdentitySections(state: MemoryState): MemoryIdentitySections {
     findIdentity: identities.findIdentity,
     state,
   });
-  const { dropPresence, ...presence } = memoryPresence(state);
+  const { dropPresence, ...presence } = memoryReach(state);
   const { dropOfflineAlerts, ...offlineAlerts } = memoryOfflineAlerts(state);
   return {
     ...identities,
@@ -41,16 +41,16 @@ function memoryIdentitySections(state: MemoryState): MemoryIdentitySections {
   };
 }
 
-function sqliteIdentitySections(db: SqliteDatabase): IdentitySections {
+function sqlIdentitySections(db: SqlDatabase): IdentitySections {
   return {
-    ...sqliteIdentities(db),
-    ...sqliteIdentityDeletes(db),
-    ...sqliteLoginRequests(db),
-    ...sqlitePresence(db),
-    ...sqliteOfflineAlerts(db),
+    ...sqlIdentities(db),
+    ...sqlIdentityDeletes(db),
+    ...sqlLoginRequests(db),
+    ...sqlReach(db),
+    ...sqlOfflineAlerts(db),
   };
 }
 
 export { memoryIdentityLifecycle } from "./identity-lifecycle-memory.ts";
 
-export { memoryIdentitySections, sqliteIdentitySections };
+export { memoryIdentitySections, sqlIdentitySections };

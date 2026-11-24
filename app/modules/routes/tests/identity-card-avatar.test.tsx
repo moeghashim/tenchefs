@@ -7,6 +7,7 @@ const NAME = "ada";
 
 const CARD: IdentityCardParts = {
   agent: false,
+  broughtInBy: null,
   deactivated: false,
   description: null,
   displayName: null,
@@ -29,7 +30,7 @@ function sourceOf(card: IdentityCardParts): IdentityCardSource {
   };
 }
 
-it("a card for an identity with no presence shows its avatar with no presence dot and no presence words", {
+it("a card for an identity with no presence, drawn where no composer is provided, shows its avatar tile with no presence dot or words, and Message disabled", {
   timeout: 2000,
 }, async () => {
   expect.hasAssertions();
@@ -44,7 +45,7 @@ it("a card for an identity with no presence shows its avatar with no presence do
   act(() => {
     within(container).getByRole("link", { name: NAME }).focus();
   });
-  const card = await screen.findByRole("tooltip");
+  const card = await screen.findByRole("dialog", { name: NAME });
   const lines: string[] = [];
   for (const line of card.querySelectorAll("p")) {
     lines.push(line.textContent);
@@ -54,7 +55,8 @@ it("a card for an identity with no presence shows its avatar with no presence do
     within(card).getByTestId("avatar").dataset["initials"],
     card.querySelector("[data-presence]"),
     lines,
-  ]).toStrictEqual(["A", null, [NAME, "Human"]]);
+    within(card).getByRole("button", { name: "Message" }).hasAttribute("disabled"),
+  ]).toStrictEqual(["A", null, [NAME, "Human"], true]);
 
   unmount();
 });

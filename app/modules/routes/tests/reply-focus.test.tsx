@@ -17,7 +17,7 @@ async function channelWith(channel: string, replies: readonly string[]): Promise
 
 async function focusedBox(): Promise<string | null> {
   const panel = await screen.findByRole("complementary", { name: "Thread" });
-  const box = await within(panel).findByLabelText("Reply");
+  const box = await within(panel).findByRole("textbox", { name: "Reply" });
   await waitFor(() => {
     expect(document.activeElement).toBe(box);
   });

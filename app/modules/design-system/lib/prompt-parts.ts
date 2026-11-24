@@ -5,6 +5,7 @@ interface PromptButtonsParts {
   readonly button: string;
   readonly busyButton: string;
   readonly onCancel: () => void;
+  readonly disabled?: boolean;
 }
 
 interface PromptFormParts extends Parts, PromptButtonsParts {
@@ -42,7 +43,7 @@ interface FieldNotesParts {
 }
 
 interface InputFieldParts extends PromptFieldParts {
-  readonly kind: "text" | "number" | "integer";
+  readonly kind: "text" | "number" | "integer" | "date" | "time";
   readonly value: string;
   readonly onEdit: (value: string) => void;
 }

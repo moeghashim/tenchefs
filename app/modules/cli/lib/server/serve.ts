@@ -3,6 +3,7 @@ import {
   Cause,
   Console,
   Effect,
+  Function,
   Layer,
   Option,
   Predicate,
@@ -13,8 +14,8 @@ import {
 import { Command, Flag } from "effect/cli";
 import { CommandFailed, printLine, refused } from "./output.ts";
 import type { IdentityName, Token } from "../../../identities/index.ts";
-import { SpawnSettings, domainLayers, openRoutes, routes } from "./route-list.ts";
-import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
+import type { ServeStorage, ServedStorage } from "./serve-stores.ts";
+import { SpawnSettings, domainLayers, openRoutes, routes, triggerCallerLive } from "./route-list.ts";
 import {
   adminName,
   adminNameRule,
@@ -25,17 +26,17 @@ import {
   port,
   publicUrl,
 } from "../../../config/server.ts";
+import { chosenAssetStore, servedStorage } from "./serve-stores.ts";
 import { firstAdminName, token } from "../../../identities/index.ts";
 import { httpServer, serverUrl } from "../../../http/server.ts";
 
 import type { AdminNameIsAgent } from "../../../identities/server.ts";
-import type { FileSystem } from "effect";
 import type { Serving } from "../../../http/server.ts";
 import { adminTokenSet } from "../../../identities/server.ts";
 import { requireTokenWithinLimit } from "./gate.ts";
 
 export type ServeLayers = {
-  readonly storage: (path: string) => Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem>;
+  readonly storage: ServeStorage;
   readonly webFolder?: string;
 };
 
@@ -78,9 +79,13 @@ function adminNameIsAgent({
   return refused(agentName);
 }
 
-function storageUnavailable({ message }: Pick<StorageUnavailable, "message">): Effect.Effect<never, CommandFailed> {
-  const unavailable = { code: "storage_unavailable", message };
-  return refused(unavailable);
+function storageUnavailable(
+  redact: (text: string) => string,
+): (failure: { readonly message: string }) => Effect.Effect<never, CommandFailed> {
+  return ({ message }) => {
+    const unavailable = { code: "storage_unavailable", message: redact(message) };
+    return refused(unavailable);
+  };
 }
 
 const isCommandFailed = Schema.is(CommandFailed);
@@ -120,35 +125,50 @@ function firstStackFrame(failure: unknown): string {
   return Option.match(frame, { onNone: () => "", onSome: (line) => ` (${Str.trim(line)})` });
 }
 
-function startFailureLine(cause: Cause.Cause<unknown>): string {
+function startFailureLine(cause: Cause.Cause<unknown>, redact: (text: string) => string): string {
   const failure = Cause.squash(cause);
   let line = `cookout serve failed to start: ${tagOf(failure)}: ${messageOf(failure)}`;
   if (!Cause.hasFails(cause)) {
     line += firstStackFrame(failure);
   }
-  return Str.replaceAll(lineBreaks, " ")(line);
+  return redact(Str.replaceAll(lineBreaks, " ")(line));
 }
 
-function failedToStart<Failure>(cause: Cause.Cause<Failure>): Effect.Effect<never, Failure | CommandFailed> {
-  const alreadyPrinted = Cause.hasInterruptsOnly(cause) || isCommandFailed(Cause.squash(cause));
-  if (alreadyPrinted) {
-    return Effect.failCause(cause);
-  }
-  return Console.error(startFailureLine(cause)).pipe(Effect.andThen(serveFailed));
+function failedToStart(
+  redact: (text: string) => string,
+): <Failure>(cause: Cause.Cause<Failure>) => Effect.Effect<never, Failure | CommandFailed> {
+  return (cause) => {
+    const alreadyPrinted = Cause.hasInterruptsOnly(cause) || isCommandFailed(Cause.squash(cause));
+    if (alreadyPrinted) {
+      return Effect.failCause(cause);
+    }
+    return Console.error(startFailureLine(cause, redact)).pipe(Effect.andThen(serveFailed));
+  };
 }
 
-const runServer = (layers: ServeLayers, listen: Omit<Serving, "webFolder">, database: string) =>
+const startOn = Effect.fnUntraced(function* startOnStorage(
+  layers: ServeLayers,
+  listen: Omit<Serving, "webFolder">,
+  { path, served }: { readonly path: string; readonly served: ServedStorage },
+) {
+  const admin = yield* adminTokenOrRefuse;
+  const name = yield* adminNameOrRefuse;
+  const assets = yield* chosenAssetStore(path);
+  const stores = Layer.merge(layers.storage(served.setting), assets);
+  const server = cookoutServer({ ...listen, ...webFolderOf(layers), adminName: name, adminToken: admin });
+  const services = yield* Layer.build(Layer.provide(server, stores).pipe(Layer.provide(triggerCallerLive))).pipe(
+    Effect.catchTags({ AdminNameIsAgent: adminNameIsAgent, StorageUnavailable: storageUnavailable(served.redact) }),
+  );
+  const url = yield* serverUrl.pipe(Effect.provideContext(services));
+  yield* printLine({ database: served.database, listening: url });
+});
+
+const runServer = (layers: ServeLayers, listen: Omit<Serving, "webFolder">, path: string) =>
   Effect.gen(function* () {
-    const admin = yield* adminTokenOrRefuse;
-    const name = yield* adminNameOrRefuse;
-    const services = yield* Layer.build(
-      cookoutServer({ ...listen, ...webFolderOf(layers), adminName: name, adminToken: admin }).pipe(
-        Layer.provide(layers.storage(database)),
-      ),
-    ).pipe(Effect.catchTags({ AdminNameIsAgent: adminNameIsAgent, StorageUnavailable: storageUnavailable }));
-    const url = yield* serverUrl.pipe(Effect.provideContext(services));
-    yield* printLine({ database, listening: url });
-  }).pipe(Effect.catchCause(failedToStart), Effect.andThen(Effect.never), Effect.scoped);
+    const served = yield* servedStorage(path).pipe(Effect.catchCause(failedToStart(Function.identity)));
+    const started = startOn(layers, listen, { path, served });
+    yield* Effect.catchCause(started, failedToStart(served.redact));
+  }).pipe(Effect.andThen(Effect.never), Effect.scoped);
 
 export const serveCommand = (layers: ServeLayers) =>
   Command.make(
@@ -156,7 +176,7 @@ export const serveCommand = (layers: ServeLayers) =>
     {
       db: Flag.String("db").pipe(
         Flag.withFallbackConfig(databasePath),
-        Flag.withDescription("The SQLite file (COOKOUT_DB)."),
+        Flag.withDescription("The SQLite file (COOKOUT_DB), when DATABASE_URL is unset."),
       ),
       host: Flag.String("host").pipe(
         Flag.withFallbackConfig(host),
@@ -169,4 +189,4 @@ export const serveCommand = (layers: ServeLayers) =>
       ),
     },
     (flags) => runServer(layers, { host: flags.host, port: flags.port, publicUrl: flags.publicUrl }, flags.db),
-  ).pipe(Command.withDescription("Start the cookout server on SQLite."));
+  ).pipe(Command.withDescription("Start the cookout server, on Postgres at DATABASE_URL or else SQLite."));

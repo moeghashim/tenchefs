@@ -1,3 +1,4 @@
+import { ATTACHMENTS_MIGRATION, SEARCH_MIGRATION, TRIGGERS_MIGRATION } from "./feature-migrations.ts";
 import { DEACTIVATED_QUIET_AGENTS_MIGRATION, DEACTIVATION_OFFERS_MIGRATION } from "./deactivation-offers-sqlite.ts";
 import { Effect, FileSystem, Schema } from "effect";
 import { NUDGES_MIGRATION } from "./nudges-sqlite.ts";
@@ -194,6 +195,32 @@ const migrations: readonly string[] = [
   `ALTER TABLE message_id_sequence ADD COLUMN latest_created_at TEXT;
    UPDATE message_id_sequence SET latest_created_at = (SELECT max(created_at) FROM messages);`,
   DEACTIVATED_QUIET_AGENTS_MIGRATION,
+  SEARCH_MIGRATION,
+  "ALTER TABLE identities ADD COLUMN brought_in_by TEXT;",
+  ATTACHMENTS_MIGRATION,
+  `CREATE TABLE scheduled_messages (
+     id INTEGER PRIMARY KEY,
+     channel TEXT NOT NULL REFERENCES channels (name),
+     creator TEXT NOT NULL REFERENCES identities (name),
+     text TEXT NOT NULL,
+     cron TEXT,
+     run_at TEXT,
+     time_zone TEXT NOT NULL,
+     status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'finished')),
+     paused_because TEXT CHECK (paused_because IN ('creator_deactivated')),
+     runs_from TEXT NOT NULL,
+     last_run_due TEXT,
+     last_run_outcome TEXT CHECK (last_run_outcome IN ('posted', 'skipped')),
+     last_run_message INTEGER,
+     created_at TEXT NOT NULL,
+     updated_at TEXT NOT NULL,
+     deleted_at TEXT,
+     CHECK ((cron IS NULL) <> (run_at IS NULL))
+   ) STRICT;
+   CREATE INDEX scheduled_messages_by_channel ON scheduled_messages (channel, id);
+   CREATE INDEX scheduled_messages_by_creator ON scheduled_messages (creator);
+   ALTER TABLE messages ADD COLUMN scheduled_message_id INTEGER;`,
+  TRIGGERS_MIGRATION,
 ];
 
 const UserVersionRow = Schema.Struct({ user_version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)) });

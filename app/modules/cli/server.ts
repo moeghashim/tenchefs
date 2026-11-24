@@ -13,12 +13,18 @@
  *
  * Any other failure before `serve` is listening, such as a port in use or a bad setting, prints one stderr line,
  * `cookout serve failed to start: <tag>: <message>`, plus the first stack frame for a defect, and exits 1
- * (mattpocock/cookout#261). A bad setting's line names the variable and its rule, never its value.
+ * (mattpocock/cookout#261). A bad setting's line names the variable and its rule, never its value. `serve` keeps
+ * its data in Postgres when `DATABASE_URL` is set, and else in the SQLite file at `COOKOUT_DB` (`--db`); its startup
+ * line `{ database, listening }` and every failure line show a Postgres database only as
+ * `postgres://<host>/<database name>`, never its password (mattpocock/cookout#336).
  *
  * Every verb but `serve`, `join`, `login` and `logout` sends one credential. Inside a harness it is the first of:
  * the agent session token in `COOKOUT_SESSION`, the agent session this harness session joined, and `COOKOUT_TOKEN`;
  * with none of them, it is refused with `not_joined`. Outside one it is the first of `COOKOUT_TOKEN`,
  * `COOKOUT_SESSION` and the Login (mattpocock/cookout#150). `whoami` says on stderr when it ignored `COOKOUT_TOKEN`.
+ * With `COOKOUT_AUTH=proxy`, a proxy adds the credential (a cloud session's network proxy adds `Authorization:
+ * Bearer`), so they send no token at all, still name the harness, and `whoami`'s `source` is `proxy`; any other
+ * `COOKOUT_AUTH` is refused with `usage` (mattpocock/cookout#340).
  *
  * `join` runs inside a harness session (Claude Code's `CLAUDE_CODE_SESSION_ID`, which its subagents share) and
  * keeps the agent session token it was issued in a state file for that session and server, under

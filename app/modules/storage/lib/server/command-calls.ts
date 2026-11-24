@@ -2,10 +2,10 @@ import type { AppendMessageResult, MessagesSection, NewMessage } from "./message
 import type { CommandTokensSection, StoredCommandToken } from "./command-tokens.ts";
 import type { DeliveriesSection, StoredDelivery } from "./deliveries.ts";
 import { Effect } from "effect";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
-import { sqliteCommandTokens } from "./command-tokens.ts";
-import { sqliteDeliveries } from "./deliveries.ts";
+import { sqlCommandTokens } from "./command-tokens.ts";
+import { sqlDeliveries } from "./deliveries.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
@@ -23,8 +23,8 @@ type CallParts = Pick<MessagesSection, "appendMessage"> &
   Pick<CommandTokensSection, "addCommandToken"> &
   Pick<DeliveriesSection, "addDelivery">;
 
-interface SqliteCallParts {
-  readonly db: SqliteDatabase;
+interface SqlCallParts {
+  readonly db: SqlDatabase;
   readonly appendMessage: CallParts["appendMessage"];
 }
 
@@ -49,11 +49,11 @@ function memoryCommandCalls(parts: CallParts): CommandCallsSection {
   return { appendCommandCall: storeCall(parts) };
 }
 
-function sqliteCommandCalls({ appendMessage, db }: SqliteCallParts): CommandCallsSection {
-  const { addCommandToken } = sqliteCommandTokens(db);
-  const { addDelivery } = sqliteDeliveries(db);
+function sqlCommandCalls({ appendMessage, db }: SqlCallParts): CommandCallsSection {
+  const { addCommandToken } = sqlCommandTokens(db);
+  const { addDelivery } = sqlDeliveries(db);
   const store = storeCall({ addCommandToken, addDelivery, appendMessage });
   return { appendCommandCall: (call) => db.transaction(store(call)) };
 }
 
-export { type CommandCallsSection, type NewCommandCall, memoryCommandCalls, sqliteCommandCalls };
+export { type CommandCallsSection, type NewCommandCall, memoryCommandCalls, sqlCommandCalls };

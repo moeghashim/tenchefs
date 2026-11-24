@@ -2,7 +2,7 @@ import { Effect, Layer, Redacted, Ref, String as Str } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { Mac, SecureRandom } from "effect/crypto";
 import { expect, it } from "@effect/vitest";
-import { handlerServer, handlerUrl } from "../../server.ts";
+import { handlerListener, handlerUrl, serveHandler } from "../../server.ts";
 import { Hex } from "effect/encoding";
 
 interface Answer {
@@ -17,6 +17,7 @@ const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
 const NOT_FOUND = 404;
 const TOO_LARGE = 413;
+const ANY_FREE_PORT = { host: "127.0.0.1", port: 0 };
 const ONCE = 1;
 const TWICE = 2;
 const OVER_TWO_MEBIBYTES = 2_097_153;
@@ -48,13 +49,11 @@ function signatureOf(body: string, secret: string): Effect.Effect<string> {
 function deliver(body: string, headers: Readonly<Record<string, string>>, times = ONCE): Effect.Effect<Answer> {
   return Effect.gen(function* deliverWebhook() {
     const received = yield* Ref.make<readonly unknown[]>([]);
-    const server = handlerServer({
+    const server = serveHandler({
       cookoutUrl: "http://127.0.0.1:9",
-      host: "127.0.0.1",
       onCall: (accepted) => Ref.update(received, (before) => [...before, accepted]),
-      port: 0,
       secret: Redacted.make(SECRET),
-    });
+    }).pipe(Layer.provideMerge(handlerListener(ANY_FREE_PORT)));
     const response = yield* Effect.gen(function* send() {
       const url = yield* handlerUrl;
       const post = HttpClientRequest.post(`${url}/webhook`).pipe(
@@ -70,13 +69,11 @@ function deliver(body: string, headers: Readonly<Record<string, string>>, times 
 }
 
 function statusOf(path: string): Effect.Effect<number> {
-  const server = handlerServer({
+  const server = serveHandler({
     cookoutUrl: "http://127.0.0.1:9",
-    host: "127.0.0.1",
     onCall: () => Effect.void,
-    port: 0,
     secret: Redacted.make(SECRET),
-  });
+  }).pipe(Layer.provideMerge(handlerListener(ANY_FREE_PORT)));
   return Effect.gen(function* getPath() {
     const url = yield* handlerUrl;
     const response = yield* HttpClient.get(`${url}${path}`);

@@ -34,17 +34,17 @@ import type {
   ListIdentitiesQuery,
   ListIdentitiesResponse,
 } from "../identities/index.ts";
-import type { EventStream, WatchOptions } from "./lib/events.ts";
 import type {
+  CreateMessageRequest,
   ListMessagesQuery,
   ListMessagesResponse,
   MessageId,
   MessageResponse,
-  PostMessageRequest,
   ReactionName,
   ReactionsResponse,
   ThreadResponse,
 } from "./lib/messages.ts";
+import type { EventStream, WatchOptions } from "./lib/events.ts";
 import { eventCalls, eventOf } from "./lib/events.ts";
 import type { CallGroups } from "./lib/identities.ts";
 import type { HealthResponse } from "../http/index.ts";
@@ -149,9 +149,9 @@ export type CookoutClient = CallGroups &
     /**
      * `POST /v1/messages`: a top-level message, or a reply with `replyTo` (a reply to a reply joins the parent's thread).
      * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`. With `close`,
-     * the reply also closes its thread in one step.
+     * the reply also closes its thread.
      */
-    readonly createMessage: (request: PostMessageRequest) => Promise<MessageResponse>;
+    readonly createMessage: (post: CreateMessageRequest) => Promise<MessageResponse>;
     /**
      * `GET /v1/channels/:name/messages`: the channel's top-level messages, oldest first: the newest `limit` (default 50),
      * or those before `before`. Page back by passing the first message's ID as `before` while `hasMore` is true.

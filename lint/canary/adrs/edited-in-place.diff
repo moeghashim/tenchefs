@@ -1,7 +1,7 @@
-diff --git a/docs/adr/0048-message-text-is-markdown-rendered-by-react-markdown.md b/docs/adr/0048-message-text-is-markdown-rendered-by-react-markdown.md
-index 73806291..6a8f3a34 100644
---- a/docs/adr/0048-message-text-is-markdown-rendered-by-react-markdown.md
-+++ b/docs/adr/0048-message-text-is-markdown-rendered-by-react-markdown.md
-@@ -13 +13 @@
--- Inbox rows keep their plain-text preview through `MentionText`.
-+- One-line previews (an Inbox row's text and its thread context) show a plain-text summary (mattpocock/cookout#158).
+diff --git a/docs/adr/0055-read-receipts-come-from-the-read-position.md b/docs/adr/0055-read-receipts-come-from-the-read-position.md
+index 02fe0f15..6a8f3a34 100644
+--- a/docs/adr/0055-read-receipts-come-from-the-read-position.md
++++ b/docs/adr/0055-read-receipts-come-from-the-read-position.md
+@@ -11 +11 @@
+-- **One live event.** Each newly recorded receipt is sent as a `read-receipt` event on the all-channels feed, since everyone on the board sees receipts (Q3).
++- **One live event per channel.** Each newly recorded receipt is sent as a `read-receipt` event on its own channel feed.

@@ -1,4 +1,7 @@
+import { changesetMissing, packageShips } from "./lib/changesets.ts";
 import { existsSync, readFileSync } from "node:fs";
+import type { Change } from "./lib/changesets.ts";
+import { MIGRATION_LISTS } from "./lib/migration-lists.ts";
 import type { SpawnSyncReturns } from "node:child_process";
 import { adrEdits } from "./lib/adr-append-only.ts";
 import { duplicateNumbers } from "./lib/adr-numbers.ts";
@@ -93,7 +96,7 @@ function givenBase(): string {
   return flag.slice(BASE_FLAG.length);
 }
 
-function adrBase(): string {
+function comparedBase(): string {
   const given = givenBase();
   if (given !== "") {
     return given;
@@ -117,7 +120,7 @@ function originalLines(file: string): readonly string[] {
 }
 
 function appendOnlyAdrs(): readonly string[] {
-  const base = adrBase();
+  const base = comparedBase();
   const changed = git(["diff", "--name-only", "--no-renames", "--diff-filter=M", base, "--", ADRS]);
   const diff = git(["diff", "--no-renames", "--unified=0", "--no-color", base, "--", ADRS]);
   return adrEdits({
@@ -127,25 +130,54 @@ function appendOnlyAdrs(): readonly string[] {
   });
 }
 
-const MIGRATIONS = "app/modules/storage/lib/server/migrations.ts";
+function headList(file: string): string {
+  if (!existsSync(file)) {
+    return "";
+  }
+  return readFileSync(file, "utf8");
+}
+
+function deployedList(tag: string, file: string): readonly string[] {
+  if (!git(["ls-tree", "--name-only", tag, "--", file]).includes(file)) {
+    return [];
+  }
+  const shown = spawnSync("git", ["show", `${tag}:${file}`], GIT_OUTPUT);
+  if (failed(shown)) {
+    return [`git show ${tag}:${file} failed: ${shown.stderr}`];
+  }
+  return migrationsInserted({ base: shown.stdout, baseName: tag, file, head: headList(file) });
+}
 
 function deployedMigrations(): readonly string[] {
-  const [tag = ""] = git(["tag", "--list", "deploy/*", "--sort=-creatordate"]);
+  const [tag = ""] = git(["tag", "--list", "deploy/*", "--merged", "HEAD", "--sort=-creatordate"]);
   if (tag === "") {
     return [
-      "found no deploy/* tag, so can't check the migrations list against production's. Run git fetch --tags; the Deploy workflow tags each deployed commit deploy/<short-sha>.",
+      "found no deploy/* tag that HEAD contains, so can't check the migrations list against production's. Run git fetch --tags; the Deploy workflow tags each deployed commit deploy/<short-sha>.",
     ];
   }
-  const shown = spawnSync("git", ["show", `${tag}:${MIGRATIONS}`], GIT_OUTPUT);
-  if (failed(shown)) {
-    return [`git show ${tag}:${MIGRATIONS} failed: ${shown.stderr}`];
+  return MIGRATION_LISTS.flatMap((file) => deployedList(tag, file));
+}
+
+const MERGE_PARENTS_LINE = 3;
+
+function isMergeOnV1(): boolean {
+  const [mergeBase = ""] = git(["merge-base", "HEAD", "origin/v1"]);
+  const headAndParents = git(["rev-list", "--parents", "--max-count=1", "HEAD"]).join(" ").split(" ");
+  const [head] = headAndParents;
+  return head === mergeBase && headAndParents.length >= MERGE_PARENTS_LINE;
+}
+
+function change(line: string): Change {
+  const [status = "", file = ""] = line.split("\t");
+  return { file, status };
+}
+
+async function changesets(): Promise<readonly string[]> {
+  if (isMergeOnV1()) {
+    return [];
   }
-  return migrationsInserted({
-    base: shown.stdout,
-    baseName: tag,
-    file: MIGRATIONS,
-    head: readFileSync(MIGRATIONS, "utf8"),
-  });
+  const changes = git(["diff", "--name-status", "--no-renames", comparedBase(), "HEAD"]).map((line) => change(line));
+  return changesetMissing({ changes, ships: await packageShips() });
 }
 
 const failures = [
@@ -157,6 +189,7 @@ const failures = [
   ...adrNumbers(),
   ...appendOnlyAdrs(),
   ...deployedMigrations(),
+  ...(await changesets()),
 ];
 for (const failure of failures) {
   console.error(`hygiene: ${failure}`);

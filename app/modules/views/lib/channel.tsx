@@ -1,10 +1,10 @@
-import type { Board, ChannelMessagesState } from "../../board/index.ts";
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
-import { Pane, PaneHeader, ScrollArea } from "../../design-system/index.tsx";
+import { Pane, PaneHeader } from "../../design-system/index.tsx";
+import type { Board } from "../../board/index.ts";
+import { ChannelFeed } from "./channel-feed.tsx";
+import type { ChannelFeedProps } from "./channel-feed.tsx";
 import type { Composer } from "../../composer/index.ts";
 import { MessageFooter } from "./message-footer.tsx";
-import { MessageRows } from "./message-rows.tsx";
-import type { MessageRowsProps } from "./message-rows.tsx";
 import { NotBuiltView } from "./not-built.tsx";
 import type { ReactNode } from "react";
 import { SubscriptionRefusal } from "./subscription-refusal.tsx";
@@ -12,8 +12,6 @@ import { SubscriptionToggle } from "./subscription-toggle.tsx";
 import { useSyncExternalStore } from "react";
 
 const TEXT = { missing: "No channel has this name.", nothing: "Nothing here" } as const;
-
-const NONE = 0;
 
 interface ChannelProps {
   readonly board: Board;
@@ -25,7 +23,7 @@ interface ChannelProps {
   };
   readonly me: string;
   readonly open: MessageId | null;
-  readonly unread: MessageRowsProps["unread"];
+  readonly unread: ChannelFeedProps["unread"];
 }
 
 function useDescription(board: Board, name: ChannelName): string | null {
@@ -39,13 +37,6 @@ function useDescription(board: Board, name: ChannelName): string | null {
     }
   }
   return null;
-}
-
-function countOf(state: ChannelMessagesState): number {
-  if (state.status !== "loaded") {
-    return NONE;
-  }
-  return state.messages.length;
 }
 
 export function ChannelView(props: ChannelProps): ReactNode {
@@ -66,22 +57,22 @@ export function ChannelView(props: ChannelProps): ReactNode {
         )}
       </PaneHeader>
       <SubscriptionRefusal channel={props.channel} state={subscribed} />
-      <ScrollArea count={countOf(state)} label={`Messages in #${props.channel}`}>
-        <MessageRows
-          closing={props.board.closing}
-          channel={props.channel}
-          me={props.me}
-          messages={messages}
-          open={props.open}
-          state={state}
-          readPosition={readPosition}
-          unread={props.unread}
-        />
-      </ScrollArea>
+      <ChannelFeed
+        closing={props.board.closing}
+        channel={props.channel}
+        me={props.me}
+        messages={messages}
+        open={props.open}
+        state={state}
+        readPosition={readPosition}
+        unread={props.unread}
+      />
       <MessageFooter
         commands={props.board.commands}
+        channel={props.channel}
         draft={props.composer.channelDraft(props.channel)}
         messages={messages}
+        scheduling={props.board.scheduling}
         state={state}
       />
     </Pane>

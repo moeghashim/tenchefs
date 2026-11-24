@@ -1,48 +1,112 @@
+import {
+  AssetStore,
+  StorageUnavailable,
+  diskAssetStore,
+  memoryStorage,
+  sqliteStorage,
+} from "../../../storage/server.ts";
 import { Context, Effect, Layer } from "effect";
 import type { FileSystem, Path, Scope } from "effect";
-import { freshDatabasePath, unusableStorage } from "./storage.ts";
-import { memoryStorage, sqliteStorage } from "../../../storage/server.ts";
+import {
+  ScriptedTriggers,
+  scriptedTriggers,
+  unusedScriptedTriggers,
+  webhookFake,
+} from "../../../webhook-fake/server.ts";
+import {
+  deactivatedMidRunStorage,
+  editedMidRunStorage,
+  freshDatabasePath,
+  memoryAssets,
+  pausedMidRunStorage,
+  unusableStorage,
+} from "./storage.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import type { Storage } from "../../../storage/server.ts";
 import type { Token } from "../../../identities/index.ts";
+import type { TriggerCaller } from "../../../triggers/server.ts";
 import type { WebhookFake } from "../../../webhook-fake/server.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
 import { secretsOf } from "./secrets.ts";
-import { webhookFake } from "../../../webhook-fake/server.ts";
+import { triggerCallerLive } from "../../../triggers/server.ts";
 
-type StorageKind = "memory" | "unusable" | "sqlite";
+type StorageKind = "memory" | "unusable" | "sqlite" | "paused-mid-run" | "deactivated-mid-run" | "edited-mid-run";
 
 interface BackingOptions {
   readonly storage?: StorageKind;
   readonly secrets?: "test" | "live";
+  readonly triggers?: "receiver" | "scripted";
+  readonly assets?: "failing-removes";
 }
 
-type StorageFactory = Effect.Effect<Layer.Layer<Storage>, never, FileSystem.FileSystem | Path.Path | Scope.Scope>;
+type Stores = Storage | AssetStore;
+
+type StorageFactory = Effect.Effect<Layer.Layer<Stores>, never, FileSystem.FileSystem | Path.Path | Scope.Scope>;
 
 function sharedStore(layer: Layer.Layer<Storage>): StorageFactory {
-  return Effect.map(Layer.build(layer), (store) => Layer.succeedContext(store));
+  return Effect.map(Layer.build(Layer.merge(layer, memoryAssets)), (store) => Layer.succeedContext(store));
 }
+
+function sqliteStores(database: string): Layer.Layer<Stores> {
+  const assets = diskAssetStore(`${database}-assets`);
+  return Layer.merge(sqliteStorage(database), assets).pipe(Layer.provide(nodeServices), Layer.orDie);
+}
+
+const sharedLayers: Readonly<Record<Exclude<StorageKind, "sqlite">, Layer.Layer<Storage>>> = {
+  "deactivated-mid-run": deactivatedMidRunStorage,
+  "edited-mid-run": editedMidRunStorage,
+  memory: memoryStorage,
+  "paused-mid-run": pausedMidRunStorage,
+  unusable: unusableStorage,
+};
 
 function storageOf(kind: StorageKind | undefined): StorageFactory {
   if (kind === "sqlite") {
-    return Effect.map(freshDatabasePath, (path) => sqliteStorage(path).pipe(Layer.provide(nodeServices), Layer.orDie));
+    return Effect.map(freshDatabasePath, sqliteStores);
   }
-  if (kind === "unusable") {
-    return sharedStore(unusableStorage);
-  }
-  return sharedStore(memoryStorage);
+  return sharedStore(sharedLayers[kind ?? "memory"]);
 }
 
-function storageFor(options: BackingOptions): Effect.Effect<Layer.Layer<Storage>, never, Scope.Scope> {
-  return Effect.flatMap(Layer.build(nodeServices), (node) => Effect.provideContext(storageOf(options.storage), node));
+const failingRemoves: Layer.Layer<AssetStore, never, AssetStore> = Layer.effect(
+  AssetStore,
+  Effect.map(AssetStore, (assets) => ({
+    ...assets,
+    remove: () => Effect.fail(StorageUnavailable.make({ message: "The test made this asset store fail to remove." })),
+  })),
+);
+
+function withAssets(stores: Layer.Layer<Stores>, assets: BackingOptions["assets"]): Layer.Layer<Stores> {
+  if (assets === "failing-removes") {
+    return Layer.merge(stores, Layer.provide(failingRemoves, stores));
+  }
+  return stores;
 }
 
-function backingServices(options: BackingOptions): Layer.Layer<Secrets | WebhookFake> {
-  return Layer.mergeAll(secretsOf(options.secrets ?? "test"), webhookFake);
+function storageFor(options: BackingOptions): Effect.Effect<Layer.Layer<Stores>, never, Scope.Scope> {
+  return Effect.flatMap(Layer.build(nodeServices), (node) =>
+    Effect.map(Effect.provideContext(storageOf(options.storage), node), (stores) => withAssets(stores, options.assets)),
+  );
+}
+
+type Backing = Secrets | WebhookFake | TriggerCaller | ScriptedTriggers;
+
+function triggersOf(kind: BackingOptions["triggers"]): Layer.Layer<TriggerCaller | ScriptedTriggers> {
+  if (kind === "scripted") {
+    return scriptedTriggers;
+  }
+  return Layer.merge(triggerCallerLive, unusedScriptedTriggers);
+}
+
+function backingServices(options: BackingOptions): Layer.Layer<Backing> {
+  return Layer.mergeAll(secretsOf(options.secrets ?? "test"), webhookFake, triggersOf(options.triggers));
 }
 
 function newToken(store: Context.Context<Secrets>): Effect.Effect<Token> {
   return Context.get(store, Secrets).newToken;
 }
 
-export { type StorageKind, backingServices, newToken, storageFor };
+function scriptedTriggersIn(store: Context.Context<ScriptedTriggers>): ScriptedTriggers["Service"] {
+  return Context.get(store, ScriptedTriggers);
+}
+
+export { type StorageKind, backingServices, newToken, scriptedTriggersIn, storageFor };

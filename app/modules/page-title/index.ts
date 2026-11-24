@@ -11,7 +11,7 @@
 import type { Unread, UnreadState } from "../unread/index.ts";
 import { useEffect, useSyncExternalStore } from "react";
 import type { Route } from "../paths/index.ts";
-import type { Session } from "../session/index.ts";
+import type { Session } from "../board/index.ts";
 import { countsOf } from "../unread/index.ts";
 
 const APP = "cookout";

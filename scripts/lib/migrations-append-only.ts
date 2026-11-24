@@ -16,7 +16,7 @@ interface Scan {
   readonly entries: readonly string[];
 }
 
-const LIST_START = /\bconst migrations\b[^=]*=\s*\[/u;
+const LIST_START = /\bconst (?:postgresMigrations|migrations)\b[^=]*=\s*\[/u;
 const TOKEN = /`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[[\](){},]|[^`"'[\](){},]+/gu;
 const NESTING: ReadonlyMap<string, Kind> = new Map([
   ["(", "open"],

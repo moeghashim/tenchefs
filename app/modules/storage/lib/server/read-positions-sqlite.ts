@@ -1,12 +1,13 @@
 import type { AckedInbox, AckedMessage, Scope } from "./inbox.ts";
 import { Array as Arr, Effect, Option, Predicate, Schema } from "effect";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import type { Message, MessageId } from "../../../messages/index.ts";
 import type { MovedBackReadPosition, ReadPosition } from "../../../inbox/index.ts";
 import { movedBackTo, scopeOf } from "./inbox.ts";
 import type { IdentityName } from "../../../identities/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isChannelName } from "../../../channels/index.ts";
+import { isFalse } from "./adapters/sql-database.ts";
 import { isMessageId } from "../../../messages/index.ts";
 import { recordReceiptsIn } from "./read-receipts-sqlite.ts";
 import { unreadable } from "./errors.ts";
@@ -20,7 +21,7 @@ const READ_POSITIONS = `SELECT channel, NULL AS thread_id, message_id FROM chann
     WHERE identity_name = ?1
   UNION ALL SELECT messages.channel, t.thread_id, t.message_id
     FROM thread_read_positions AS t JOIN messages ON messages.id = t.thread_id WHERE t.identity_name = ?1
-  ORDER BY channel, thread_id`;
+  ORDER BY channel, thread_id NULLS FIRST`;
 
 const ReadPositionRow = Schema.Struct({
   channel: Schema.String.pipe(Schema.refine(isChannelName)),
@@ -68,7 +69,7 @@ function sqlOf(scope: Scope): ScopeSql {
   return THREAD_SQL;
 }
 
-function savePosition(db: SqliteDatabase, identity: IdentityName, position: MovedBackReadPosition): Fails<void> {
+function savePosition(db: SqlDatabase, identity: IdentityName, position: MovedBackReadPosition): Fails<void> {
   const sql = sqlOf(position);
   const key = position.thread ?? position.channel;
   if (Predicate.isNull(position.messageId)) {
@@ -104,7 +105,7 @@ function readPositionRow(row: unknown): Fails<ReadPosition> {
 }
 
 interface Reading {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly identity: IdentityName;
 }
 
@@ -114,13 +115,23 @@ function readPositionsIn({ db, identity }: Reading): Fails<readonly ReadPosition
     .pipe(Effect.flatMap((rows) => Effect.forEach(rows, readPositionRow, ONE_AT_A_TIME)));
 }
 
-const MOVE_CHANNEL_POSITION = `INSERT INTO channel_read_positions (identity_name, channel, message_id) VALUES (?, ?, ?)
-  ON CONFLICT (identity_name, channel) DO UPDATE SET message_id = max(message_id, excluded.message_id)
-  RETURNING message_id`;
+interface MoveSql {
+  readonly channel: string;
+  readonly thread: string;
+}
 
-const MOVE_THREAD_POSITION = `INSERT INTO thread_read_positions (identity_name, thread_id, message_id) VALUES (?, ?, ?)
-  ON CONFLICT (identity_name, thread_id) DO UPDATE SET message_id = max(message_id, excluded.message_id)
-  RETURNING message_id`;
+function moveSql(greatest: string): MoveSql {
+  return {
+    channel: `INSERT INTO channel_read_positions (identity_name, channel, message_id) VALUES (?, ?, ?)
+  ON CONFLICT (identity_name, channel) DO UPDATE SET message_id = ${greatest}(channel_read_positions.message_id, excluded.message_id)
+  RETURNING message_id`,
+    thread: `INSERT INTO thread_read_positions (identity_name, thread_id, message_id) VALUES (?, ?, ?)
+  ON CONFLICT (identity_name, thread_id) DO UPDATE SET message_id = ${greatest}(thread_read_positions.message_id, excluded.message_id)
+  RETURNING message_id`,
+  };
+}
+
+const MOVE_SQL: DialectForms<MoveSql> = { postgres: moveSql("greatest"), sqlite: moveSql("max") };
 
 const PositionRow = Schema.Struct({ message_id: MessageIdColumn });
 
@@ -137,9 +148,9 @@ interface Acking extends Reading {
 
 function movePosition({ db, identity, message }: Acking, scope: Scope): Fails<unknown> {
   if (Predicate.isNull(scope.thread)) {
-    return db.get(MOVE_CHANNEL_POSITION, identity, scope.channel, message.id);
+    return db.get(MOVE_SQL[db.dialect].channel, identity, scope.channel, message.id);
   }
-  return db.get(MOVE_THREAD_POSITION, identity, scope.thread, message.id);
+  return db.get(MOVE_SQL[db.dialect].thread, identity, scope.thread, message.id);
 }
 
 function ackIn(acking: Acking): Fails<AckedMessage> {
@@ -152,18 +163,22 @@ function ackIn(acking: Acking): Fails<AckedMessage> {
   });
 }
 
-const SEEN_IN_CHANNEL = `UPDATE reactions SET seen = 1 WHERE seen = 0 AND message_id IN
+function seenInChannelSql(db: SqlDatabase): string {
+  return `UPDATE reactions SET seen = TRUE WHERE ${isFalse[db.dialect]("seen")} AND message_id IN
   (SELECT id FROM messages WHERE author_name = ?1 AND channel = ?2 AND reply_to IS NULL AND id <= ?3)`;
+}
 
-const SEEN_IN_THREAD = `UPDATE reactions SET seen = 1 WHERE seen = 0 AND message_id IN
+function seenInThreadSql(db: SqlDatabase): string {
+  return `UPDATE reactions SET seen = TRUE WHERE ${isFalse[db.dialect]("seen")} AND message_id IN
   (SELECT id FROM messages WHERE author_name = ?1 AND reply_to = ?2 AND id <= ?3)`;
+}
 
 function reactionsSeenUpTo({ db, identity, message }: Acking): Fails<void> {
   const { channel, thread } = scopeOf(message);
   if (Predicate.isNull(thread)) {
-    return db.run(SEEN_IN_CHANNEL, identity, channel, message.id);
+    return db.run(seenInChannelSql(db), identity, channel, message.id);
   }
-  return db.run(SEEN_IN_THREAD, identity, thread, message.id);
+  return db.run(seenInThreadSql(db), identity, thread, message.id);
 }
 
 function ackMessageIn(acking: Acking): Fails<AckedMessage> {

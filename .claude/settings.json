@@ -1,0 +1,29 @@
+{
+  "autoCompactWindow": 300000,
+  "permissions": {
+    "deny": [
+      "mcp__claude-code-remote__create_trigger",
+      "mcp__claude-code-remote__update_trigger",
+      "mcp__claude-code-remote__delete_trigger",
+      "mcp__claude-code-remote__fire_trigger",
+      "mcp__claude-code-remote__get_trigger",
+      "mcp__claude-code-remote__list_triggers",
+      "mcp__claude-code-remote__list_computer_folders",
+      "mcp__claude-code-remote__request_computer_folder",
+      "mcp__claude-code-remote__watch_url",
+      "mcp__claude-code-remote__unwatch_url",
+      "mcp__claude-code-remote__set_session_tags",
+      "mcp__claude-code-remote__set_session_title",
+      "mcp__claude-code-remote__archive_session",
+      "mcp__claude-code-remote__unarchive_session",
+      "mcp__claude-code-remote__interrupt_session",
+      "mcp__claude-code-remote__get_event",
+      "mcp__claude-code-remote__list_events",
+      "mcp__claude-code-remote__list_sessions",
+      "mcp__claude-code-remote__create_session",
+      "mcp__claude-code-remote__send_message",
+      "mcp__claude-code-remote__switch_environment",
+      "mcp__Claude_Docs"
+    ]
+  }
+}

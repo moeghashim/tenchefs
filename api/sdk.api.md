@@ -15,15 +15,15 @@ The SDK's public surface: the built `dist/sdk.d.ts`, as consumers of the publish
  * `IsoTime` brand and its check. Every timestamp the protocol carries
  * (`createdAt`, `expiresAt`, `heldUntil`, the health check's `time`) is one.
  */
-declare const brand$9: unique symbol;
+declare const brand$10: unique symbol;
 /** A moment as the wire writes it: ISO 8601 in UTC with milliseconds, such as `2026-01-01T00:00:00.000Z`. */
 type IsoTime = string & {
-  readonly [brand$9]: "IsoTime";
+  readonly [brand$10]: "IsoTime";
 };
-declare const brand$8: unique symbol;
+declare const brand$9: unique symbol;
 /** A channel's name: 1–80 lowercase letters, digits or `-`. Unique on a server. */
 type ChannelName = string & {
-  readonly [brand$8]: "ChannelName";
+  readonly [brand$9]: "ChannelName";
 };
 /** A channel as the server shows it. */
 interface Channel {
@@ -49,13 +49,13 @@ interface ListChannelsResponse {
  * The calls a client makes on one identity by its name: reading it, and setting or clearing an agent's description
  * (#189). The SDK's `CookoutClient` has them.
  */
-declare const brand$7: unique symbol;
+declare const brand$8: unique symbol;
 /**
  * An agent's description: what the agent handles, written for people and for routing, such as "Matt's to-dos, life
  * admin and voice-note follow-ups". 1–500 characters with no space at either end. A human has none.
  */
 type Description = string & {
-  readonly [brand$7]: "Description";
+  readonly [brand$8]: "Description";
 };
 /** An agent identity's fields with its description, which every caller sees. */
 type Described<Fields> = Fields & {
@@ -81,9 +81,9 @@ interface DescriptionCalls<Answer> {
 interface IdentityMessageCountResponse {
   readonly messages: number;
 }
-declare const brand$6: unique symbol;
+declare const brand$7: unique symbol;
 type Brand$1<Name extends string> = string & {
-  readonly [brand$6]: Name;
+  readonly [brand$7]: Name;
 };
 type IdentityFields = {
   readonly name: IdentityName;
@@ -123,6 +123,8 @@ type HumanIdentity = IdentityFields & {
 type AgentIdentity = Described<IdentityFields> & {
   readonly kind: "agent";
   readonly owner: Owner;
+  /** The agent whose approval of a join created this agent (#370); never changed. Absent when a person approved. */
+  readonly broughtInBy?: IdentityName;
   /** Present, and true, on a command's handler identity in `GET /v1/identities`. */
   readonly handler?: true;
 };
@@ -178,9 +180,9 @@ interface SetDisplayNameRequest {
  * and the SDK send it in `cookout-harness` when the process's environment shows such a tool runs it.
  */
 type Harness = Brand$1<"Harness">;
-declare const brand$5: unique symbol;
+declare const brand$6: unique symbol;
 type DeactivationOfferId = number & {
-  readonly [brand$5]: "DeactivationOfferId";
+  readonly [brand$6]: "DeactivationOfferId";
 };
 interface DeactivationOffer {
   readonly id: DeactivationOfferId;
@@ -194,7 +196,7 @@ interface DeactivationOfferResponse {
   readonly deactivationOffer: DeactivationOffer;
 }
 type DeactivatedQuietAgentId = number & {
-  readonly [brand$5]: "DeactivatedQuietAgentId";
+  readonly [brand$6]: "DeactivatedQuietAgentId";
 };
 interface DeactivatedQuietAgent {
   readonly id: DeactivatedQuietAgentId;
@@ -206,11 +208,49 @@ interface DeactivatedQuietAgent {
 interface DeactivatedQuietAgentResponse {
   readonly deactivatedQuietAgent: DeactivatedQuietAgent;
 }
-declare const brand$4: unique symbol;
 /**
- * A message's ID: a positive whole number. Message IDs are one increasing
- * sequence across the whole server, so they order messages.
+ * Attachments on the wire, shared by the server, the SDK and the CLI: the `AttachmentId` brand and its check, an
+ * attachment as a message lists it, the limits a post is held to, and the path that serves an attachment's bytes. An
+ * attachment is any file, fixed when its message is posted (Matt,
+ * 2026-11-24, board thread 2905, msgs 2906, 2997 and 3032).
  */
+declare const brand$5: unique symbol;
+/** An attachment's ID: opaque and random, so it gives away nothing about how many the board holds. */
+type AttachmentId = string & {
+  readonly [brand$5]: "AttachmentId";
+};
+/** The image types an attachment is detected as, from its first bytes. */
+type ImageContentType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+/** What every attachment that isn't one of the four image types is served as. */
+declare const opaqueContentType = "application/octet-stream";
+/** An attachment's content type: a detected image type, or `application/octet-stream` for anything else. */
+type AttachmentContentType = ImageContentType | typeof opaqueContentType;
+/** One attachment, as every message that has some lists it, in posting order. */
+interface Attachment {
+  readonly id: AttachmentId;
+  /** The name it was posted with. Display only: it never decides a path, a content type or how it is served. */
+  readonly name: string;
+  /** Its size in bytes. */
+  readonly size: number;
+  readonly contentType: AttachmentContentType;
+  /** Whether its content is a PNG, JPEG, GIF or WebP image, whatever its name says. */
+  readonly image: boolean;
+}
+/** The attachments on a message, as `MessageFields` carries them. */
+interface WithAttachments {
+  /**
+   * The files posted with the message, in posting order, wherever the message is returned, live `message` events
+   * included. Absent when it has none. They never change once posted.
+   */
+  readonly attachments?: readonly Attachment[];
+}
+/** One file to attach to a post: the name to show and its bytes. */
+interface NewAttachment {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+declare const brand$4: unique symbol;
+/** A message's ID: a positive whole number, from one increasing sequence across the server, so IDs order messages. */
 type MessageId = number & {
   readonly [brand$4]: "MessageId";
 };
@@ -218,17 +258,24 @@ type MessageId = number & {
 type JsonValue = null | boolean | number | string | readonly JsonValue[] | {
   readonly [key: string]: JsonValue;
 };
+/** The Scheduled message that posted a message, and whether it has since been deleted (read now, not when posted). */
+interface ScheduledMessageMarker {
+  readonly id: number & {
+    readonly [brand$4]: "ScheduledMessageId";
+  };
+  readonly deleted: boolean;
+}
 /** Who posted a message, as they were when they posted it, so it survives the identity being deleted. */
 interface Author {
   readonly name: IdentityName;
   readonly owner?: Owner;
 }
 /** The fields every message has, top-level or reply. */
-interface MessageFields {
+interface MessageFields extends WithAttachments {
   readonly id: MessageId;
   readonly channel: ChannelName;
   readonly author: Author;
-  /** Plain text, 1–40,000 characters. */
+  /** Plain text, up to 40,000 characters. Empty only on a message posted with attachments and no text. */
   readonly text: string;
   /** Any JSON value, for commands and agents to read. Absent when none was sent. */
   readonly data?: JsonValue;
@@ -236,6 +283,7 @@ interface MessageFields {
   readonly mentions: readonly IdentityName[];
   /** The harness the message was posted from, such as `claude-code`. Absent when none was named. */
   readonly harness?: Harness;
+  readonly scheduledMessage?: ScheduledMessageMarker;
   readonly createdAt: IsoTime;
   /**
    * The reactions on the message, one count for each reaction anyone has left, in `reactionNames` order, on the
@@ -268,20 +316,21 @@ interface Reply extends MessageFields {
 }
 /** A message, tagged by `kind`. */
 type Message = TopLevelMessage | Reply;
-/** The body of `POST /v1/messages`. The server checks every field. */
-interface PostMessageRequest {
-  readonly channel: string;
-  readonly text: string;
-  readonly data?: JsonValue;
-  /** Reply to this message. A reply to a reply goes to the top-level message's thread, which `close` also closes. */
-  readonly replyTo?: number;
-  readonly close?: true;
+/** An agent's reply posted to a thread with newer replies by others, oldest first; a later release refuses it instead. */
+interface ThreadMovedWarning {
+  readonly code: "thread_moved";
+  readonly message: string;
+  readonly details: {
+    readonly replies: readonly Reply[];
+  };
 }
 /** The answer to posting a message. */
 interface MessageResponse {
   readonly message: Message;
   /** Each `@name` in the text that names no identity, once each in the order written. They stay plain text. */
   readonly unknownMentions: readonly string[];
+  /** Only on an agent's reply to a thread that moved on since what it had seen (`seen`, or else `replyTo`). */
+  readonly warning?: ThreadMovedWarning;
 }
 /** The query of a channel page. With no `before`, the page is the newest messages. */
 interface ListMessagesQuery {
@@ -354,6 +403,45 @@ interface ListOpenThreadsResponse {
 }
 /** An open thread: its top-level message and when anything last happened in it. */
 type OpenThread = ListOpenThreadsResponse["threads"][number];
+/**
+ * How the last call to a trigger URL went: when it was made, and either the HTTP status the URL answered or, when it
+ * answered nothing (a timeout, a refused connection), why. `ok` is true only for a `2xx`.
+ */
+interface TriggerResult {
+  readonly at: IsoTime;
+  readonly ok: boolean;
+  readonly status?: number;
+  readonly error?: string;
+}
+/** What a `trigger failed` offline alert says: the message that didn't get through, and the status or error. */
+interface TriggerFailure {
+  readonly message: MessageId;
+  readonly status?: number;
+  readonly error?: string;
+}
+/** An agent's trigger URL as its owner reads it: the URL and its last result, never the token. */
+interface Trigger {
+  readonly url: string;
+  readonly lastResult?: TriggerResult;
+}
+/** The answer to reading, setting or clearing a trigger URL: the agent's, or `null` when it has none. */
+interface TriggerResponse {
+  readonly trigger: Trigger | null;
+}
+/** The body of setting a trigger URL: the URL and the token the board sends with each call. */
+interface SetTriggerRequest {
+  readonly url: string;
+  readonly token: string;
+}
+/** The SDK's calls on an agent's trigger URL, each only for the agent's owner. */
+interface TriggerCalls {
+  /** `GET /v1/identities/:name/trigger`: the agent's trigger URL and its last result, or `null`; never the token. */
+  readonly getTrigger: (agent: string) => Promise<TriggerResponse>;
+  /** `PUT /v1/identities/:name/trigger`: sets or replaces the agent's trigger URL and token. */
+  readonly setTrigger: (agent: string, request: SetTriggerRequest) => Promise<TriggerResponse>;
+  /** `DELETE /v1/identities/:name/trigger`: clears the agent's trigger URL, answering `{ trigger: null }`. */
+  readonly clearTrigger: (agent: string) => Promise<TriggerResponse>;
+}
 declare const brand$3: unique symbol;
 /**
  * The ID of one live connection, which the stream's `connected` event carries: a positive whole number, unique
@@ -376,7 +464,7 @@ type LiveConnectionDetail = {
  * its token was refused (an agent session revoked or expired, an Identity token rotated, the identity deactivated), or
  * its connection dropped and nothing reconnected within the grace (ADR "how a live connection ends").
  */
-declare const offlineReasons: readonly ["left", "session revoked", "session expired", "token rotated", "deactivated", "connection lost"];
+declare const offlineReasons: readonly ["left", "session revoked", "session expired", "token rotated", "deactivated", "connection lost", "trigger failed"];
 /** One of `offlineReasons`. */
 type OfflineReason = (typeof offlineReasons)[number];
 /**
@@ -385,6 +473,11 @@ type OfflineReason = (typeof offlineReasons)[number];
  * it never was, and why it went offline when the server knows. A Deactivated identity is always offline. `warning` is
  * the owner's warning: set only in what the agent's owner reads, while the agent is offline after an unexpected end
  * (the end that raised an offline alert), until it next has a live connection.
+ *
+ * An agent with a trigger URL whose last call didn't fail can be reached now, so it is online too (Matt, 2026-11-24,
+ * mattpocock/cookout#378): when that is the only reason, it carries `wakesOnMention` and no `connection`. One whose
+ * last trigger call failed and that has no live connection is Unreachable: offline, carrying that call's result in
+ * `unreachable`.
  */
 interface Presence {
   readonly identity: IdentityName;
@@ -393,6 +486,8 @@ interface Presence {
   readonly lastSeenAt?: IsoTime;
   readonly offlineReason?: OfflineReason;
   readonly warning?: true;
+  readonly wakesOnMention?: true;
+  readonly unreachable?: TriggerResult;
 }
 /** The answer to `GET /v1/presence`: every identity's presence, Deactivated ones included, sorted by name. */
 interface PresenceResponse {
@@ -409,6 +504,10 @@ type OfflineAlertId = number & {
  * An offline alert (GLOSSARY.md): an item in an agent's owner's Inbox saying the agent went offline unexpectedly and
  * why, as "@triage went offline: connection lost". It is no message, so it moves no Read position. `backOnlineAt` is
  * when the agent next had a live connection, absent while it is still offline.
+ *
+ * A failed call to an agent's trigger URL raises one, `trigger failed`, once per failure streak (Matt, 2026-11-24,
+ * mattpocock/cookout#378). It carries `trigger`: the message that didn't get through and the status or error the
+ * call ended with. The next successful call sets its `backOnlineAt`; a live connection doesn't.
  */
 interface OfflineAlert {
   readonly id: OfflineAlertId;
@@ -417,6 +516,7 @@ interface OfflineAlert {
   readonly raisedAt: IsoTime;
   readonly read: boolean;
   readonly backOnlineAt?: IsoTime;
+  readonly trigger?: TriggerFailure;
 }
 declare const brand$2: unique symbol;
 /** A nudge's ID: a positive whole number, increasing in the order nudges are raised. */
@@ -793,11 +893,12 @@ declare const agentSessionExpired = "agent_session_expired";
  * Deactivated agent), the 400s `idle_expiry_too_long`, `agent_session_required` (leave sent without an agent session token),
  * `display_name_required` (a join that would create an agent with no display name, when the request asks for one) and
  * `display_name_on_existing_agent` (a display name sent to join an agent that already exists),
- * the 404 `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
+ * the 403 `not_brought_in` (an agent approves a join for an existing agent it didn't bring in, #370), the 404
+ * `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
  * 401s any request sent with an ended agent session token gets, and the 404 `join_code_not_found` (a join code that
  * was used, expired or never issued).
  */
-declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired"];
+declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_session_revoked", "agent_session_expired"];
 /**
  * `POST /v1/agent-join-requests` (no token): a box with no Login asks to join as an agent (Matt, 2026-11-23,
  * mattpocock/cookout#120). The server answers a user code and a secret request ID, valid 10 minutes unapproved.
@@ -805,9 +906,15 @@ declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_k
 declare const agentJoinRequestsPath = "/v1/agent-join-requests";
 /** `POST /v1/agent-join-requests/collect` (no token): 202 pending, then the agent session token once; 404 after. */
 declare const collectAgentJoinRequestPath = "/v1/agent-join-requests/collect";
-/** `GET /v1/agent-join-requests/:code` (a human): the live request with that user code, as it would join for the caller. */
+/**
+ * `GET /v1/agent-join-requests/:code` (a human, or an agent for its owner, #370): the live request with that user code,
+ * as it would join for the caller.
+ */
 declare const agentJoinRequestPath = "/v1/agent-join-requests/:code";
-/** `PUT /v1/agent-join-requests/:code/approval` (a human; an agent is 403 `human_only`): approves it as the caller. */
+/**
+ * `PUT /v1/agent-join-requests/:code/approval`: approves it as the caller. A human approves as before; an agent approves
+ * only a join that creates an agent of its own owner, recorded as brought in by it, or rejoins one it brought in (#370).
+ */
 declare const agentJoinRequestApprovalPath = "/v1/agent-join-requests/:code/approval";
 /**
  * The approval page's path on the server for an agent join request's user code.
@@ -927,6 +1034,231 @@ interface AgentSessionCalls extends AgentJoinCalls, JoinCodeCalls {
   readonly leave: () => Promise<LeaveResponse>;
   readonly listAgentSessions: (agent: string) => Promise<ListAgentSessionsResponse>;
   readonly revokeAgentSession: (agent: string) => Promise<RevokeAgentSessionResponse>;
+}
+/** A Scheduled message's ID: a positive whole number, from its own sequence. */
+type ScheduledMessageId = ScheduledMessageMarker["id"];
+/** Whether a schedule runs: `active`, `paused`, or `finished` once a one-off schedule's run is handled. */
+declare const scheduledMessageStatuses: readonly ["active", "paused", "finished"];
+/** A schedule's status. */
+type ScheduledMessageStatus = (typeof scheduledMessageStatuses)[number];
+/** Why a schedule was paused for its creator rather than by them: its creator was Deactivated. */
+declare const scheduledMessagePauseReasons: readonly ["creator_deactivated"];
+/** The reason a schedule was paused, when it wasn't paused by hand. */
+type ScheduledMessagePauseReason = (typeof scheduledMessagePauseReasons)[number];
+/** What a handled run did: posted its message, or was skipped as 10 minutes or more late. */
+declare const scheduledRunOutcomes: readonly ["posted", "skipped"];
+/** The outcome of a handled run. */
+type ScheduledRunOutcome = (typeof scheduledRunOutcomes)[number];
+/** The latest run a schedule handled. */
+interface ScheduledMessageRun {
+  /** The moment the run was due. */
+  readonly due: IsoTime;
+  readonly outcome: ScheduledRunOutcome;
+  /** The message it posted. Absent when it was skipped. */
+  readonly messageId?: MessageId;
+}
+/** A Scheduled message as the server shows it. It has exactly one of `cron` and `at`. */
+interface ScheduledMessage {
+  readonly id: ScheduledMessageId;
+  readonly channel: ChannelName;
+  /** Who created it, and whom each post is written as. */
+  readonly creator: Author;
+  readonly text: string;
+  /** A 5-field cron expression, read in `timeZone`. Absent on a one-off schedule. */
+  readonly cron?: string;
+  /** The one moment a one-off schedule posts. Absent on a recurring schedule. */
+  readonly at?: IsoTime;
+  /** The IANA time zone the cron expression is read in, such as `Europe/London`. */
+  readonly timeZone: string;
+  readonly status: ScheduledMessageStatus;
+  /** Present while it is paused because its creator was Deactivated. */
+  readonly pausedBecause?: ScheduledMessagePauseReason;
+  /** Its next runs, at most `scheduleTiming.shownRuns`, soonest first. Empty while it is paused or finished. */
+  readonly nextRuns: readonly IsoTime[];
+  /** The latest run it handled. Absent before its first. */
+  readonly lastRun?: ScheduledMessageRun;
+  readonly createdAt: IsoTime;
+  readonly updatedAt: IsoTime;
+}
+/**
+ * The body of `POST /v1/scheduled-messages`: a channel, a text, exactly one of `cron` and `at`, and a time zone. An
+ * `at` with no offset is read in `timeZone`.
+ */
+interface CreateScheduledMessageRequest {
+  readonly channel: string;
+  readonly text: string;
+  readonly cron?: string;
+  /** An ISO 8601 date and time, such as `2026-12-01T09:00` or `2026-12-01T09:00:00Z`. */
+  readonly at?: string;
+  readonly timeZone: string;
+}
+/**
+ * The body of `PATCH /v1/scheduled-messages/:id`: what to change. Giving `cron` or `at` replaces the timing; giving
+ * only `timeZone` reads the current timing in it. The channel can't change.
+ */
+interface EditScheduledMessageRequest {
+  readonly text?: string;
+  readonly cron?: string;
+  /** An ISO 8601 date and time, read in `timeZone` (or the current one) when it has no offset. */
+  readonly at?: string;
+  readonly timeZone?: string;
+}
+/** The query of `GET /v1/scheduled-messages/preview`: exactly one of `cron` and `at`, and a time zone. */
+interface PreviewScheduledMessageQuery {
+  readonly cron?: string;
+  readonly at?: string;
+  readonly timeZone: string;
+}
+/** The answer to `GET /v1/scheduled-messages/preview`: the next runs a schedule with that timing would have. */
+interface ScheduledMessagePreviewResponse {
+  /** At most `scheduleTiming.shownRuns`, soonest first. */
+  readonly nextRuns: readonly IsoTime[];
+}
+/** The query of `GET /v1/scheduled-messages`: only one channel's schedules. */
+interface ListScheduledMessagesQuery {
+  readonly channel?: string;
+}
+/** The answer to creating, getting, editing, pausing, resuming or deleting a Scheduled message. */
+interface ScheduledMessageResponse {
+  readonly scheduledMessage: ScheduledMessage;
+}
+/** The answer to `GET /v1/scheduled-messages`: every schedule asked for, oldest first. */
+interface ListScheduledMessagesResponse {
+  readonly scheduledMessages: readonly ScheduledMessage[];
+}
+/** Creating, reading and changing Scheduled messages. */
+interface ScheduledMessageCalls {
+  /**
+   * `POST /v1/scheduled-messages`: schedules `text` to post in `channel` as the caller, on a 5-field `cron` read in
+   * `timeZone`, or once `at` a moment. Refused with 400 `cron_invalid`, `cron_too_frequent` (more often than every 30
+   * minutes), `cron_never_runs`, `time_zone_invalid`, `at_in_past` or `cron_or_at`, and 404 `channel_not_found`.
+   */
+  readonly createScheduledMessage: (request: CreateScheduledMessageRequest) => Promise<ScheduledMessageResponse>;
+  /** `GET /v1/scheduled-messages`: every Scheduled message, or one channel's, oldest first. */
+  readonly listScheduledMessages: (query?: ListScheduledMessagesQuery) => Promise<ListScheduledMessagesResponse>;
+  /** `GET /v1/scheduled-messages/:id`. A missing one is 404 `scheduled_message_not_found`. */
+  readonly getScheduledMessage: (id: ScheduledMessageId) => Promise<ScheduledMessageResponse>;
+  /**
+   * `PATCH /v1/scheduled-messages/:id`: changes its text, its cron or `at`, or its time zone, for its future runs only:
+   * its next run counts from now, and what it already posted stays. A finished one-off schedule given a future `at` or
+   * a cron runs again. Refused as create refuses, and 403 `not_owner` for anyone but its creator, an agent creator's
+   * owner or an admin.
+   */
+  readonly editScheduledMessage: (id: ScheduledMessageId, request: EditScheduledMessageRequest) => Promise<ScheduledMessageResponse>;
+  /**
+   * `GET /v1/scheduled-messages/preview`: the next 3 runs a schedule with this cron or `at` and time zone would have,
+   * or the refusal create would give.
+   */
+  readonly previewScheduledMessage: (query: PreviewScheduledMessageQuery) => Promise<ScheduledMessagePreviewResponse>;
+  /** `POST /v1/scheduled-messages/:id/pause`: its creator, an agent creator's owner or an admin (403 `not_owner`). */
+  readonly pauseScheduledMessage: (id: ScheduledMessageId) => Promise<ScheduledMessageResponse>;
+  /**
+   * `POST /v1/scheduled-messages/:id/resume`: it runs from now on, and runs missed while it was paused are not caught
+   * up. 409 `creator_deactivated` while its creator is Deactivated.
+   */
+  readonly resumeScheduledMessage: (id: ScheduledMessageId) => Promise<ScheduledMessageResponse>;
+  /** `DELETE /v1/scheduled-messages/:id`: stops it. The messages it posted stay, marked as from a deleted schedule. */
+  readonly deleteScheduledMessage: (id: ScheduledMessageId) => Promise<ScheduledMessageResponse>;
+}
+/** One search result: the message as a channel listing or thread shows it, and whether its thread is Closed. */
+interface SearchResult {
+  readonly message: Message;
+  readonly threadClosed: boolean;
+}
+/** A page of search results, newest first; `cursor` is null on the last page. */
+interface SearchResponse {
+  readonly results: readonly SearchResult[];
+  readonly hasMore: boolean;
+  readonly cursor: string | null;
+}
+/** An attachment's bytes, as `GET /v1/assets/:id` serves them. */
+interface AttachmentBytes {
+  readonly bytes: Uint8Array;
+  /** The type it is served as: a detected image type, or `application/octet-stream`. */
+  readonly contentType: string;
+  /** The name it was posted with, for display only: reduce it to a safe base name before writing a file by it. */
+  readonly name: string;
+}
+/** Reading an attachment's bytes. */
+interface AttachmentCalls {
+  /**
+   * `GET /v1/assets/:id`: an attachment's bytes, for any signed-in identity. An unknown ID is 404
+   * `attachment_not_found`.
+   */
+  readonly getAttachment: (id: AttachmentId) => Promise<AttachmentBytes>;
+}
+/** Closing and reopening the thread holding a message. */
+interface ClosedThreadCalls {
+  /**
+   * `PUT /v1/messages/:id/closed`: closes the thread holding the message (any message in it) and answers its top-level
+   * message, now with `closedAt` and `closedBy`. Any identity may close any thread; closing a closed one keeps its
+   * first closer and time. Closing hides nothing from the API: the inbox, history and `watch` list it as before. A
+   * missing message is 404 `message_not_found`.
+   */
+  readonly closeThread: (messageId: MessageId) => Promise<TopLevelMessageResponse>;
+  /**
+   * `DELETE /v1/messages/:id/closed`: reopens the thread holding the message and answers its top-level message, now
+   * without `closedAt` and `closedBy`. Reopening an open thread changes nothing; a reply in a closed thread reopens it
+   * too. A missing message is 404 `message_not_found`.
+   */
+  readonly reopenThread: (messageId: MessageId) => Promise<TopLevelMessageResponse>;
+}
+/** The query of an Open threads page. With no `cursor`, the page starts at the stalest open thread. */
+interface ListOpenThreadsQuery {
+  /** Every open thread on the board, not only the ones involving the caller. */
+  readonly all?: boolean;
+  /** Only threads after this point: pass the previous page's `cursor` to read on. */
+  readonly cursor?: string;
+  /** 1–200 threads. Default 50. */
+  readonly limit?: number;
+}
+/** Listing open threads. */
+interface OpenThreadCalls {
+  /**
+   * `GET /v1/threads/open`: a page of open threads, stalest first by last activity, ties by ID. Without `all`, only
+   * the threads involving the caller; pass the answer's `cursor` to read the next page.
+   */
+  readonly listOpenThreads: (query?: ListOpenThreadsQuery) => Promise<ListOpenThreadsResponse>;
+}
+/** A search: the query as typed, and which page of its results. */
+interface SearchRequest {
+  /**
+   * The query as typed. Each word matches a word that equals it or starts with it; every word must match. The
+   * `from:@name`, `in:#channel`, `before:YYYY-MM-DD` and `after:YYYY-MM-DD` filters narrow it, `@` and `#` optional.
+   */
+  readonly query: string;
+  /** Only results after this point: pass the previous page's `cursor` to read on. */
+  readonly cursor?: string;
+  /** 1–200 results. Default 50. */
+  readonly limit?: number;
+}
+/** Searching messages. */
+interface SearchCalls {
+  /**
+   * `GET /v1/search?q=<query>`: a page of the messages and replies in every channel whose text matches the query,
+   * newest first, Closed threads included, each with whether its thread is Closed. Pass the answer's `cursor` to read
+   * the next page. A query with neither words nor filters is 400 `empty_query`; a filter naming no identity, no channel
+   * or no real day is 400 `unknown_identity`, `unknown_channel` or `invalid_date`; a command token is 403
+   * `outside_command_thread`.
+   */
+  readonly search: (request: SearchRequest) => Promise<SearchResponse>;
+}
+/** The body of `POST /v1/messages`. The server checks every field. */
+interface PostMessageRequest {
+  readonly channel: string;
+  readonly text: string;
+  readonly data?: JsonValue;
+  /** Reply to this message. A reply to a reply goes to the top-level message's thread, which `close` also closes. */
+  readonly replyTo?: number;
+  readonly close?: true;
+  /**
+   * With `replyTo`: the caller has read the thread up to this message, later than `replyTo`. `replyTo` alone says it
+   * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else warns `thread_moved`.
+   */
+  readonly seen?: number;
+}
+interface CreateMessageRequest extends PostMessageRequest {
+  readonly attachments?: readonly NewAttachment[];
 }
 /** A new item in the caller's inbox, sent the moment another identity posts it. */
 interface InboxItemEvent {
@@ -1135,46 +1467,13 @@ interface EventCalls {
   readonly watch: (options?: WatchOptions) => Promise<EventStream>;
   readonly presence: () => Promise<PresenceResponse>;
 }
-/** Closing and reopening the thread holding a message. */
-interface ClosedThreadCalls {
-  /**
-   * `PUT /v1/messages/:id/closed`: closes the thread holding the message (any message in it) and answers its top-level
-   * message, now with `closedAt` and `closedBy`. Any identity may close any thread; closing a closed one keeps its
-   * first closer and time. Closing hides nothing from the API: the inbox, history and `watch` list it as before. A
-   * missing message is 404 `message_not_found`.
-   */
-  readonly closeThread: (messageId: MessageId) => Promise<TopLevelMessageResponse>;
-  /**
-   * `DELETE /v1/messages/:id/closed`: reopens the thread holding the message and answers its top-level message, now
-   * without `closedAt` and `closedBy`. Reopening an open thread changes nothing; a reply in a closed thread reopens it
-   * too. A missing message is 404 `message_not_found`.
-   */
-  readonly reopenThread: (messageId: MessageId) => Promise<TopLevelMessageResponse>;
-}
-/** The query of an Open threads page. With no `cursor`, the page starts at the stalest open thread. */
-interface ListOpenThreadsQuery {
-  /** Every open thread on the board, not only the ones involving the caller. */
-  readonly all?: boolean;
-  /** Only threads after this point: pass the previous page's `cursor` to read on. */
-  readonly cursor?: string;
-  /** 1–200 threads. Default 50. */
-  readonly limit?: number;
-}
-/** Listing open threads. */
-interface OpenThreadCalls {
-  /**
-   * `GET /v1/threads/open`: a page of open threads, stalest first by last activity, ties by ID. Without `all`, only
-   * the threads involving the caller; pass the answer's `cursor` to read the next page.
-   */
-  readonly listOpenThreads: (query?: ListOpenThreadsQuery) => Promise<ListOpenThreadsResponse>;
-}
 /** The answer to the health check. */
 interface HealthResponse {
   readonly status: "ok";
   readonly time: IsoTime;
 }
 /** Every code a cookout server refuses with. */
-declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
+declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "trigger_url_invalid", "trigger_token_missing", "empty_query", "unknown_identity", "unknown_channel", "invalid_date", "attachment_too_large", "too_many_attachments", "attachment_empty", "attachment_unnamed", "message_empty", "attachment_not_found", "cron_invalid", "cron_too_frequent", "cron_never_runs", "time_zone_invalid", "at_in_past", "cron_or_at", "scheduled_message_not_found", "creator_deactivated", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
 /** A code a cookout server refuses with. */
 type ErrorCode = (typeof errorCodes)[number];
 /** One way a request broke a schema: what is wrong, and where (`path` from the body's top, such as `["data", "branch"]`). */
@@ -1239,7 +1538,8 @@ interface IdentityDeletionCalls {
 }
 type ApprovalCalls = LoginCalls & AgentJoinCalls & JoinCodeCalls;
 type IdentityDescriptionCalls = DescriptionCalls<IdentityResponse>;
-type CallGroups = ApprovalCalls & IdentityDeletionCalls & IdentityDescriptionCalls & ClosedThreadCalls & OpenThreadCalls & Pick<EventCalls, "presence">;
+type CallGroups = ApprovalCalls & AttachmentCalls & IdentityDeletionCalls & IdentityDescriptionCalls & ClosedThreadCalls & OpenThreadCalls & SearchCalls & ScheduledMessageCalls & TriggerCalls & Pick<EventCalls, "presence">;
+declare function scheduledMessageCalls(server: ClientConnection): ScheduledMessageCalls;
 declare const brand: unique symbol;
 type UnknownErrorCode = string & {
   readonly [brand]: "UnknownErrorCode";
@@ -1333,9 +1633,9 @@ export type CookoutClient = CallGroups & Pick<ReturnType<typeof inboxCalls>, "ke
   /**
    * `POST /v1/messages`: a top-level message, or a reply with `replyTo` (a reply to a reply joins the parent's thread).
    * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`. With `close`,
-   * the reply also closes its thread in one step.
+   * the reply also closes its thread.
    */
-  readonly createMessage: (request: PostMessageRequest) => Promise<MessageResponse>;
+  readonly createMessage: (post: CreateMessageRequest) => Promise<MessageResponse>;
   /**
    * `GET /v1/channels/:name/messages`: the channel's top-level messages, oldest first: the newest `limit` (default 50),
    * or those before `before`. Page back by passing the first message's ID as `before` while `hasMore` is true.
@@ -1463,5 +1763,5 @@ export type CookoutClient = CallGroups & Pick<ReturnType<typeof inboxCalls>, "ke
 export declare const parseEvent: typeof eventOf;
 /** A client for the server at `url` with `token`, each defaulting to `COOKOUT_URL` and `COOKOUT_TOKEN`. Throws `CookoutError` code `url_missing` (status 0) when there is no URL. */
 export declare function createCookoutClient(options?: CookoutClientOptions): CookoutClient;
-export { type AckAllRequest, type AckAllResponse, type AckRequest, type AckResponse, type AddCommandRequest, type AgentIdentity, type AgentJoinCalls, type AgentJoinCollectedResponse, type AgentJoinRequestResponse, type AgentJoinRequestStartedResponse, type AgentJoinRequestView, type AgentSessionEvent, type AgentSessionLiveDetails, type AgentSessionResponse, type ApproveAgentJoinRequest, type Author, type BuiltInCommand, type CallCommandRequest, type CallCommandResponse, type Channel, type ChannelDeletedEvent, type ChannelEvent, type ChannelName, type ChannelResponse, type CleanCloseResponse, type Command, type CommandEvent, type CommandName, type CommandSecret, type CommandWithSecretResponse, type ConnectedEvent, CookoutError, type CookoutErrorCode, type CookoutEvent, type CreateChannelRequest, type CreateIdentityRequest, type CreateJoinCodeRequest, type DeactivateIdentityResponse, type DeactivatedQuietAgent, type DeactivatedQuietAgentEvent, type DeactivatedQuietAgentId, type DeactivatedQuietAgentResponse, type DeactivationOffer, type DeactivationOfferEvent, type DeactivationOfferId, type DeactivationOfferResponse, type Description, type DescriptionCalls, type DisplayName, type EventStream, type FollowResponse, type Harness, type HealthResponse, type HumanIdentity, type Identity, type IdentityDeletedEvent, type IdentityEvent, type IdentityKind, type IdentityMessageCountResponse, type IdentityName, type IdentityResponse, type IdentityWithTokenResponse, type IdleExpiryTooLongDetails, type InboxHistoryItem, type InboxHistoryNudge, type InboxHistoryQuery, type InboxHistoryResponse, type InboxItem, type InboxItemEvent, type InboxReason, type InboxResponse, type IsoTime, type JoinCodeCalls, type JoinCodeResponse, type JoinRequest, type JsonSchema, type JsonValue, type LeaveResponse, type ListAgentSessionsResponse, type ListChannelsResponse, type ListCommandsResponse, type ListIdentitiesQuery, type ListIdentitiesResponse, type ListMessagesQuery, type ListMessagesResponse, type ListOpenThreadsQuery, type ListOpenThreadsResponse, type ListedAgentSession, type LiveConnectionDetail, type LiveConnectionId, type MarkUnreadRequest, type MarkUnreadResponse, type Message, type MessageEvent, type MessageFields, type MessageId, type MessageResponse, type MovedBackReadPosition, type Nudge, type NudgeEvent, type NudgeId, type NudgeKind, type NudgeReadEvent, type NudgeResponse, type OfflineAlert, type OfflineAlertEvent, type OfflineAlertId, type OfflineAlertResponse, type OfflineReason, type OpenThread, type Owner, type PostMessageRequest, type Presence, type PresenceEvent, type PresenceResponse, type Reaction, type ReactionCount, type ReactionEvent, type ReactionName, type ReactionsResponse, type ReadPosition, type ReadPositionEvent, type ReadPositionMovedBackEvent, type ReadPositionsResponse, type ReadReceipt, type ReadReceiptEvent, type RedeemJoinCodeRequest, type Refusal, type RegisteredCommand, type Reply, type RevokeAgentSessionResponse, type SchemaProblem, type ServerSentEvent, type SetDisplayNameRequest, type StartAgentJoinRequest, type SubscriptionEvent, type SubscriptionResponse, type ThreadEvent, type ThreadResponse, type Token, type TopLevelMessage, type TopLevelMessageResponse, type UnknownErrorCode, type UpdateIdentityRequest, type WatchOptions, type agentJoinApprovalPathOf, type agentJoinRequestApprovalPath, type agentJoinRequestPath, type agentJoinRequestsPath, type agentSessionErrorCodes, type agentSessionExpired, type agentSessionPath, type agentSessionRevoked, type allChannelsQuery, type collectAgentJoinRequestPath, type defaultIdleExpiry, type eventsPath, type identityAgentSessionPath, type idleExpiryPattern, type joinCodeLifetimeMinutes, type joinCodesPath, type liveConnectionPath, type redeemJoinCodePath, type refusalEvent, refusalOf };
+export { type AckAllRequest, type AckAllResponse, type AckRequest, type AckResponse, type AddCommandRequest, type AgentIdentity, type AgentJoinCalls, type AgentJoinCollectedResponse, type AgentJoinRequestResponse, type AgentJoinRequestStartedResponse, type AgentJoinRequestView, type AgentSessionEvent, type AgentSessionLiveDetails, type AgentSessionResponse, type ApproveAgentJoinRequest, type Attachment, type AttachmentBytes, type AttachmentContentType, type AttachmentId, type Author, type BuiltInCommand, type CallCommandRequest, type CallCommandResponse, type Channel, type ChannelDeletedEvent, type ChannelEvent, type ChannelName, type ChannelResponse, type CleanCloseResponse, type Command, type CommandEvent, type CommandName, type CommandSecret, type CommandWithSecretResponse, type ConnectedEvent, CookoutError, type CookoutErrorCode, type CookoutEvent, type CreateChannelRequest, type CreateIdentityRequest, type CreateJoinCodeRequest, type CreateMessageRequest, type CreateScheduledMessageRequest, type DeactivateIdentityResponse, type DeactivatedQuietAgent, type DeactivatedQuietAgentEvent, type DeactivatedQuietAgentId, type DeactivatedQuietAgentResponse, type DeactivationOffer, type DeactivationOfferEvent, type DeactivationOfferId, type DeactivationOfferResponse, type Description, type DescriptionCalls, type DisplayName, type EditScheduledMessageRequest, type EventStream, type FollowResponse, type Harness, type HealthResponse, type HumanIdentity, type Identity, type IdentityDeletedEvent, type IdentityEvent, type IdentityKind, type IdentityMessageCountResponse, type IdentityName, type IdentityResponse, type IdentityWithTokenResponse, type IdleExpiryTooLongDetails, type ImageContentType, type InboxHistoryItem, type InboxHistoryNudge, type InboxHistoryQuery, type InboxHistoryResponse, type InboxItem, type InboxItemEvent, type InboxReason, type InboxResponse, type IsoTime, type JoinCodeCalls, type JoinCodeResponse, type JoinRequest, type JsonSchema, type JsonValue, type LeaveResponse, type ListAgentSessionsResponse, type ListChannelsResponse, type ListCommandsResponse, type ListIdentitiesQuery, type ListIdentitiesResponse, type ListMessagesQuery, type ListMessagesResponse, type ListOpenThreadsQuery, type ListOpenThreadsResponse, type ListScheduledMessagesQuery, type ListScheduledMessagesResponse, type ListedAgentSession, type LiveConnectionDetail, type LiveConnectionId, type MarkUnreadRequest, type MarkUnreadResponse, type Message, type MessageEvent, type MessageFields, type MessageId, type MessageResponse, type MovedBackReadPosition, type NewAttachment, type Nudge, type NudgeEvent, type NudgeId, type NudgeKind, type NudgeReadEvent, type NudgeResponse, type OfflineAlert, type OfflineAlertEvent, type OfflineAlertId, type OfflineAlertResponse, type OfflineReason, type OpenThread, type Owner, type PostMessageRequest, type Presence, type PresenceEvent, type PresenceResponse, type PreviewScheduledMessageQuery, type Reaction, type ReactionCount, type ReactionEvent, type ReactionName, type ReactionsResponse, type ReadPosition, type ReadPositionEvent, type ReadPositionMovedBackEvent, type ReadPositionsResponse, type ReadReceipt, type ReadReceiptEvent, type RedeemJoinCodeRequest, type Refusal, type RegisteredCommand, type Reply, type RevokeAgentSessionResponse, type ScheduledMessage, type ScheduledMessageId, type ScheduledMessagePreviewResponse, type ScheduledMessageResponse, type ScheduledMessageRun, type SchemaProblem, type SearchRequest, type SearchResponse, type SearchResult, type ServerSentEvent, type SetDisplayNameRequest, type SetTriggerRequest, type StartAgentJoinRequest, type SubscriptionEvent, type SubscriptionResponse, type ThreadEvent, type ThreadMovedWarning, type ThreadResponse, type Token, type TopLevelMessage, type TopLevelMessageResponse, type Trigger, type TriggerFailure, type TriggerResponse, type TriggerResult, type UnknownErrorCode, type UpdateIdentityRequest, type WatchOptions, type agentJoinApprovalPathOf, type agentJoinRequestApprovalPath, type agentJoinRequestPath, type agentJoinRequestsPath, type agentSessionErrorCodes, type agentSessionExpired, type agentSessionPath, type agentSessionRevoked, type allChannelsQuery, type collectAgentJoinRequestPath, type defaultIdleExpiry, type eventsPath, type identityAgentSessionPath, type idleExpiryPattern, type joinCodeLifetimeMinutes, type joinCodesPath, type liveConnectionPath, type redeemJoinCodePath, type refusalEvent, refusalOf, type scheduledMessageCalls };
 ```

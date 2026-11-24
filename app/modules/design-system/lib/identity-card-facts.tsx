@@ -1,16 +1,18 @@
-import type { IdentityCardBoxParts } from "./identity-card-parts.ts";
+import { IdentityCardBroughtInBy } from "./identity-card-brought-in-by.tsx";
+import { IdentityCardPresence } from "./identity-card-presence.tsx";
+import type { IdentityCardShownParts } from "./identity-card-parts.ts";
 import type { ReactNode } from "react";
 
-const TEXT = { deactivated: "Deactivated" } as const;
+const DEACTIVATED = "Deactivated";
 
-export function IdentityCardFacts(parts: IdentityCardBoxParts): ReactNode {
+export function IdentityCardFacts(parts: IdentityCardShownParts): ReactNode {
   const { card } = parts;
   return (
-    <>
-      {card.presence !== null && <p className="text-xs text-muted-foreground">{card.presence.label}</p>}
-      <p className="text-xs text-muted-foreground">{card.kind}</p>
-      {card.description !== null && <p className="whitespace-pre-line">{card.description}</p>}
-      {card.deactivated && <p className="text-xs font-medium text-muted-foreground">{TEXT.deactivated}</p>}
-    </>
+    <div className="flex flex-col gap-1">
+      {card.deactivated && <p className="text-[13px] leading-5 font-medium text-destructive">{DEACTIVATED}</p>}
+      {!card.deactivated && <IdentityCardPresence card={card} />}
+      <p className="text-[13px] leading-5 text-muted-foreground">{card.kind}</p>
+      {card.broughtInBy !== null && <IdentityCardBroughtInBy bringer={card.broughtInBy} />}
+    </div>
   );
 }

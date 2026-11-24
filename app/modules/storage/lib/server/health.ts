@@ -1,13 +1,13 @@
 import { Effect } from "effect";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 
 export type HealthSection = {
   readonly checkHealth: () => Effect.Effect<void, StorageUnavailable>;
 };
 
-export const sqliteHealth = (db: SqliteDatabase): HealthSection => ({
+export const sqlHealth = (db: SqlDatabase): HealthSection => ({
   checkHealth: () => Effect.asVoid(db.get("SELECT 1 AS ok")),
 });
 

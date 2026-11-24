@@ -5,8 +5,8 @@ import { FieldNotes } from "./field-notes.tsx";
 import type { InputFieldParts } from "./prompt-parts.ts";
 import type { ReactNode } from "react";
 
-const STEPS = { integer: "1", number: "any", text: "any" } as const;
-const TYPES = { integer: "number", number: "number", text: "text" } as const;
+const STEPS = { date: "any", integer: "1", number: "any", text: "any", time: "60" } as const;
+const TYPES = { date: "date", integer: "number", number: "number", text: "text", time: "time" } as const;
 
 export function InputField(parts: InputFieldParts): ReactNode {
   const { onEdit } = parts;

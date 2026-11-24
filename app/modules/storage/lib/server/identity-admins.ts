@@ -1,7 +1,7 @@
 import { Array as Arr, Effect, Option, Predicate, Schema } from "effect";
 import { IDENTITY_COLUMNS, IdentityRow, toIdentity } from "./identity-row.ts";
 import type { Identity, IdentityName } from "../../../identities/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { nameFitsOwner } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
@@ -20,7 +20,7 @@ const LAST_ADMIN_COUNT = 1;
 
 const SELECT_IDENTITY = `SELECT ${IDENTITY_COLUMNS} FROM identities WHERE name = ?`;
 
-const COUNT_ADMINS = "SELECT count(*) AS count FROM identities WHERE admin = 1 AND deactivated = 0";
+const COUNT_ADMINS = "SELECT count(*) AS count FROM identities WHERE admin = TRUE AND deactivated = FALSE";
 
 const AdminCountRow = Schema.Struct({ count: Schema.Int });
 
@@ -55,14 +55,14 @@ function memorySetAdmin(
   };
 }
 
-function countAdmins(db: SqliteDatabase): Fails<number> {
+function countAdmins(db: SqlDatabase): Fails<number> {
   return db.get(COUNT_ADMINS).pipe(
     Effect.flatMap((row) => Effect.mapError(Schema.decodeUnknownEffect(AdminCountRow)(row), unreadable)),
     Effect.map((row) => row.count),
   );
 }
 
-function setAdminRow(db: SqliteDatabase, row: unknown, admin: boolean): Fails<SetAdminResult> {
+function setAdminRow(db: SqlDatabase, row: unknown, admin: boolean): Fails<SetAdminResult> {
   return Effect.gen(function* setAdminOnRow() {
     const decoded = yield* Effect.mapError(Schema.decodeUnknownEffect(IdentityRow)(row), unreadable);
     const admins = yield* countAdmins(db);
@@ -74,7 +74,7 @@ function setAdminRow(db: SqliteDatabase, row: unknown, admin: boolean): Fails<Se
   });
 }
 
-function sqliteSetAdmin(db: SqliteDatabase): SetAdmin {
+function sqlSetAdmin(db: SqlDatabase): SetAdmin {
   return (name, admin) =>
     db.transaction(
       Effect.flatMap(db.get(SELECT_IDENTITY, name), (row) => {
@@ -144,7 +144,7 @@ function memoryTransfers({ identities, open }: MemoryTransferMap): TransfersSect
   };
 }
 
-function identityNamed(db: SqliteDatabase, name: IdentityName): Fails<Option.Option<Identity>> {
+function identityNamed(db: SqlDatabase, name: IdentityName): Fails<Option.Option<Identity>> {
   return db.get(SELECT_IDENTITY, name).pipe(
     Effect.flatMap((row) => {
       if (Predicate.isUndefined(row)) {
@@ -157,7 +157,7 @@ function identityNamed(db: SqliteDatabase, name: IdentityName): Fails<Option.Opt
   );
 }
 
-function sqliteTransfers(db: SqliteDatabase): TransfersSection {
+function sqlTransfers(db: SqlDatabase): TransfersSection {
   return {
     transferAgent: (name, owner) =>
       db.transaction(
@@ -176,11 +176,4 @@ function sqliteTransfers(db: SqliteDatabase): TransfersSection {
   };
 }
 
-export {
-  memorySetAdmin,
-  memoryTransfers,
-  type SetAdminResult,
-  sqliteSetAdmin,
-  sqliteTransfers,
-  type TransferAgentResult,
-};
+export { memorySetAdmin, memoryTransfers, type SetAdminResult, sqlSetAdmin, sqlTransfers, type TransferAgentResult };

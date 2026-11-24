@@ -6,17 +6,18 @@ import {
   memoryCreateRefusal,
   memoryDeactivations,
   memoryRemoveIdentity,
-  sqliteCreateRefusal,
-  sqliteDeactivations,
+  sqlCreateRefusal,
+  sqlDeactivations,
 } from "./identity-owners.ts";
-import { memoryDisplayNames, sqliteDisplayNames } from "./display-names.ts";
-import { memorySetAdmin, memoryTransfers, sqliteSetAdmin, sqliteTransfers } from "./identity-admins.ts";
+import { memoryDisplayNames, sqlDisplayNames } from "./display-names.ts";
+import { memorySetAdmin, memoryTransfers, sqlSetAdmin, sqlTransfers } from "./identity-admins.ts";
 import type { DisplayNamesSection } from "./display-names.ts";
 import type { Fails } from "./errors.ts";
 import type { FindIdentity } from "./identity-row.ts";
 import type { MemoryState } from "./memory-state.ts";
 import type { PlaceHandler } from "./commands.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
+import { isFalse } from "./adapters/sql-database.ts";
 import { unreadable } from "./errors.ts";
 
 export type TokenLookup =
@@ -30,15 +31,15 @@ type ReplaceTokenResult =
 
 export type IdentitiesSection = DisplayNamesSection &
   IdentityDeletesSection &
-  ReturnType<typeof sqliteTransfers> &
-  ReturnType<typeof sqliteDeactivations> & {
+  ReturnType<typeof sqlTransfers> &
+  ReturnType<typeof sqlDeactivations> & {
     readonly createIdentity: (identity: Identity, hash: TokenHash) => Fails<"created" | CreateRefusal>;
     readonly setOnlyToken: (identity: Identity, hash: TokenHash) => Fails<void>;
     readonly listIdentities: () => Fails<readonly Identity[]>;
     readonly findIdentityByTokenHash: (hash: TokenHash) => Fails<TokenLookup>;
     readonly findIdentityByName: (name: IdentityName) => Fails<Identity | undefined>;
     readonly replaceToken: (name: IdentityName, hash: TokenHash) => Fails<ReplaceTokenResult>;
-    readonly setAdmin: ReturnType<typeof sqliteSetAdmin>;
+    readonly setAdmin: ReturnType<typeof sqlSetAdmin>;
   };
 
 type MemoryIdentities = {
@@ -172,7 +173,14 @@ const toLookup = (row: unknown): Fails<TokenLookup> =>
               })),
       );
 
-export const sqliteIdentities = (db: SqliteDatabase): Omit<IdentitiesSection, keyof IdentityDeletesSection> => {
+function broughtInByOf(identity: Identity): IdentityName | null {
+  if (identity.kind === "agent") {
+    return identity.broughtInBy ?? null;
+  }
+  return null;
+}
+
+export const sqlIdentities = (db: SqlDatabase): Omit<IdentitiesSection, keyof IdentityDeletesSection> => {
   const count = (sql: string, ...params: readonly string[]) =>
     db.get(sql, ...params).pipe(
       Effect.flatMap(decode(CountRow)),
@@ -185,23 +193,25 @@ export const sqliteIdentities = (db: SqliteDatabase): Omit<IdentitiesSection, ke
   const insert = (identity: Identity, hash: TokenHash) =>
     Effect.andThen(
       db.run(
-        "INSERT INTO identities (name, kind, owner, admin, created_at, display_name) VALUES (?, ?, ?, ?, ?, ?)",
+        `INSERT INTO identities (name, kind, owner, admin, created_at, display_name, brought_in_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         identity.name,
         identity.kind,
         identity.kind === "agent" ? identity.owner : null,
         identity.admin ? 1 : 0,
         identity.createdAt,
         identity.displayName ?? null,
+        broughtInByOf(identity),
       ),
-      db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, 0)", hash, identity.name),
+      db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)", hash, identity.name),
     );
   const revokeTokensOfName = (name: IdentityName) =>
-    db.run("UPDATE tokens SET revoked = 1 WHERE identity_name = ? AND revoked = 0", name);
+    db.run(`UPDATE tokens SET revoked = TRUE WHERE identity_name = ? AND ${isFalse[db.dialect]("revoked")}`, name);
   return {
     createIdentity: (identity, hash) =>
       db.transaction(
         Effect.gen(function* () {
-          const refusal = yield* sqliteCreateRefusal(db)(identity);
+          const refusal = yield* sqlCreateRefusal(db)(identity);
           if (Option.isSome(refusal)) {
             return refusal.value;
           }
@@ -209,7 +219,7 @@ export const sqliteIdentities = (db: SqliteDatabase): Omit<IdentitiesSection, ke
           return "created" as const;
         }),
       ),
-    ...sqliteDeactivations(db),
+    ...sqlDeactivations(db),
     findIdentityByName: (name) =>
       Effect.map(find(name), (row) => Option.getOrUndefined(Option.map(Option.fromUndefinedOr(row), toIdentity))),
     findIdentityByTokenHash: (hash) =>
@@ -233,11 +243,11 @@ export const sqliteIdentities = (db: SqliteDatabase): Omit<IdentitiesSection, ke
             return { status: "not_found" } as const;
           }
           yield* revokeTokensOfName(name);
-          yield* db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, 0)", hash, name);
+          yield* db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)", hash, name);
           return { identity: toIdentity(row), status: "replaced" } as const;
         }),
       ),
-    setAdmin: sqliteSetAdmin(db),
+    setAdmin: sqlSetAdmin(db),
     setOnlyToken: (identity, hash) =>
       db.transaction(
         Effect.gen(function* () {
@@ -247,19 +257,19 @@ export const sqliteIdentities = (db: SqliteDatabase): Omit<IdentitiesSection, ke
             return;
           }
           yield* db.run(
-            "UPDATE tokens SET revoked = 1 WHERE identity_name = ? AND revoked = 0 AND token_hash <> ?",
+            `UPDATE tokens SET revoked = TRUE WHERE identity_name = ? AND ${isFalse[db.dialect]("revoked")} AND token_hash <> ?`,
             identity.name,
             hash,
           );
           yield* db.run(
-            `INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, 0)
-             ON CONFLICT (token_hash) DO UPDATE SET identity_name = excluded.identity_name, revoked = 0`,
+            `INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)
+             ON CONFLICT (token_hash) DO UPDATE SET identity_name = excluded.identity_name, revoked = FALSE`,
             hash,
             identity.name,
           );
         }),
       ),
-    ...sqliteDisplayNames(db),
-    ...sqliteTransfers(db),
+    ...sqlDisplayNames(db),
+    ...sqlTransfers(db),
   };
 };

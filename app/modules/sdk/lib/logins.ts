@@ -64,3 +64,4 @@ function loginCalls(server: ClientConnection): LoginCalls {
 }
 
 export { loginCalls };
+export type { LoginCalls } from "../../logins/index.ts";

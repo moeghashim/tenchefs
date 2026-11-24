@@ -45,6 +45,23 @@ it.effect.each(storageLayers)(
 );
 
 it.effect.each(storageLayers)(
+  "storage contract ($adapter): asking for no identities' presence finds none",
+  ({ layer }) =>
+    Effect.gen(function* noneAsked() {
+      const { storage } = yield* openStore(layer);
+      yield* storage.createIdentity(identity("ada", { kind: "human" }), hashA);
+      yield* storage.recordPresence({
+        identity: nameOf("ada"),
+        lastSeenAt: isoTime("2026-01-01T00:00:00.000Z"),
+        online: true,
+      });
+      const none = yield* storage.listPresence([]);
+
+      expect(none).toStrictEqual([]);
+    }),
+);
+
+it.effect.each(storageLayers)(
   "storage contract ($adapter): an offline identity's reason and whether its end was unexpected are kept, and going online again clears them",
   ({ layer }) =>
     Effect.gen(function* endKept() {

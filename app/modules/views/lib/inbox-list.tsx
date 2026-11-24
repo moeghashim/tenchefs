@@ -8,6 +8,7 @@ import { InboxHeader } from "./inbox-header.tsx";
 import type { InboxRows } from "./use-inbox-rows.ts";
 import type { InboxSelection } from "../../paths/index.ts";
 import { MarkAllFailed } from "./mark-all-failed.tsx";
+import { useMemo } from "react";
 
 const TITLE = "Inbox";
 
@@ -24,12 +25,16 @@ interface InboxListProps {
 export function InboxList(props: InboxListProps): ReactNode {
   const { me, rows, selected, state: unread } = props;
   const handleMarkAlertRead = props.unread.alerts.markRead;
+  const { ack } = props.board;
+  const { markUnread } = props.unread;
+  const actions = useMemo(() => ({ ack, markUnread }), [ack, markUnread]);
   return (
     <ListPane hiddenWhenNarrow={selected !== null}>
       <InboxHeader board={props.board} state={unread} title={TITLE} unread={props.unread} />
       <Feed label={TITLE}>
         {unread.status === "loaded" && <MarkAllFailed markAll={unread.markAll} />}
         <InboxBody
+          actions={actions}
           me={me}
           notices={props.notices}
           onMarkAlertRead={handleMarkAlertRead}

@@ -7,6 +7,7 @@ import { involves, lastActivityOf, pageOfOpenThreads } from "./open-threads.ts";
 import type { Effect } from "effect";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { StorageUnavailable } from "./errors.ts";
+import { memorySearch } from "./search-memory.ts";
 import { reopened } from "../../../messages/index.ts";
 
 interface MemoryThreads {
@@ -50,7 +51,7 @@ interface ChangedBy {
   readonly close: NewMessage["close"];
 }
 
-type ThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads">;
+type ThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads" | "searchMessages">;
 
 function findMessage({ id, messages }: Finding): Option.Option<Message> {
   return Arr.findFirst(messages, (message) => message.id === id);
@@ -190,6 +191,7 @@ function openThreadsIn(
 
 function memoryThreads({ change, read }: ThreadsOn): ThreadsSection {
   return {
+    ...memorySearch((work) => read((data) => work(data.messages))),
     closeThread: (id, closed) =>
       change((data) => {
         const [result, next] = changeThread(data, id, closing(closed));

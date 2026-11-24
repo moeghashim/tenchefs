@@ -29,6 +29,7 @@ import { inboxReasons, isDeactivatedQuietAgentId, isDeactivationOfferId, isNudge
 import { isOfflineAlertId, offlineReasons } from "../../../presence/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import { Schema } from "effect";
+import type { TriggerFailure } from "../../../triggers/index.ts";
 import { matchesWire } from "../../../http/index.ts";
 
 const InboxReasonSchema = Schema.Literals(inboxReasons);
@@ -103,6 +104,14 @@ const InboxHistoryItemSchema = matchesWire<InboxHistoryItem>()(
   Schema.Struct({ ...inboxItemFields, read: Schema.Boolean }),
 );
 
+const TriggerFailureSchema = matchesWire<TriggerFailure>()(
+  Schema.Struct({
+    error: Schema.optionalKey(Schema.String),
+    message: MessageIdSchema,
+    status: Schema.optionalKey(Schema.Int),
+  }),
+);
+
 export const OfflineAlertSchema = matchesWire<OfflineAlert>()(
   Schema.Struct({
     agent: IdentityNameSchema,
@@ -111,6 +120,7 @@ export const OfflineAlertSchema = matchesWire<OfflineAlert>()(
     offlineReason: Schema.Literals(offlineReasons),
     raisedAt: IsoTimeSchema,
     read: Schema.Boolean,
+    trigger: Schema.optionalKey(TriggerFailureSchema),
   }),
 );
 

@@ -1,5 +1,5 @@
 import { Button, CardBody, Muted } from "../../design-system/index.tsx";
-import type { LoginApprovalState, LoginRequest } from "../../session/index.ts";
+import type { LoginApprovalState, LoginRequest } from "../../board/index.ts";
 import type { ReactNode } from "react";
 
 const TEXT = {

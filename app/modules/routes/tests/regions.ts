@@ -80,6 +80,10 @@ export function inTopBar(): Region {
   return regionOf(() => screen.getByRole("banner", { name: "Top bar" }));
 }
 
+export function inSearchResults(): Region {
+  return regionOf(() => screen.getByRole("list", { name: "Search results" }));
+}
+
 export function inDialog(): Region {
   return regionOf(() => screen.getByRole("alertdialog"));
 }

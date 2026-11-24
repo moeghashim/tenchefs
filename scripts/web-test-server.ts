@@ -8,10 +8,12 @@ import { spawn } from "node:child_process";
 interface WebTestCookout {
   readonly adminToken: string;
   readonly url: string;
+  readonly receiverUrl: string;
 }
 
 interface RunningWebTestCookout {
   readonly url: string;
+  readonly receiverUrl: string;
   readonly stop: () => Promise<void>;
 }
 
@@ -19,6 +21,8 @@ interface Started {
   readonly stop: () => Promise<void>;
   readonly value: string;
 }
+
+const RECEIVER_URL = "cookoutWebTestReceiverUrl";
 
 const adminToken = "web-test-admin-token-0123456789abcdef0123456789";
 
@@ -62,6 +66,7 @@ export async function startWebTestCookout(): Promise<RunningWebTestCookout> {
     [
       `COOKOUT_ADMIN_TOKEN=${adminToken}`,
       "COOKOUT_PRESENCE_GRACE_SECONDS=0",
+      "COOKOUT_ALLOW_LOCAL_TRIGGERS=true",
       `COOKOUT_ROUTINE_FIRE_URL=${routine.value}`,
       "COOKOUT_ROUTINE_TOKEN=web-test-routine-token",
       `COOKOUT_PUBLIC_URL=${webTestBoardUrl}`,
@@ -78,6 +83,7 @@ export async function startWebTestCookout(): Promise<RunningWebTestCookout> {
     "listening",
   );
   return {
+    receiverUrl: routine.value,
     stop: async () => {
       await Promise.all([server.stop(), routine.stop()]);
       rmSync(folder, { force: true, recursive: true });
@@ -87,5 +93,7 @@ export async function startWebTestCookout(): Promise<RunningWebTestCookout> {
 }
 
 export function webTestCookout(): WebTestCookout {
-  return { adminToken, url: globalThis.location.origin };
+  return { adminToken, receiverUrl: String(Reflect.get(globalThis, RECEIVER_URL)), url: globalThis.location.origin };
 }
+
+export { RECEIVER_URL };

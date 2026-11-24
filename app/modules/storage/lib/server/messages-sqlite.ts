@@ -8,16 +8,15 @@ import type {
   ThreadResponse,
   TopLevelMessage,
 } from "../../../messages/index.ts";
-import { MESSAGE_COLUMNS, MentionsText, dataText, toMessage } from "./message-rows-sqlite.ts";
+import { MentionsText, dataText, messageColumns, toMessage } from "./message-rows-sqlite.ts";
+import { insertAttachments, sqlAttachments } from "./attachments.ts";
 import { isPlaced, placeIn, placed, threadIdOf, withKnownMentions } from "./messages.ts";
 import { latestOf, stampedIn, takeId } from "./message-sequence-sqlite.ts";
-import { recordAppended, sqliteInbox } from "./inbox-sqlite.ts";
-import { sqliteClosedThreads, threadChangedBy } from "./closed-threads-sqlite.ts";
-import type { CommandCallsSection } from "./command-calls.ts";
+import { recordAppended, sqlInbox } from "./inbox-sqlite.ts";
+import { sqlClosedThreads, threadChangedBy } from "./closed-threads-sqlite.ts";
 import type { MessageReader } from "./inbox-sqlite.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
-import { sqliteCommandCalls } from "./command-calls.ts";
 import { unreadable } from "./errors.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
@@ -32,8 +31,8 @@ const ONE_AT_A_TIME = { concurrency: 1 } as const;
 const isFoundRow = Schema.is(Schema.Struct({ found: Schema.Literal(FOUND) }));
 
 const INSERT_MESSAGE = `INSERT INTO messages
-  (id, channel, author_name, author_owner, text, data, reply_to, mentions, created_at, harness)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  (id, channel, author_name, author_owner, text, data, reply_to, mentions, created_at, harness, scheduled_message_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function replyToOf(message: Message): MessageId | null {
   if (message.kind === "reply") {
@@ -42,8 +41,8 @@ function replyToOf(message: Message): MessageId | null {
   return null;
 }
 
-function find(db: SqliteDatabase, id: MessageId): Fails<Message | undefined> {
-  return db.get(`SELECT ${MESSAGE_COLUMNS} FROM messages WHERE id = ?`, id).pipe(
+function find(db: SqlDatabase, id: MessageId): Fails<Message | undefined> {
+  return db.get(`SELECT ${messageColumns(db)} FROM messages WHERE id = ?`, id).pipe(
     Effect.flatMap((row) => {
       if (Predicate.isObject(row)) {
         return toMessage(row);
@@ -53,52 +52,72 @@ function find(db: SqliteDatabase, id: MessageId): Fails<Message | undefined> {
   );
 }
 
-function channelExists(db: SqliteDatabase, channel: ChannelName): Fails<boolean> {
+function channelExists(db: SqlDatabase, channel: ChannelName): Fails<boolean> {
   return db.get("SELECT 1 AS found FROM channels WHERE name = ?", channel).pipe(Effect.map(isFoundRow));
 }
 
-function placementOf(db: SqliteDatabase, { channel, replyTo }: NewMessage): Fails<Placement> {
+function placementOf(db: SqlDatabase, { channel, replyTo }: NewMessage): Fails<Placement> {
   if (Predicate.isUndefined(replyTo)) {
     return Effect.succeed({ status: "top-level" });
   }
   return Effect.map(find(db, replyTo), (found) => placeIn({ channel, found }));
 }
 
-function insert(db: SqliteDatabase, message: Message, data: string | null): Fails<void> {
+function scheduleOf({ scheduledMessage }: Message): number | null {
+  if (Predicate.isUndefined(scheduledMessage)) {
+    return null;
+  }
+  return scheduledMessage.id;
+}
+
+function insert(db: SqlDatabase, message: Message, data: string | null): Fails<void> {
   return Effect.gen(function* insertMessage() {
     const mentions = yield* Schema.encodeEffect(MentionsText)(message.mentions).pipe(Effect.mapError(unreadable));
     const owner = message.author.owner ?? null;
     const replyTo = replyToOf(message);
     const { harness = null, author, channel, createdAt, id, text } = message;
-    const columns = [id, channel, author.name, owner, text, data, replyTo, mentions, createdAt, harness] as const;
+    const schedule = scheduleOf(message);
+    const columns = [
+      id,
+      channel,
+      author.name,
+      owner,
+      text,
+      data,
+      replyTo,
+      mentions,
+      createdAt,
+      harness,
+      schedule,
+    ] as const;
     yield* db.run(INSERT_MESSAGE, ...columns);
   });
 }
 
-function knownNames(db: SqliteDatabase, names: Message["mentions"]): Fails<ReadonlySet<Message["mentions"][number]>> {
+function knownNames(db: SqlDatabase, names: Message["mentions"]): Fails<ReadonlySet<Message["mentions"][number]>> {
   return pipe(
     names,
     Effect.filter((name) =>
-      db.get("SELECT 1 AS found FROM identities WHERE name = ? AND deactivated = 0", name).pipe(Effect.map(isFoundRow)),
+      db.get("SELECT 1 AS found FROM identities WHERE name = ? AND NOT deactivated", name).pipe(Effect.map(isFoundRow)),
     ),
     Effect.map((found: Message["mentions"]) => new Set(found)),
   );
 }
 
-function sqliteMessageReader(db: SqliteDatabase): MessageReader {
-  return { columns: MESSAGE_COLUMNS, findMessage: (id) => find(db, id), toMessage };
+function sqlMessageReader(db: SqlDatabase): MessageReader {
+  return { columns: messageColumns(db), findMessage: (id) => find(db, id), toMessage };
 }
 
 function afterInsert(
-  db: SqliteDatabase,
+  db: SqlDatabase,
   message: Message,
   close: NewMessage["close"],
 ): Fails<readonly [readonly ReadReceipt[], TopLevelMessage | undefined]> {
-  const reader = sqliteMessageReader(db);
+  const reader = sqlMessageReader(db);
   return Effect.all([recordAppended({ db, message }), threadChangedBy({ close, db, message, reader })], ONE_AT_A_TIME);
 }
 
-function appendInChannel(db: SqliteDatabase, message: NewMessage): Fails<AppendMessageResult> {
+function appendInChannel(db: SqlDatabase, message: NewMessage): Fails<AppendMessageResult> {
   return Effect.gen(function* appendMessage() {
     const placement = yield* placementOf(db, message);
     if (!isPlaced(placement)) {
@@ -109,15 +128,15 @@ function appendInChannel(db: SqliteDatabase, message: NewMessage): Fails<AppendM
     const mentioning = yield* stampedIn({ db, message: withKnownMentions({ known, message }) });
     const id = yield* takeId({ db, message: mentioning });
     const stored = placed({ id, message: mentioning, placement });
-    const [receipts, threadChanged] = yield* Effect.andThen(
-      insert(db, stored, data),
-      afterInsert(db, stored, message.close),
+    const [receipts, threadChanged] = yield* insert(db, stored, data).pipe(
+      Effect.andThen(insertAttachments(db)(stored)),
+      Effect.andThen(afterInsert(db, stored, message.close)),
     );
     return { message: stored, receipts, status: "appended", threadChanged } as const;
   });
 }
 
-function append(db: SqliteDatabase, message: NewMessage): Fails<AppendMessageResult> {
+function append(db: SqlDatabase, message: NewMessage): Fails<AppendMessageResult> {
   return Effect.gen(function* appendIfChannel() {
     const exists = yield* channelExists(db, message.channel);
     if (exists) {
@@ -127,12 +146,12 @@ function append(db: SqliteDatabase, message: NewMessage): Fails<AppendMessageRes
   });
 }
 
-function threadMessages(db: SqliteDatabase, parentId: MessageId): Fails<readonly Message[]> {
-  const sql = `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE id = ? OR reply_to = ? ORDER BY id`;
+function threadMessages(db: SqlDatabase, parentId: MessageId): Fails<readonly Message[]> {
+  const sql = `SELECT ${messageColumns(db)} FROM messages WHERE id = ? OR reply_to = ? ORDER BY id`;
   return db.all(sql, parentId, parentId).pipe(Effect.flatMap((rows) => Effect.forEach(rows, toMessage, ONE_AT_A_TIME)));
 }
 
-function threadOf(db: SqliteDatabase, id: MessageId): Fails<Omit<ThreadResponse, "receipts"> | undefined> {
+function threadOf(db: SqlDatabase, id: MessageId): Fails<Omit<ThreadResponse, "receipts"> | undefined> {
   return Effect.gen(function* getThread() {
     const found = yield* find(db, id);
     if (Predicate.isUndefined(found)) {
@@ -147,13 +166,13 @@ function threadOf(db: SqliteDatabase, id: MessageId): Fails<Omit<ThreadResponse,
   });
 }
 
-function newestRows(db: SqliteDatabase, channel: ChannelName, page: ChannelPageRequest): Fails<readonly unknown[]> {
-  const sql = `SELECT ${MESSAGE_COLUMNS} FROM messages
+function newestRows(db: SqlDatabase, channel: ChannelName, page: ChannelPageRequest): Fails<readonly unknown[]> {
+  const sql = `SELECT ${messageColumns(db)} FROM messages
     WHERE channel = ? AND reply_to IS NULL AND id < ? ORDER BY id DESC LIMIT ?`;
   return db.all(sql, channel, page.before ?? ALL_IDS, page.limit + ONE_MORE);
 }
 
-function pageOf(db: SqliteDatabase, channel: ChannelName, page: ChannelPageRequest): Fails<Page> {
+function pageOf(db: SqlDatabase, channel: ChannelName, page: ChannelPageRequest): Fails<Page> {
   return Effect.gen(function* readPage() {
     const rows = yield* newestRows(db, channel, page);
     const messages = yield* Effect.forEach(rows, toMessage, ONE_AT_A_TIME);
@@ -163,11 +182,13 @@ function pageOf(db: SqliteDatabase, channel: ChannelName, page: ChannelPageReque
   });
 }
 
-function sqliteMessages(db: SqliteDatabase): MessagesSection & ReturnType<typeof sqliteInbox> & CommandCallsSection {
+type SharedMessagesSection = Omit<MessagesSection, "searchMessages"> & ReturnType<typeof sqlInbox>;
+
+function sqlMessages(db: SqlDatabase): SharedMessagesSection {
   return {
-    ...sqliteInbox({ db, reader: sqliteMessageReader(db) }),
-    ...sqliteClosedThreads({ db, reader: sqliteMessageReader(db) }),
-    ...sqliteCommandCalls({ appendMessage: (message) => append(db, message), db }),
+    ...sqlInbox({ db, reader: sqlMessageReader(db) }),
+    ...sqlClosedThreads({ db, reader: sqlMessageReader(db) }),
+    ...sqlAttachments(db),
     appendMessage: (message) => db.transaction(append(db, message)),
     getThread: (id) => threadOf(db, id),
     latestMessageId: latestOf(db),
@@ -181,4 +202,8 @@ function sqliteMessages(db: SqliteDatabase): MessagesSection & ReturnType<typeof
   };
 }
 
-export { sqliteMessages };
+function appenderOf(db: SqlDatabase): (message: NewMessage) => Fails<AppendMessageResult> {
+  return (message) => append(db, message);
+}
+
+export { appenderOf, sqlMessageReader, sqlMessages };

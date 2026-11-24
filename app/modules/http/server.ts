@@ -6,7 +6,18 @@
  * a 500. Given a web folder, it also serves the built web UI: `index.html` at
  * `/` and the build's files under `/assets/`, with no token.
  */
-import { ByteSize, DateTime, Effect, FileSystem, Layer, Option, Path, String as Str } from "effect";
+import {
+  ByteSize,
+  DateTime,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Predicate,
+  Record as Rec,
+  String as Str,
+} from "effect";
 import { ErrorResponseSchema, HealthResponseSchema, SchemaProblemsSchema, securityHeaders } from "./lib/server/wire.ts";
 import type { Gate, Route } from "./lib/server/router.ts";
 import { HttpIncomingMessage, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -113,6 +124,11 @@ function webRoutes({ publicUrl = "", webFolder }: Serving): readonly Route<WebNe
   });
 }
 
+function withSecurityHeaders(response: HttpServerResponse.HttpServerResponse): HttpServerResponse.HttpServerResponse {
+  const missing = Rec.filter(securityHeaders, (_value, name) => !Predicate.hasProperty(response.headers, name));
+  return HttpServerResponse.setHeaders(response, missing);
+}
+
 function answerFailure(failure: unknown): Effect.Effect<HttpServerResponse.HttpServerResponse> {
   return respond(toRefusal(failure));
 }
@@ -200,7 +216,7 @@ export function httpServer<Needs, Provides, Requires, Fails, OpenNeeds = never>(
   const open: readonly Route<Storage | WebNeeds | OpenNeeds>[] = [healthRoute, ...webRoutes(serving), ...openRoutes];
   const app = Effect.andThen(guardRequest(publicUrl), dispatch({ gate, gated, open })).pipe(
     Effect.catch(answerFailure),
-    Effect.map(HttpServerResponse.setHeaders(securityHeaders)),
+    Effect.map(withSecurityHeaders),
     Effect.provideService(HttpIncomingMessage.MaxBodySize, maxBodySize),
   );
   return Layer.provideMerge(HttpServer.serve(app), nodeHttpServer({ host, port }));

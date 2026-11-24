@@ -6,6 +6,7 @@ import { StorageUnavailable } from "../errors.ts";
 type SqlValue = SQLInputValue;
 
 export type SqliteDatabase = {
+  readonly dialect: "sqlite";
   readonly get: (sql: string, ...params: readonly SqlValue[]) => Effect.Effect<unknown, StorageUnavailable>;
   readonly all: (sql: string, ...params: readonly SqlValue[]) => Effect.Effect<readonly unknown[], StorageUnavailable>;
   readonly run: (sql: string, ...params: readonly SqlValue[]) => Effect.Effect<void, StorageUnavailable>;
@@ -23,6 +24,7 @@ const wrap = (db: DatabaseSync): SqliteDatabase => {
   const oneAtATime = Semaphore.makeUnsafe(1);
   return {
     all: (sql, ...params) => attempt((): readonly unknown[] => db.prepare(sql).all(...params)),
+    dialect: "sqlite",
     exec,
     get: (sql, ...params) => attempt((): unknown => db.prepare(sql).get(...params)),
     run: (sql, ...params) => attempt(() => void db.prepare(sql).run(...params)),

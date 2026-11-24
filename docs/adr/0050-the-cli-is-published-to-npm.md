@@ -1,6 +1,6 @@
 # The CLI is published to npm
 
-2026-11-23 (mattpocock/cookout#157). Supersedes [ADR 0031](0031-changesets-version-the-package-and-publishing-stays-off.md)'s hold on publishing; its Changesets setup stands. Publishing `@ai-hero/cookout` to npm now, with the chief of staff in charge of releases, is Matt's decision of 2026-11-23, on the board. Publishing by trusted publishing (OIDC) with no npm token, because granular npm tokens are no longer an option, is also Matt's, of the same day. Making 0.1.0 the first version is the ticket's.
+2026-11-23 (mattpocock/cookout#157). Supersedes ADR 0031's hold on publishing; its Changesets setup stands. Publishing `@ai-hero/cookout` to npm now, with the chief of staff in charge of releases, is Matt's decision of 2026-11-23, on the board. Publishing by trusted publishing (OIDC) with no npm token, because granular npm tokens are no longer an option, is also Matt's, of the same day. Making 0.1.0 the first version is the ticket's.
 
 ## Decision
 

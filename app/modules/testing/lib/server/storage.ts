@@ -1,11 +1,22 @@
 import { Context, Effect, Exit, FileSystem, Layer, Path, Scope } from "effect";
-import { Storage, StorageUnavailable, memoryStorage, sqliteStorage } from "../../../storage/server.ts";
+import type { QueryPlan, ScheduledRun } from "../../../storage/server.ts";
+import {
+  Storage,
+  StorageUnavailable,
+  memoryAssetStore,
+  memoryStorage,
+  postgresQueryPlans,
+  postgresStorage,
+  sqliteQueryPlans,
+  sqliteStorage,
+} from "../../../storage/server.ts";
 import { fixtureOwnerName, identityFixture } from "./identities.ts";
+import { freshPostgresDatabase } from "./postgres.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
 import { tokenHash } from "../../../identities/index.ts";
 
 interface StorageLayer {
-  readonly adapter: "memory" | "sqlite";
+  readonly adapter: "memory" | "sqlite" | "postgres";
   readonly layer: Layer.Layer<Storage, StorageUnavailable>;
   readonly emptyLayer: Layer.Layer<Storage, StorageUnavailable>;
 }
@@ -39,9 +50,20 @@ function withFixtureOwner<Failure>(
   );
 }
 
+const freshPostgresStorage: Layer.Layer<Storage, StorageUnavailable> = Layer.unwrap(
+  Effect.map(freshPostgresDatabase, postgresStorage),
+);
+
+const postgresLayer: StorageLayer = {
+  adapter: "postgres",
+  emptyLayer: freshPostgresStorage,
+  layer: withFixtureOwner(freshPostgresStorage),
+};
+
 const storageLayers: readonly StorageLayer[] = [
   { adapter: "memory", emptyLayer: memoryStorage, layer: withFixtureOwner(memoryStorage) },
   { adapter: "sqlite", emptyLayer: freshSqliteStorage, layer: withFixtureOwner(freshSqliteStorage) },
+  postgresLayer,
 ];
 
 const unusableStorage: Layer.Layer<Storage> = Layer.effect(
@@ -53,6 +75,62 @@ const unusableStorage: Layer.Layer<Storage> = Layer.effect(
   })),
 ).pipe(Layer.provide(memoryStorage));
 
+const pausedMidRunStorage: Layer.Layer<Storage> = Layer.effect(
+  Storage,
+  Effect.map(Storage, (storage) => ({
+    ...storage,
+    runScheduledMessage: (run: ScheduledRun): ReturnType<Storage["Service"]["runScheduledMessage"]> =>
+      Effect.andThen(storage.pauseScheduledMessage(run.id, run.due), storage.runScheduledMessage(run)),
+  })),
+).pipe(Layer.provide(memoryStorage));
+
+const EDITED_TEXT = "edited mid-run";
+
+function editingText(storage: Storage["Service"], run: ScheduledRun): Effect.Effect<void> {
+  return Effect.flatMap(Effect.flatMap(storage.findScheduledMessage(run.id), Effect.fromNullishOr), (schedule) =>
+    Effect.when(
+      Effect.asVoid(storage.editScheduledMessage(run.id, { ...schedule, text: EDITED_TEXT }, run.due)),
+      Effect.succeed(schedule.text !== EDITED_TEXT),
+    ),
+  ).pipe(Effect.asVoid, Effect.orDie);
+}
+
+const editedMidRunStorage: Layer.Layer<Storage> = Layer.effect(
+  Storage,
+  Effect.map(Storage, (storage) => ({
+    ...storage,
+    runScheduledMessage: (run: ScheduledRun): ReturnType<Storage["Service"]["runScheduledMessage"]> =>
+      Effect.andThen(editingText(storage, run), storage.runScheduledMessage(run)),
+  })),
+).pipe(Layer.provide(memoryStorage));
+
+function deactivatingCreator(storage: Storage["Service"], run: ScheduledRun): Effect.Effect<void> {
+  return Effect.flatMap(Effect.flatMap(storage.findScheduledMessage(run.id), Effect.fromNullishOr), ({ creator }) =>
+    Effect.asVoid(storage.deactivateIdentity(creator)),
+  ).pipe(Effect.orDie);
+}
+
+const deactivatedMidRunStorage: Layer.Layer<Storage> = Layer.effect(
+  Storage,
+  Effect.map(Storage, (storage) => ({
+    ...storage,
+    runScheduledMessage: (run: ScheduledRun): ReturnType<Storage["Service"]["runScheduledMessage"]> =>
+      Effect.andThen(deactivatingCreator(storage, run), storage.runScheduledMessage(run)),
+  })),
+).pipe(Layer.provide(memoryStorage));
+
+function freshSqliteQueryPlans<Failure>(
+  work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>,
+): Effect.Effect<readonly QueryPlan[], Failure | StorageUnavailable, FileSystem.FileSystem | Path.Path> {
+  return Effect.scoped(Effect.flatMap(freshDatabasePath, (path) => sqliteQueryPlans({ path, work })));
+}
+
+function freshPostgresQueryPlans<Failure>(
+  work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>,
+): Effect.Effect<readonly QueryPlan[], Failure | StorageUnavailable> {
+  return Effect.scoped(Effect.flatMap(freshPostgresDatabase, (url) => postgresQueryPlans({ url, work })));
+}
+
 function openStore<Failure, Needs>(
   layer: Layer.Layer<Storage, Failure, Needs>,
 ): Effect.Effect<OpenStore, Failure, Needs> {
@@ -63,4 +141,17 @@ function openStore<Failure, Needs>(
   });
 }
 
-export { freshDatabasePath, openStore, storageLayers, unusableStorage };
+const memoryAssets = memoryAssetStore;
+
+export {
+  deactivatedMidRunStorage,
+  editedMidRunStorage,
+  freshDatabasePath,
+  freshPostgresQueryPlans,
+  freshSqliteQueryPlans,
+  memoryAssets,
+  openStore,
+  pausedMidRunStorage,
+  storageLayers,
+  unusableStorage,
+};

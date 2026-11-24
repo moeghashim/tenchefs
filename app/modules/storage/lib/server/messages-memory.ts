@@ -10,12 +10,21 @@ import type {
 } from "./messages.ts";
 import { Array as Arr, Effect, Option, Predicate, Ref, pipe } from "effect";
 import type { Author, Message, MessageId, TopLevelMessage } from "../../../messages/index.ts";
+import type { DeletedChannel, MemoryChannelsSection } from "./channels.ts";
 import { EMPTY_INBOX, memoryReactions, withoutChannel, withoutIdentity } from "./inbox-memory-state.ts";
 import { afterAppend, memoryInbox } from "./inbox-memory.ts";
-import { asMessageId, isPlaced, placeIn, placed, stampedAfter, threadIdOf, withKnownMentions } from "./messages.ts";
+import {
+  asMessageId,
+  attachmentIn,
+  isPlaced,
+  placeIn,
+  placed,
+  stampedAfter,
+  threadIdOf,
+  withKnownMentions,
+} from "./messages.ts";
 import { current, findMessage, memoryThreads, repliesTo, threadChangedBy } from "./threads-memory.ts";
 import type { IdentitiesSection } from "./identities.ts";
-import type { MemoryChannelsSection } from "./channels.ts";
 import type { MemoryInbox } from "./inbox-memory-state.ts";
 import type { MemoryInboxSection } from "./inbox-memory.ts";
 import type { MemoryState } from "./memory-state.ts";
@@ -34,6 +43,8 @@ interface MemoryMessagesOptions {
   readonly identities: Pick<IdentitiesSection, "listIdentities">;
   readonly state: MemoryState;
 }
+
+type ScheduledMessageId = NonNullable<Message["scheduledMessage"]>["id"];
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
@@ -114,19 +125,42 @@ function pageIn(messages: readonly Message[], channel: ChannelName, page: Channe
 type MemoryMessagesSection = MessagesSection &
   MemoryInboxSection &
   ReturnType<typeof memoryReactions> & {
-    readonly forgetChannel: (channel: ChannelName) => Fails<ReadonlySet<MessageId>>;
+    readonly forgetChannel: (channel: ChannelName) => Fails<ForgottenChannel>;
     readonly forgetIdentity: (identity: Author["name"]) => Fails<void>;
     readonly countMessagesBy: (identity: Author["name"]) => Fails<number>;
+    readonly markMessagesOf: (schedule: ScheduledMessageId) => Fails<void>;
   };
 
-function withoutMessagesIn(
-  data: MemoryMessages,
-  channel: ChannelName,
-): readonly [ReadonlySet<MessageId>, MemoryMessages] {
+interface ForgottenChannel {
+  readonly messageIds: ReadonlySet<MessageId>;
+  readonly attachments: DeletedChannel["attachments"];
+}
+
+function markedDeleted(schedule: ScheduledMessageId): (message: Message) => Message {
+  return (message) => {
+    if (Predicate.isUndefined(message.scheduledMessage) || message.scheduledMessage.id !== schedule) {
+      return message;
+    }
+    return { ...message, scheduledMessage: { deleted: true, id: schedule } };
+  };
+}
+
+function withScheduleDeleted(schedule: ScheduledMessageId) {
+  return (data: MemoryMessages): readonly [true, MemoryMessages] => [
+    true,
+    { ...data, messages: Arr.map(data.messages, markedDeleted(schedule)) },
+  ];
+}
+
+function withoutMessagesIn(data: MemoryMessages, channel: ChannelName): readonly [ForgottenChannel, MemoryMessages] {
   const gone = Arr.filter(data.messages, (message) => message.channel === channel);
   const kept = Arr.filter(data.messages, (message) => message.channel !== channel);
   const ids = new Set(Arr.map(gone, (message) => message.id));
-  return [ids, { ...data, inbox: withoutChannel({ channel, ids, inbox: data.inbox }), messages: kept }];
+  const attachments = Arr.flatMap(gone, (message) => Arr.map(message.attachments ?? [], ({ id }) => id));
+  return [
+    { attachments, messageIds: ids },
+    { ...data, inbox: withoutChannel({ channel, ids, inbox: data.inbox }), messages: kept },
+  ];
 }
 
 function namesAuthor(identity: Author["name"]): (message: Message) => boolean {
@@ -173,6 +207,7 @@ function memoryMessages({ channels, identities, state }: MemoryMessagesOptions):
         return Effect.succeed(CHANNEL_NOT_FOUND);
       }),
     countMessagesBy: (identity) => read((messages) => Arr.filter(messages, namesAuthor(identity)).length),
+    findAttachment: (id) => read(attachmentIn(id)),
     forgetChannel: (channel) => change((data) => withoutMessagesIn(data, channel)),
     forgetIdentity: (identity) =>
       Effect.asVoid(change((data) => [true, { ...data, inbox: withoutIdentity({ identity, inbox: data.inbox }) }])),
@@ -185,6 +220,7 @@ function memoryMessages({ channels, identities, state }: MemoryMessagesOptions):
         }
         return Effect.undefined;
       }),
+    markMessagesOf: (schedule) => Effect.asVoid(change(withScheduleDeleted(schedule))),
   };
 }
 

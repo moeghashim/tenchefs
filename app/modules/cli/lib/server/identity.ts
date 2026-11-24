@@ -5,6 +5,8 @@ import { deactivation, identitiesAnswer, identityAnswer } from "./handles.ts";
 import type { CallFailure } from "./adapters/sdk.ts";
 import { callServer } from "./adapters/sdk.ts";
 import { identityKinds } from "../../../identities/index.ts";
+import { identityTriggerCommand } from "./identity-trigger.ts";
+import { isDeactivationOfferId } from "../../../inbox/index.ts";
 
 const NOTHING = {};
 
@@ -81,7 +83,7 @@ const identityDeactivateCommand = Command.make("deactivate", { name: identityNam
   answered(deactivation(name)),
 ).pipe(
   Command.withDescription(
-    "Deactivate an identity (admin, or a human for their own agents). Its tokens stop working, and its messages and name stay; a human's agents stay active. On a command's handler it warns on stderr that the command stops replying.",
+    "Deactivate an identity (admin, a human for their own agents, or an agent for the agents it brought in). Its tokens stop working, and its messages and name stay; a human's agents stay active. On a command's handler it warns on stderr that the command stops replying.",
   ),
 );
 
@@ -134,7 +136,8 @@ const identitySessionsCommand = Command.make(
   },
 ).pipe(
   Command.withDescription(
-    "List an agent's live agent session (issued, last used, expiry, host), or revoke it with --revoke. Owner or admin.",
+    "List an agent's live agent session (issued, last used, expiry, host), or revoke it with --revoke. Owner or " +
+      "admin; --revoke also the agent that brought it in.",
   ),
 );
 
@@ -210,7 +213,7 @@ const identityGetCommand = Command.make("get", { name: identityName }, ({ name }
 
 const identityCommand = Command.make("identity").pipe(
   Command.withDescription(
-    "Create, list, get, rotate, deactivate, reactivate and delete identities, make or remove admins, set display names and agents' descriptions, and manage agents' sessions and owners.",
+    "Create, list, get, rotate, deactivate, reactivate and delete identities, make or remove admins, set display names and agents' descriptions, and manage agents' sessions, owners and trigger URLs.",
   ),
   Command.withSubcommands([
     identityCreateCommand,
@@ -225,7 +228,23 @@ const identityCommand = Command.make("identity").pipe(
     identityDescribeCommand,
     identitySessionsCommand,
     identityTransferCommand,
+    identityTriggerCommand,
   ]),
 );
 
-export { identityCommand };
+const offerIdArgument = Argument.Int("deactivation-offer-id").pipe(
+  Argument.filterMap(
+    (value) => Option.liftPredicate(value, isDeactivationOfferId),
+    (value) => `${String(value)} is not a deactivation offer ID.`,
+  ),
+);
+
+const keepCommand = Command.make("keep", { id: offerIdArgument }, ({ id }) =>
+  answer((client) => client.keepDeactivationOffer(id)),
+).pipe(
+  Command.withDescription(
+    "Answer Keep on an offer to deactivate a quiet agent: it leaves the inbox of everyone it went to, and the next comes 30 days later if the agent stays quiet. To deactivate instead, run cookout identity deactivate.",
+  ),
+);
+
+export { identityCommand, keepCommand };

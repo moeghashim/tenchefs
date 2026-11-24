@@ -19,6 +19,7 @@ interface ConversationRepliesProps {
   readonly parent: TopLevelMessage;
   readonly replies: readonly Reply[];
   readonly readPosition: number | null;
+  readonly linked: MessageId | null;
   readonly receipts: readonly ReadReceipt[];
   readonly me: string;
   readonly menu: MessageMenu;
@@ -33,8 +34,13 @@ function earlierText(count: number): string {
   return `${String(count)} ${EARLIER.other}`;
 }
 
-function isRead(reply: Reply, readPosition: number | null): boolean {
-  return readPosition !== null && reply.id <= readPosition;
+interface Folding {
+  readonly readPosition: number | null;
+  readonly linked: MessageId | null;
+}
+
+function isFolded(reply: Reply, { linked, readPosition }: Folding): boolean {
+  return readPosition !== null && reply.id <= readPosition && (linked === null || reply.id < linked);
 }
 
 function lastOf(messages: readonly Message[], parent: Message): Message {
@@ -42,11 +48,17 @@ function lastOf(messages: readonly Message[], parent: Message): Message {
 }
 
 export function ConversationReplies(props: ConversationRepliesProps): ReactNode {
-  const { me, menu, parent, readPosition, receipts, replies, selection } = props;
+  const { linked, me, menu, parent, readPosition, receipts, replies, selection } = props;
   const { expanded } = useSyncExternalStore(selection.subscribe, selection.snapshot);
   const handleExpand = selection.expand;
-  const earlier = useMemo(() => replies.filter((reply) => isRead(reply, readPosition)), [replies, readPosition]);
-  const unread = useMemo(() => replies.filter((reply) => !isRead(reply, readPosition)), [replies, readPosition]);
+  const earlier = useMemo(
+    () => replies.filter((reply) => isFolded(reply, { linked, readPosition })),
+    [replies, linked, readPosition],
+  );
+  const unread = useMemo(
+    () => replies.filter((reply) => !isFolded(reply, { linked, readPosition })),
+    [replies, linked, readPosition],
+  );
   return (
     <>
       {earlier.length > NONE && !expanded && (

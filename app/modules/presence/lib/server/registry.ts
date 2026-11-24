@@ -1,8 +1,9 @@
 import type { Announce, AnnounceNeeds } from "./announce.ts";
 import { Array as Arr, Effect, PubSub, Stream, SynchronizedRef } from "effect";
 import type { Book, Ends } from "./endings.ts";
-import type { BookState, Connection } from "./book.ts";
+import type { BookState, Connection, Reach } from "./book.ts";
 import type { LiveConnectionId, Presence } from "../../index.ts";
+import type { Option, Scope } from "effect";
 import type { StorageUnavailable, StoredPresence } from "../../../storage/server.ts";
 import { announced, announcer, now } from "./announce.ts";
 import {
@@ -17,9 +18,9 @@ import {
   release,
 } from "./book.ts";
 import { endsEndedTokens, heldEnding, openEnds } from "./endings.ts";
+import { reachablePresenceIn, withReach } from "./reach.ts";
 import { IdentityChanges } from "../../../identities/server.ts";
 import type { Refusal } from "../../../http/index.ts";
-import type { Scope } from "effect";
 import { Storage } from "../../../storage/server.ts";
 import { closeCleanly } from "./ending.ts";
 
@@ -35,8 +36,10 @@ interface Registry {
   readonly hold: (identity: IdentityName, connection: Connection) => Effect.Effect<HeldConnection, never, Scope.Scope>;
   readonly closeCleanly: (identity: IdentityName, connection: LiveConnectionId) => Effect.Effect<boolean>;
   readonly presenceOf: (identity: IdentityName) => Effect.Effect<Presence>;
+  readonly livePresenceOf: (identity: IdentityName) => Effect.Effect<Presence>;
   readonly changed: Effect.Effect<PubSub.Subscription<Presence>, never, Scope.Scope>;
   readonly liveConnections: (identity: IdentityName) => Effect.Effect<number>;
+  readonly setReach: (identity: IdentityName, reach: Option.Option<Reach>) => Effect.Effect<void>;
 }
 
 const ONE_AT_A_TIME = { concurrency: 1, discard: true } as const;
@@ -140,7 +143,9 @@ function openRegistry(graces: Graces): Effect.Effect<Registry, StorageUnavailabl
         book.modify(identity, (state) => closeCleanly({ connection, identity, state })),
       hold: (identity, connection) => held({ ...ends, graceMillis: graces.graceMillis }, { connection, identity }),
       liveConnections: (identity) => Effect.map(book.read, (state) => liveConnectionsIn({ identity, state })),
-      presenceOf: (identity) => Effect.map(book.read, (state) => presenceIn({ identity, state })),
+      livePresenceOf: (identity) => Effect.map(book.read, (state) => presenceIn({ identity, state })),
+      presenceOf: (identity) => Effect.map(book.read, (state) => reachablePresenceIn({ identity, state })),
+      setReach: (identity, reach) => changed(book, identity, (state) => withReach({ identity, reach, state })),
     };
   });
 }

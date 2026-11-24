@@ -35,6 +35,7 @@ export function MessageLayout(parts: MessageLayoutParts): ReactNode {
         choices={parts.choices}
         onAction={handleAction}
         reactions={parts.reactions}
+        replyOnHover={parts.replyOnHover}
         thread={parts.thread}
       />
     </>

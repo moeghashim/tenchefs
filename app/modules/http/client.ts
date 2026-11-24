@@ -132,7 +132,9 @@ function addressed(address: HttpAddress): string {
 async function fetched(options: HttpRequest, accept: string): Promise<Response> {
   const headers = new Headers({ accept, ...options.headers });
   const init: RequestInit = { headers, method: options.method, redirect: "manual" };
-  if ("body" in options) {
+  if (options.body instanceof FormData) {
+    init.body = options.body;
+  } else if ("body" in options) {
     headers.set("content-type", "application/json");
     init.body = JSON.stringify(options.body);
   }
@@ -157,8 +159,14 @@ export interface HttpRequest {
   readonly params?: Readonly<Record<string, string>>;
   readonly query?: Readonly<Record<string, QueryValue>>;
   readonly headers?: Readonly<Record<string, string>>;
+  /** Sent as JSON, or as `multipart/form-data` when it is a `FormData`. */
   readonly body?: unknown;
 }
+
+/** The answer to a request for bytes: the bytes when it succeeded, else the whole refusal. */
+export type BytesResponse =
+  | { readonly ok: true; readonly headers: Headers; readonly bytes: Uint8Array }
+  | { readonly ok: false; readonly response: HttpResponse };
 
 /** The whole answer to one request. `json` is absent when the body is not JSON. */
 export interface HttpResponse {
@@ -217,6 +225,21 @@ export function baseUrlOf(url: string): string {
 export async function request(options: HttpRequest): Promise<HttpResponse> {
   const response = await fetched(options, "application/json");
   return answerOf(response);
+}
+
+/**
+ * Sends one request and reads the answer as bytes, as `request` does but for a body that isn't JSON or text.
+ * @param options The request.
+ * @returns The bytes, or the refusal read whole.
+ */
+export async function requestBytes(options: HttpRequest): Promise<BytesResponse> {
+  const response = await fetched(options, "*/*");
+  if (!response.ok) {
+    const refused = await answerOf(response);
+    return { ok: false, response: refused };
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { bytes, headers: response.headers, ok: true };
 }
 
 /**

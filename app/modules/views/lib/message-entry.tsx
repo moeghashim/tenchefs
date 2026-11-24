@@ -1,10 +1,10 @@
 import type { ChannelName, Message, MessageId, ReadReceipt } from "../../sdk/index.ts";
+import { FeedRowClosed, MessageItem } from "../../design-system/index.tsx";
 import type { MenuClosing, Reply } from "./use-message-menu.ts";
 import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
 import { threadHref, threadSummaryOf, useMarkOf } from "./message-marks.ts";
 import { useMessageMenu, useReplyAction } from "./use-message-menu.ts";
 import { MessageContent } from "./message-content.tsx";
-import { MessageItem } from "../../design-system/index.tsx";
 import type { ReactNode } from "react";
 import { ReplySummary } from "./reply-summary.tsx";
 import { useAuthor } from "./use-author.ts";
@@ -23,6 +23,7 @@ interface MessageEntryProps {
   readonly row: Row;
   readonly me: string;
   readonly channel: ChannelName | null;
+  readonly closed: boolean;
   readonly open: MessageId | null;
   readonly parent: Message | null;
   readonly news: ThreadNews | null;
@@ -54,11 +55,13 @@ export function MessageEntry(props: MessageEntryProps): ReactNode {
       note={note}
       presence={presence}
       onAction={handleReply}
+      replyOnHover={message.kind === "top-level" || props.reply !== null}
       threadOnHover
       time={useMessageTime({ message, parent: props.parent, receipts: props.receipts })}
       unreadLine={props.row.unreadLine}
     >
       <MessageContent me={props.me} message={message} />
+      <FeedRowClosed closed={props.closed} />
       {href !== null && summary !== null && <ReplySummary href={href} news={props.news} summary={summary} />}
     </MessageItem>
   );

@@ -2,10 +2,11 @@ import { Clock, Context, Effect, FileSystem, Layer, Path } from "effect";
 import { Secrets, secretsLive } from "../../../secrets/server.ts";
 import { WebhookFake, webhookFake } from "../../../webhook-fake/server.ts";
 import { cuttableRelay, serverUrl } from "../../../http/server.ts";
+import { diskAssetStore, sqliteStorage } from "../../../storage/server.ts";
 import type { Scope } from "effect";
 import { adjustableClock } from "./adjustable-clock.ts";
 import { cookoutServer } from "../../../cli/server.ts";
-import { sqliteStorage } from "../../../storage/server.ts";
+import { triggerCallerLive } from "../../../triggers/server.ts";
 import { viteDevServer } from "./web.ts";
 
 interface DevCookout {
@@ -34,7 +35,9 @@ function databaseInTempFolder(): Effect.Effect<string, never, Needs> {
 function devCookoutOn(port: number): Effect.Effect<Omit<DevCookout, "clockUrl">, never, Needs> {
   return Effect.gen(function* startDevCookout() {
     const database = yield* databaseInTempFolder();
-    const live = yield* Layer.build(Layer.mergeAll(sqliteStorage(database), secretsLive));
+    const live = yield* Layer.build(
+      Layer.mergeAll(sqliteStorage(database), diskAssetStore(`${database}-assets`), secretsLive, triggerCallerLive),
+    );
     const adminToken = yield* Context.get(live, Secrets).newToken;
     const backing = Layer.succeedContext(live);
     const server = yield* Layer.build(cookoutServer({ adminToken, host: LOCAL, port }).pipe(Layer.provide(backing)));

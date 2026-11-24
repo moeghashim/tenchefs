@@ -25,7 +25,7 @@ export function SubscriptionToggle(props: SubscriptionToggleProps): ReactNode {
   const { channel, subscriptions } = props;
   const subscribed = props.state.channels.includes(channel);
   const handleClick = useCallback(() => {
-    subscriptions.setSubscribed(channel, !subscribed);
+    subscriptions.setSubscribed(channel, !subscribed, "channel-header");
   }, [channel, subscribed, subscriptions]);
   return (
     <PressButton disabled={props.state.change.status === "changing"} onClick={handleClick} pressed={subscribed}>

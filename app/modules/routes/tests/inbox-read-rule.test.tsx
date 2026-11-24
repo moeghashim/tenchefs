@@ -2,7 +2,6 @@ import {
   arrived,
   openReading,
   otherThread,
-  readAtLast,
   rowSelected,
   shown,
   sidebarCleared,
@@ -129,7 +128,7 @@ it("opening a thread from the channel view still reads it at once", { timeout: 8
     thread,
   });
 
-  await expect(readAtLast(thread)).resolves.toBe(NONE);
+  await expect(opened.read()).resolves.toBe(NONE);
 
   await opened.close();
 });

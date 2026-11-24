@@ -2,6 +2,7 @@ import type { Author, Identity } from "../../sdk/index.ts";
 import { useContext, useSyncExternalStore } from "react";
 import { AuthorList } from "./author-list.ts";
 import type { PresenceShown } from "./use-presence.ts";
+import { identityList } from "../../board/index.ts";
 import { useAuthorPresence } from "./use-presence.ts";
 import { useProfileHref } from "./profile-base.ts";
 
@@ -24,8 +25,8 @@ interface Drawn {
 }
 
 function useEveryListed(): readonly Identity[] {
-  const identities = useContext(AuthorList);
-  return useSyncExternalStore(identities.subscribe, identities.snapshot);
+  const store = useContext(AuthorList);
+  return useSyncExternalStore(store.subscribeShowing("identities"), () => identityList(store.snapshot()));
 }
 
 function listedIn(listed: readonly Identity[], name: string): Identity | null {

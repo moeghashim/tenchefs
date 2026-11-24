@@ -1,9 +1,7 @@
 import type { ChannelName, TopLevelMessage } from "../../sdk/index.ts";
-import type { Reading, Unread } from "../../unread/index.ts";
-import type { Board } from "../../board/index.ts";
 import { ChannelConversationPanel } from "./channel-conversation-panel.tsx";
-import type { Composer } from "../../composer/index.ts";
 import { ConversationMissing } from "./conversation-missing.tsx";
+import type { ConversationProps } from "./conversation-parts.ts";
 import type { ReactNode } from "react";
 import { actionsOf } from "./conversation-parts.ts";
 import { useChannelPosts } from "./use-channel-posts.ts";
@@ -14,13 +12,8 @@ interface Ends {
   readonly newest: TopLevelMessage;
 }
 
-interface ChannelConversationProps {
-  readonly board: Board;
-  readonly composer: Composer;
+interface ChannelConversationProps extends Omit<ConversationProps, "selected"> {
   readonly channel: ChannelName;
-  readonly unread: Unread;
-  readonly reading: Reading;
-  readonly me: string;
 }
 
 function firstOf(ends: Ends | null, post: TopLevelMessage): TopLevelMessage {
@@ -55,6 +48,7 @@ export function ChannelConversation(props: ChannelConversationProps): ReactNode 
       board={props.board}
       channel={channel}
       composer={props.composer}
+      edge={props.edge}
       first={ends.first}
       newest={ends.newest}
       me={props.me}

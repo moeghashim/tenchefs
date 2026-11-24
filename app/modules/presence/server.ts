@@ -9,7 +9,7 @@
  * hub announces deleted leaves the registry, as it leaves storage. An agent holds one live connection at most
  * (ADR "one live connection per agent"): a newer one ends the one before with `watchReplacedRefusal`.
  */
-import type { Config, PubSub, Scope } from "effect";
+import type { Config, Option, PubSub, Scope } from "effect";
 import type { Connection, Registry, RegistryNeeds } from "./lib/server/registry.ts";
 import { Context, Duration, Effect, Layer } from "effect";
 import type { Identity, IdentityName } from "../identities/index.ts";
@@ -20,6 +20,7 @@ import type { Refusal } from "../http/index.ts";
 import type { Route } from "../http/server.ts";
 import { Storage } from "../storage/server.ts";
 import type { StorageUnavailable } from "../storage/server.ts";
+import type { TriggerResult } from "../triggers/index.ts";
 import { presenceGraceSeconds } from "../config/server.ts";
 import { presenceRouteOn } from "./lib/server/seen-by-caller.ts";
 
@@ -27,7 +28,16 @@ const BOOT_GRACE = Duration.toMillis("5 minutes");
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
 
 function presenceOfEach(registry: Registry, identities: readonly Identity[]): Effect.Effect<readonly Presence[]> {
-  return Effect.forEach(identities, (identity) => registry.presenceOf(identity.name), ONE_AT_A_TIME);
+  return Effect.forEach(
+    identities,
+    ({ deactivated, name }) => {
+      if (deactivated === true) {
+        return registry.livePresenceOf(name);
+      }
+      return registry.presenceOf(name);
+    },
+    ONE_AT_A_TIME,
+  );
 }
 
 /** A live connection the stream holds (ADR "how a live connection ends"). */
@@ -64,6 +74,17 @@ export interface PresenceService {
   readonly changed: Effect.Effect<PubSub.Subscription<Presence>, never, Scope.Scope>;
   /** How many live connections `identity` holds now, for tests that wait for a closed stream to be noticed. */
   readonly liveConnections: (identity: IdentityName) => Effect.Effect<number>;
+  /**
+   * Sets whether agent `identity` has a trigger URL, and how its last call went, or (`Option.none()`) that it has none
+   * or is Deactivated. With one whose last call didn't fail it is online; with a failed one and no live connection,
+   * Unreachable.
+   */
+  readonly setReach: (identity: IdentityName, reach: Option.Option<TriggerReach>) => Effect.Effect<void>;
+}
+
+/** What presence knows of an agent's trigger URL: how its last call went, if it has been called. */
+export interface TriggerReach {
+  readonly lastResult?: TriggerResult;
 }
 
 export class PresenceRegistry extends Context.Service<PresenceRegistry, PresenceService>()(
@@ -92,6 +113,7 @@ export const presenceLayer: Layer.Layer<PresenceRegistry, Config.ConfigError | S
             return { ended: Effect.raceFirst(held.ended, replaced), id: held.connection, refused: held.refused };
           }),
         liveConnections: registry.liveConnections,
+        setReach: registry.setReach,
       };
     }),
   );
@@ -118,3 +140,6 @@ export const presenceRoutes: readonly Route<PresenceRegistry | PresenceRouteNeed
 
 /** The Schemas of one identity's presence and of `GET /v1/presence`'s answer, for the live stream and the SDK's validators. */
 export { PresenceResponseSchema, PresenceSchema } from "./lib/server/wire.ts";
+
+/** The Schema of how a call to a trigger URL went, which an Unreachable presence and a trigger URL both carry. */
+export { TriggerResultSchema } from "./lib/server/wire.ts";

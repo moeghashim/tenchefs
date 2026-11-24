@@ -117,7 +117,8 @@ export const agentSessionExpired = "agent_session_expired";
  * Deactivated agent), the 400s `idle_expiry_too_long`, `agent_session_required` (leave sent without an agent session token),
  * `display_name_required` (a join that would create an agent with no display name, when the request asks for one) and
  * `display_name_on_existing_agent` (a display name sent to join an agent that already exists),
- * the 404 `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
+ * the 403 `not_brought_in` (an agent approves a join for an existing agent it didn't bring in, #370), the 404
+ * `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
  * 401s any request sent with an ended agent session token gets, and the 404 `join_code_not_found` (a join code that
  * was used, expired or never issued).
  */
@@ -132,6 +133,7 @@ export const agentSessionErrorCodes = [
   "display_name_on_existing_agent",
   "agent_join_request_not_found",
   "join_code_not_found",
+  "not_brought_in",
   agentSessionRevoked,
   agentSessionExpired,
 ] as const;
@@ -145,10 +147,16 @@ export const agentJoinRequestsPath = "/v1/agent-join-requests";
 /** `POST /v1/agent-join-requests/collect` (no token): 202 pending, then the agent session token once; 404 after. */
 export const collectAgentJoinRequestPath = "/v1/agent-join-requests/collect";
 
-/** `GET /v1/agent-join-requests/:code` (a human): the live request with that user code, as it would join for the caller. */
+/**
+ * `GET /v1/agent-join-requests/:code` (a human, or an agent for its owner, #370): the live request with that user code,
+ * as it would join for the caller.
+ */
 export const agentJoinRequestPath = "/v1/agent-join-requests/:code";
 
-/** `PUT /v1/agent-join-requests/:code/approval` (a human; an agent is 403 `human_only`): approves it as the caller. */
+/**
+ * `PUT /v1/agent-join-requests/:code/approval`: approves it as the caller. A human approves as before; an agent approves
+ * only a join that creates an agent of its own owner, recorded as brought in by it, or rejoins one it brought in (#370).
+ */
 export const agentJoinRequestApprovalPath = "/v1/agent-join-requests/:code/approval";
 
 /**

@@ -1,20 +1,8 @@
 import type { Page } from "@playwright/test";
+import { SCREENS } from "./screens.ts";
+import type { Screen } from "./screens.ts";
 
 type Theme = "light" | "dark";
-
-interface Screen {
-  readonly name: string;
-  readonly hash: string;
-  readonly click?: string;
-  readonly clickIn?: string;
-  readonly focus?: string;
-  readonly text: string;
-  readonly narrow?: boolean;
-  readonly admin?: boolean;
-  readonly liveDown?: boolean;
-  readonly daysLater?: number;
-  readonly history?: "more" | "loading";
-}
 
 interface Shot {
   readonly screen: Screen;
@@ -43,80 +31,6 @@ interface TakeScreenshots {
 }
 
 const THEMES: readonly Theme[] = ["light", "dark"];
-const NUDGE_TEXT = "Quiet for 3 days: close it, or follow up?";
-const OFFER_TEXT = "has had no activity for 30 days.";
-const DEACTIVATED_TEXT = "@triage-agent was deactivated after 90 days with no activity.";
-
-const SCREENS: readonly Screen[] = [
-  { hash: "#/inbox", name: "inbox", text: "Thanks, both of you." },
-  { hash: "#/inbox", history: "more", name: "inbox-more", text: "Show earlier" },
-  { daysLater: 3, hash: "#/inbox", name: "inbox-nudge", text: NUDGE_TEXT },
-  { admin: true, daysLater: 30, hash: "#/inbox", name: "inbox-offer", text: OFFER_TEXT },
-  { daysLater: 90, hash: "#/inbox", name: "inbox-deactivated", text: DEACTIVATED_TEXT },
-  { click: "Show earlier", hash: "#/inbox", history: "loading", name: "inbox-loading", text: "Loading…" },
-  {
-    focus: 'a[data-feed-row][aria-current="page"]',
-    hash: "#/inbox/general/1",
-    name: "inbox-thread",
-    text: "Thanks, both of you.",
-  },
-  { hash: "#/inbox/general/1", name: "inbox-narrow", narrow: true, text: "earlier replies" },
-  { hash: "#/inbox/deploys", name: "inbox-channel", text: "Deployed 1.4.0." },
-  {
-    click: "Mark conversation read",
-    clickIn: 'aside[aria-label="Conversation"]',
-    hash: "#/inbox/general/1",
-    name: "inbox-marked",
-    text: "Marked as read",
-  },
-  { hash: "#/channels/general", name: "channel", text: "Lunch at 12:30." },
-  {
-    focus: 'article:has-text("Lunch at 12:30.")',
-    hash: "#/channels/general",
-    name: "channel-hover",
-    text: "Lunch at 12:30.",
-  },
-  {
-    click: "More actions",
-    clickIn: 'article:has-text("Lunch at 12:30.")',
-    focus: 'article:has-text("Lunch at 12:30.")',
-    hash: "#/channels/general",
-    name: "message-menu",
-    text: "Mark unread",
-  },
-  { hash: "#/channels/general/threads/1", name: "thread", text: "Thanks, both of you." },
-  {
-    focus: 'article:has-text("@triage-agent can you post the failing run?") time',
-    hash: "#/channels/general/threads/1",
-    name: "receipt",
-    text: "Not seen yet:",
-  },
-  {
-    focus: 'article:has-text("@triage-agent can you post the failing run?") a:has-text("@triage-agent")',
-    hash: "#/channels/general/threads/1",
-    name: "identity-card",
-    text: "View profile",
-  },
-  {
-    focus: 'article:has-text("@grace can you check the notes before we ship?") a:has-text("@grace")',
-    hash: "#/channels/general",
-    name: "identity-card-person",
-    text: "View profile",
-  },
-  { hash: "#/people", name: "people", text: "release-bot" },
-  { hash: "#/people/release-bot", name: "profile", text: "Agent · owned by ada" },
-  { hash: "#/people/triage-agent", name: "warning", text: "Went offline unexpectedly" },
-  { admin: true, hash: "#/people/release-bot", name: "admin-profile", text: "Transfer to (a human's name)" },
-  { admin: true, hash: "#/people/old-deploy-bot", name: "admin-deactivated", text: "Reactivate" },
-  { admin: true, click: "Deactivate", hash: "#/people/release-bot", name: "confirm", text: "reactivate it later" },
-  { hash: "#/settings", name: "settings", text: "System" },
-  { click: "New channel", hash: "#/channels/general", name: "new-channel", text: "Lowercase letters" },
-  { click: "Open the sidebar", hash: "#/channels/general", name: "narrow", narrow: true, text: "#deploys" },
-  { hash: "#/channels/deploys", name: "closed-threads", text: "2 closed threads" },
-  { hash: "#/channels/deploys/threads/8", name: "closed-thread", text: "Rolled back to 1.4.1." },
-  { click: "Collapse sidebar", hash: "#/channels/general", name: "collapsed", text: "Lunch at 12:30." },
-  { hash: "#/channels/general", liveDown: true, name: "reconnecting", text: "Reconnecting…" },
-];
 
 const NONE = 0;
 const NOW = 0;
@@ -248,5 +162,6 @@ async function withOlderHistory({ history, page }: OlderHistory): Promise<void> 
   });
 }
 
-export type { Screen, Shot, Theme, ThemePass };
+export type { Shot, Theme, ThemePass };
+export type { Screen } from "./screens.ts";
 export { screenshotOptions, takeScreenshots, withOlderHistory };

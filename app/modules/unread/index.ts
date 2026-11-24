@@ -15,7 +15,9 @@
  * shows them (Matt, #152, 2026-11-23): for you (a mention, or a reply in a
  * thread you started) and activity (the rest). A row says why it is there,
  * `countsByChannel` counts both levels by channel, and `newsByThread` counts a
- * thread's unread replies and how many of them are for you. `rowsOf` groups
+ * thread's unread replies and how many of them are for you. `threadsWithNews` lists, oldest first, the top-level
+ * messages of a channel's threads with an item there for some reason besides a subscribed channel (a mention, a
+ * reply in a thread you follow, a reaction): what keeps a closed thread out of the channel's fold (#349). `rowsOf` groups
  * items, unread or `earlier`'s, into the inbox's rows: one per thread (its
  * replies) or channel (its top-level messages), as read positions are keyed,
  * each with its latest item, count, level and strongest reason, newest first; `rowKey` is the key of a
@@ -35,6 +37,9 @@
  * A closed thread's items stay in `items`, listed and counted like any other;
  * `thread` events keep each item's `parent` current, so its `closedAt` follows
  * a close or reopen live.
+ * `markChannelRead` acks one channel's items, the newest in its top-level messages and in each of its threads
+ * (`POST /v1/ack`), and drops the items the read positions it moved cover, as `markAllRead` does; `markChannel` holds
+ * why the last one failed, with its channel, until the next one starts.
  * `markAllRead` acks the whole inbox up to the newest item the store holds
  * (`POST /v1/inbox/ack-all`) and drops the items the read positions it moved
  * cover, so a message that arrives meanwhile stays unread. `markUnread` marks
@@ -68,7 +73,7 @@
  * does once it succeeds and the fresh token shows (never after a refused one, #278), until `release` (Done): the loaded state lists it under `heldDeactivatedQuietAgents`,
  * uncounted, and its own snapshot names it in `held`, so Earlier leaves it out (#277). Only the store holding it keeps it.
  * `createReading` makes the `reading` store, beside the unread store: the Inbox's read rule, as Slack's (Matt, Inbox grilling
- * on the board, 2026-11-23; `docs/adr/0073-the-inbox-reads-a-conversation-after-2-s-on-screen.md`).
+ * on the board, 2026-11-23), so a glance, a misclick or keys moving past a row read nothing.
  * `reader(key, sources)` is the reader of one selected conversation, the same
  * store each time for one key; it starts when its first subscriber arrives and
  * starts afresh, forgetting everything, once the last one leaves, as when the
@@ -86,7 +91,7 @@
  * and tests bring a clock they move on by hand.
  */
 import type { ChannelName, CookoutClient, MessageId } from "../sdk/index.ts";
-import type { DeactivatedQuietAgents, DeactivationOffers, UnreadState } from "./lib/parts.ts";
+import type { DeactivatedQuietAgents, DeactivationOffers, MarkChannel, UnreadState } from "./lib/parts.ts";
 import type { NewLine, WithNewLines } from "./lib/new-lines.ts";
 import { follow, loadedOf, loadedOrFailed, partsOf } from "./lib/parts.ts";
 import type { Alerts } from "./lib/alerts.ts";
@@ -117,6 +122,13 @@ export interface Unread {
   readonly newLine: (channel: ChannelName, thread: MessageId | null) => NewLine;
   /** Marks every inbox item the store holds as read, in every channel and thread, leaving any newer one unread. */
   readonly markAllRead: () => void;
+  /**
+   * Marks every inbox item the store holds from one channel as read, its top-level messages and its threads' replies,
+   * by acking the newest of them in each place (`POST /v1/ack`), as reading each to the bottom does.
+   */
+  readonly markChannelRead: (channel: ChannelName) => void;
+  /** Why the last `markChannelRead` failed, with its channel, until the next one starts: an external store of its own. */
+  readonly markChannel: MarkChannel;
   /** Marks a message, and everything after it in its thread or channel, unread again; a refusal shows as `menu.refusal`. */
   readonly markUnread: (messageId: MessageId) => void;
   /** What a message's actions menu needs: Mark unread, and why the last one was refused. An external store of its own. */
@@ -146,6 +158,7 @@ export interface Unread {
 export interface UnreadOptions {
   readonly client: Pick<
     CookoutClient,
+    | "ack"
     | "ackAll"
     | "closeThread"
     | "inbox"
@@ -198,6 +211,8 @@ export function createUnread(options: UnreadOptions): Unread {
     deactivationOffers,
     earlier,
     markAllRead: markAll.markAllRead,
+    markChannel: markAll.markChannel,
+    markChannelRead: markAll.markChannel.markChannelRead,
     markUnread: menu.markUnread,
     menu,
     movesBack: items.movesBack,
@@ -227,7 +242,7 @@ export type { Selection } from "./lib/selection.ts";
 export type { InboxRow } from "./lib/rows.ts";
 export { rowKey, rowsOf } from "./lib/rows.ts";
 export type { ThreadNews, UnreadCounts, UnreadWhy } from "./lib/levels.ts";
-export { NO_COUNTS, countsByChannel, countsOf, newsByThread } from "./lib/levels.ts";
+export { NO_COUNTS, countsByChannel, countsOf, newsByThread, threadsWithNews } from "./lib/levels.ts";
 export { type Reading, createReading } from "./lib/reading.ts";
 export { browserReadingTools } from "./lib/browser-reading.ts";
 export type { Newest, Reader, ReaderSources } from "./lib/reader.ts";

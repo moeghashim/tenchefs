@@ -47,6 +47,7 @@ export function RoutePanes(props: RoutePanesProps): ReactNode {
         board={stores.board}
         composer={stores.composer}
         key={route.channel}
+        layout={stores.layout}
         me={props.me}
         route={route}
         unread={stores.unread}

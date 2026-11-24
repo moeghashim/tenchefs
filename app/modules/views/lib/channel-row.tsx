@@ -1,3 +1,4 @@
+import type { ChannelActions } from "./use-channel-menu.ts";
 import { ChannelBadges } from "./channel-badges.tsx";
 import type { ChannelName } from "../../sdk/index.ts";
 import { NavLink } from "../../design-system/index.tsx";
@@ -5,8 +6,10 @@ import type { ReactNode } from "react";
 import type { UnreadCounts } from "../../unread/index.ts";
 import { hasUnread } from "./unread-counts.ts";
 import { hrefOf } from "../../paths/index.ts";
+import { useChannelMenu } from "./use-channel-menu.ts";
 
 interface ChannelRowProps {
+  readonly actions: ChannelActions;
   readonly channel: ChannelName;
   readonly open: boolean;
   readonly counts: UnreadCounts;
@@ -14,6 +17,7 @@ interface ChannelRowProps {
 
 export function ChannelRow(props: ChannelRowProps): ReactNode {
   const { channel, counts } = props;
+  const menu = useChannelMenu({ ...props.actions, channel, counts });
   return (
     <NavLink
       active={props.open}
@@ -21,6 +25,7 @@ export function ChannelRow(props: ChannelRowProps): ReactNode {
       icon="channel"
       label={`#${channel}`}
       marked={hasUnread(counts)}
+      menu={menu}
     >
       <ChannelBadges counts={counts} />
     </NavLink>

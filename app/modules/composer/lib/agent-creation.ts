@@ -1,4 +1,4 @@
-import type { CookoutClient, IdentityName, Refusal, Token } from "../../sdk/index.ts";
+import type { IdentityName, Refusal, Token } from "../../sdk/index.ts";
 import type { IdentityList } from "./identity-list.ts";
 import { listenersOf } from "./listeners.ts";
 import { refusalOf } from "../../sdk/index.ts";
@@ -21,13 +21,12 @@ interface AgentCreation {
 }
 
 interface AgentCreationOptions {
-  readonly client: Pick<CookoutClient, "createIdentity">;
   readonly list: IdentityList;
   readonly created: (name: IdentityName, token: Token) => void;
 }
 
 function createAgentCreation(options: AgentCreationOptions): AgentCreation {
-  const listeners = listenersOf(options.list.load);
+  const listeners = listenersOf(options.list.show);
   let current: AgentCreationSnapshot = { create: { status: "idle" }, text: "" };
   let queue = Promise.resolve();
 
@@ -39,9 +38,8 @@ function createAgentCreation(options: AgentCreationOptions): AgentCreation {
   async function sendAfter(previous: Promise<void>, text: string): Promise<void> {
     await previous;
     try {
-      const { identity, token } = await options.client.createIdentity({ kind: "agent", name: text.trim() });
-      options.list.put(identity);
-      options.created(identity.name, token);
+      const { name, token } = await options.list.calls.createAgent(text.trim());
+      options.created(name, token);
       publish({ create: { status: "idle" }, text: "" });
     } catch (error: unknown) {
       publish({ create: { ...refusalOf(error), status: "failed" }, text });

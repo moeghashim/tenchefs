@@ -3,6 +3,7 @@ import type { IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { LiveConnectionDetail, LiveConnectionId, OfflineReason, Presence } from "../../index.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { StoredPresence } from "../../../storage/server.ts";
+import type { TriggerResult } from "../../../triggers/index.ts";
 import { isLiveConnectionId } from "../../index.ts";
 
 type SentWith =
@@ -32,8 +33,13 @@ interface Held {
   readonly grace: Option.Option<Grace>;
 }
 
+interface Reach {
+  readonly lastResult?: TriggerResult;
+}
+
 interface BookState {
   readonly held: ReadonlyMap<IdentityName, Held>;
+  readonly reach: ReadonlyMap<IdentityName, Reach>;
   readonly lastSeen: ReadonlyMap<IdentityName, IsoTime>;
   readonly ends: ReadonlyMap<IdentityName, End>;
   readonly onBootGrace: ReadonlySet<IdentityName>;
@@ -144,6 +150,7 @@ function openBook(kept: readonly StoredPresence[]): BookState {
     held: new Map(),
     lastSeen: new Map(Arr.map(kept, ({ identity, lastSeenAt }) => [identity, lastSeenAt] as const)),
     onBootGrace: new Set(Arr.map(wereOnline, ({ identity }) => identity)),
+    reach: new Map(),
   };
 }
 
@@ -247,7 +254,9 @@ function forget(at: At): BookState {
   held.delete(at.identity);
   const lastSeen = new Map(at.state.lastSeen);
   lastSeen.delete(at.identity);
-  return { ...at.state, ends: withoutEnd(at), held, lastSeen, onBootGrace: withoutBootGrace(at) };
+  const reach = new Map(at.state.reach);
+  reach.delete(at.identity);
+  return { ...at.state, ends: withoutEnd(at), held, lastSeen, onBootGrace: withoutBootGrace(at), reach };
 }
 
 function liveConnectionsIn(at: At): number {
@@ -271,6 +280,7 @@ export {
   type Closing,
   type Connection,
   type End,
+  type Reach,
   type SentWith,
   connect,
   endBootGrace,

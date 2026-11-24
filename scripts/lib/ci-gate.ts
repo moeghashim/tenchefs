@@ -2,11 +2,13 @@ import type { CheckRun, Job, Unreadable } from "./check-run.ts";
 import type { Command, Step, Stopped } from "./merge-steps.ts";
 import { DONE, run, stop, tail } from "./merge-steps.ts";
 import { UNVOUCHED, vouchedGreen } from "./ci-vouch.ts";
-import { described, failuresOf } from "./ci-failures.ts";
+import { described, failuresOf, reportJobs } from "./ci-failures.ts";
 import { field, list, parseJson } from "./json.ts";
+import { readCheckRun, redJobs } from "./check-run.ts";
 import type { Failure } from "./ci-failures.ts";
 import type { Polled } from "./ci-verdict.ts";
-import { readCheckRun } from "./check-run.ts";
+import type { Refused } from "./ci-rerun.ts";
+import { retriedOnce } from "./ci-rerun.ts";
 import { sameCommitVerdict } from "./ci-verdict.ts";
 
 interface CiGateOptions {
@@ -17,6 +19,7 @@ interface CiGateOptions {
   readonly gh: Command;
   readonly log: (line: string) => void;
   readonly polls: number;
+  readonly rerunRed?: boolean;
   readonly sleep: () => void;
   readonly subject: string;
   readonly vouchedBy: string;
@@ -35,7 +38,6 @@ interface Progress {
 const NONE = 0;
 const NO_RUN = "none";
 const NEXT = 1;
-const GREEN = "success";
 const COMPLETED = "completed";
 const CANCELLED = "cancelled";
 const LIST = ["run", "list", "--workflow", "Check", "--event", "push", "--limit", "1", "--json", "databaseId"];
@@ -86,7 +88,7 @@ function awaitRun(options: CiGateOptions, waited: number): number | Stopped {
 }
 
 function notGreen(checkRun: CheckRun): readonly Job[] {
-  return checkRun.jobs.filter((job) => job.status === COMPLETED && job.conclusion !== GREEN);
+  return redJobs(checkRun);
 }
 
 function baseRun(options: CiGateOptions): CheckRun | typeof NO_RUN {
@@ -116,19 +118,6 @@ function inheritedFrom(options: CiGateOptions, failed: readonly Job[]): string {
   return `\nThe same jobs failed on v1's Check run for ${options.subject}'s merge-base: ${base.url}\nYour base was red; merge the current green v1 into ${options.subject} (git merge origin/v1), push, and rerun merge-ticket.`;
 }
 
-function stateOf(job: Job): string {
-  if (job.conclusion === "") {
-    return job.status;
-  }
-  return job.conclusion;
-}
-
-function report(options: CiGateOptions, checkRun: CheckRun): void {
-  for (const job of checkRun.jobs) {
-    options.log(`${job.name}: ${stateOf(job)}`);
-  }
-}
-
 function namesOf(checkRun: CheckRun, failed: readonly Failure[]): readonly string[] {
   const named = failed.map((failure) => `${failure.job.name} (${failure.job.conclusion})`);
   if (checkRun.status === COMPLETED && checkRun.jobs.length === NONE) {
@@ -137,21 +126,21 @@ function namesOf(checkRun: CheckRun, failed: readonly Failure[]): readonly strin
   return named;
 }
 
-function red(options: CiGateOptions, watched: Watched): Step {
+function red(options: CiGateOptions, watched: Watched): Refused | Step {
   const { checkRun } = watched;
   const failed = failuresOf({ ...options, jobs: notGreen(checkRun), runNumber: watched.runNumber });
   const named = namesOf(checkRun, failed);
   if (named.length === NONE) {
     return DONE;
   }
-  report(options, checkRun);
+  reportJobs({ ...options, jobs: checkRun.jobs });
   const details = failed.map((failure) => described(failure)).join("");
   const inherited = inheritedFrom(
     options,
     failed.map((failure) => failure.job),
   );
   const reason = `${options.subject}'s latest Check run is red: ${named.join(", ")}.\n${checkRun.url}${details}${inherited}`;
-  return { ...stop(reason), jobs: named.map((name) => name.replace(/ \([^)]*\)$/u, "")) };
+  return { ...stop(reason), jobs: named.map((name) => name.replace(/ \([^)]*\)$/u, "")), runNumber: watched.runNumber };
 }
 
 function wait(options: CiGateOptions, checkRun: CheckRun, waited: number): Step {
@@ -168,15 +157,19 @@ function wait(options: CiGateOptions, checkRun: CheckRun, waited: number): Step 
 }
 
 function green(options: CiGateOptions, checkRun: CheckRun): Step {
-  report(options, checkRun);
+  reportJobs({ ...options, jobs: checkRun.jobs });
   options.log(`${options.subject}'s latest Check run is green: ${checkRun.url}`);
   return DONE;
+}
+
+function judgedLater(options: CiGateOptions, checkRun: CheckRun): boolean {
+  return options.rerunRed === true || notGreen(checkRun).length === NONE;
 }
 
 function verdict(options: CiGateOptions, watched: Watched): Step | "running" {
   const { checkRun } = watched;
   const finished = checkRun.status === COMPLETED;
-  if (!finished && notGreen(checkRun).length === NONE) {
+  if (!finished && judgedLater(options, checkRun)) {
     return "running";
   }
   const refused = red(options, watched);
@@ -288,12 +281,16 @@ function poll(options: CiGateOptions, polled: Polled, waited: number): Step {
   return poll(options, next, waited + NEXT);
 }
 
+function pollOnce(options: CiGateOptions): (runNumber: number) => Step {
+  return (runNumber) => poll({ ...options, rerunRed: false }, { reran: false, runNumber }, NONE);
+}
+
 function ciGreen(options: CiGateOptions): Step {
   const runNumber = awaitRun(options, NONE);
   if (typeof runNumber !== "number") {
     return runNumber;
   }
-  return poll(options, { reran: false, runNumber }, NONE);
+  return retriedOnce({ ...options, again: pollOnce(options), first: poll(options, { reran: false, runNumber }, NONE) });
 }
 
 export { ciGreen };

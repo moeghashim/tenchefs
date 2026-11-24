@@ -9,6 +9,8 @@ const TALL_DESCRIPTION = "Reads the mail\nSorts the post\nFiles the bills\nWater
 
 interface Span {
   readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
   readonly top: number;
 }
 
@@ -20,9 +22,9 @@ interface Edges {
 async function spanOf(locator: Locator): Promise<Span> {
   const box = await locator.boundingBox();
   if (box === null) {
-    return { bottom: NONE, top: NONE };
+    return { bottom: NONE, left: NONE, right: NONE, top: NONE };
   }
-  return { bottom: box.y + box.height, top: box.y };
+  return { bottom: box.y + box.height, left: box.x, right: box.x + box.width, top: box.y };
 }
 
 async function postAs(channel: string, name: string, kind: "agent" | "human"): Promise<void> {
@@ -38,17 +40,26 @@ async function openAsReader(page: Page, channel: string): Promise<void> {
   await logInToChannels({ page, token, url: `/#/channels/${channel}` });
 }
 
-async function edgesOnHover(page: Page, name: string): Promise<Edges> {
+async function cardTrigger(page: Page, name: string): Promise<Locator> {
   const trigger = page.getByRole("list", { name: "Messages" }).getByRole("link", { exact: true, name });
+
+  await expect(trigger).toHaveAttribute("data-identity-card");
+  await expect(trigger).toBeInViewport();
+
+  return trigger;
+}
+
+async function edgesOnHover(page: Page, name: string): Promise<Edges> {
+  const trigger = await cardTrigger(page, name);
   await trigger.hover();
-  const card = page.getByRole("tooltip");
+  const card = page.getByRole("dialog");
 
   await expect(card).toBeVisible();
 
   return { card: await spanOf(card), name: await spanOf(trigger) };
 }
 
-test("a card for a name in the middle of the feed opens below the name, so it covers only that message", async ({
+test("a card for a name in the middle of the feed opens beside the name, to its right, so it covers no part of it", async ({
   page,
 }) => {
   const channel = "browser-card-below";
@@ -59,10 +70,10 @@ test("a card for a name in the middle of the feed opens below the name, so it co
   await openAsReader(page, channel);
   const edges = await edgesOnHover(page, `${channel}-middle`);
 
-  expect(edges.card.top).toBeGreaterThanOrEqual(edges.name.bottom);
+  expect([edges.card.left >= edges.name.right, edges.card.top <= edges.name.top]).toStrictEqual([true, true]);
 });
 
-test("the last message's card, with no room below it near the viewport's bottom, flips above the name", async ({
+test("the last message's card, with no room below it near the viewport's bottom, slides up to stay inside the window", async ({
   page,
 }) => {
   const channel = "browser-card-flip";
@@ -76,5 +87,34 @@ test("the last message's card, with no room below it near the viewport's bottom,
   await openAsReader(page, channel);
   const edges = await edgesOnHover(page, `${channel}-bot`);
 
-  expect(edges.card.bottom).toBeLessThanOrEqual(edges.name.top);
+  const height = await page.evaluate(() => globalThis.innerHeight);
+
+  expect([edges.card.top < edges.name.top, edges.card.bottom <= height]).toStrictEqual([true, true]);
+});
+
+async function focusedAuthor(page: Page, channel: string): Promise<string> {
+  const author = `${channel}-author`;
+  await adminClient().createChannel({ name: channel });
+  await postAs(channel, author, "human");
+  await openAsReader(page, channel);
+  const trigger = await cardTrigger(page, author);
+  await trigger.focus();
+  return author;
+}
+
+test("by keyboard alone, Tab from a focused name reaches the card's Message, and Enter on it puts @name in the message box", async ({
+  page,
+}) => {
+  const author = await focusedAuthor(page, "browser-card-keys");
+
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  await page.keyboard.press("Tab");
+
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Message" })).toBeFocused();
+
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("textbox", { name: "Message" })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Message" })).toHaveValue(`@${author} `);
 });

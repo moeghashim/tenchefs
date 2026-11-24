@@ -2,6 +2,7 @@ import { Alert, CardBody, Skeleton } from "../../design-system/index.tsx";
 import type { MessageMenu, Selection } from "../../unread/index.ts";
 import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import { ConversationReplies } from "./conversation-replies.tsx";
+import type { MessageId } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
 import { StandaloneEntry } from "./standalone-entry.tsx";
@@ -10,6 +11,7 @@ const TEXT = { first: "First message" } as const;
 
 interface ConversationBodyProps {
   readonly state: ThreadMessagesState;
+  readonly linked: MessageId | null;
   readonly me: string;
   readonly readPosition: number | null;
   readonly menu: MessageMenu;
@@ -43,6 +45,7 @@ export function ConversationBody(props: ConversationBodyProps): ReactNode {
         reply={props.reply}
       />
       <ConversationReplies
+        linked={props.linked}
         me={props.me}
         menu={props.menu}
         parent={state.parent}

@@ -43,7 +43,7 @@ async function readThreads(posting: Posting, count: number): Promise<readonly st
   });
   await reader.ack(reply.id);
   const newer = await readThreads(posting, count - ONE);
-  return [...newer, `#/inbox/${channel}/${String(parent.id)}`];
+  return [...newer, `#/inbox/${channel}/${String(parent.id)}/messages/${String(reply.id)}`];
 }
 
 interface Opening {

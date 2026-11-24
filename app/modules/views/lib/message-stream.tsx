@@ -35,6 +35,7 @@ export function MessageStream(props: MessageStreamProps): ReactNode {
           <MessageEntry
             closing={null}
             channel={props.channel}
+            closed={false}
             key={row.message.id}
             me={props.me}
             menu={props.menu}

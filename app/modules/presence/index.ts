@@ -4,8 +4,10 @@
  * word the wire uses for it (the path, the event's `type`, the CLI's field) is named here once, so renaming the term
  * is one change.
  */
+import type { TriggerFailure, TriggerResult } from "../triggers/index.ts";
 import type { IdentityName } from "../identities/index.ts";
 import type { IsoTime } from "../time/index.ts";
+import { triggerErrorCodes } from "../triggers/index.ts";
 
 declare const brand: unique symbol;
 
@@ -45,6 +47,7 @@ export const offlineReasons = [
   "token rotated",
   "deactivated",
   "connection lost",
+  "trigger failed",
 ] as const;
 
 /** One of `offlineReasons`. */
@@ -56,6 +59,11 @@ export type OfflineReason = (typeof offlineReasons)[number];
  * it never was, and why it went offline when the server knows. A Deactivated identity is always offline. `warning` is
  * the owner's warning: set only in what the agent's owner reads, while the agent is offline after an unexpected end
  * (the end that raised an offline alert), until it next has a live connection.
+ *
+ * An agent with a trigger URL whose last call didn't fail can be reached now, so it is online too (Matt, 2026-11-24,
+ * mattpocock/cookout#378): when that is the only reason, it carries `wakesOnMention` and no `connection`. One whose
+ * last trigger call failed and that has no live connection is Unreachable: offline, carrying that call's result in
+ * `unreachable`.
  */
 export interface Presence {
   readonly identity: IdentityName;
@@ -64,6 +72,8 @@ export interface Presence {
   readonly lastSeenAt?: IsoTime;
   readonly offlineReason?: OfflineReason;
   readonly warning?: true;
+  readonly wakesOnMention?: true;
+  readonly unreachable?: TriggerResult;
 }
 
 /** The answer to `GET /v1/presence`: every identity's presence, Deactivated ones included, sorted by name. */
@@ -99,6 +109,10 @@ export function isOfflineAlertId(value: number): value is OfflineAlertId {
  * An offline alert (GLOSSARY.md): an item in an agent's owner's Inbox saying the agent went offline unexpectedly and
  * why, as "@triage went offline: connection lost". It is no message, so it moves no Read position. `backOnlineAt` is
  * when the agent next had a live connection, absent while it is still offline.
+ *
+ * A failed call to an agent's trigger URL raises one, `trigger failed`, once per failure streak (Matt, 2026-11-24,
+ * mattpocock/cookout#378). It carries `trigger`: the message that didn't get through and the status or error the
+ * call ended with. The next successful call sets its `backOnlineAt`; a live connection doesn't.
  */
 export interface OfflineAlert {
   readonly id: OfflineAlertId;
@@ -107,10 +121,14 @@ export interface OfflineAlert {
   readonly raisedAt: IsoTime;
   readonly read: boolean;
   readonly backOnlineAt?: IsoTime;
+  readonly trigger?: TriggerFailure;
 }
 
 /** The code of a mark read naming an offline alert the caller has none of. */
 export const offlineAlertNotFound = "offline_alert_not_found";
 
-/** The codes presence ends a stream with, and the code of an offline alert not found. */
-export const presenceErrorCodes = [watchReplaced, offlineAlertNotFound] as const;
+/**
+ * The codes presence ends a stream with, the code of an offline alert not found, and the codes setting a trigger URL
+ * (which presence reports on) is refused with.
+ */
+export const presenceErrorCodes = [watchReplaced, offlineAlertNotFound, ...triggerErrorCodes] as const;

@@ -1,4 +1,5 @@
 import type { IdentityName, LiveConnectionDetail, Presence } from "../../sdk/index.ts";
+import { isUnreachable, reachText, unreachableBrief } from "./trigger-presence.ts";
 import { useContext, useSyncExternalStore } from "react";
 import { PresenceList } from "./presence-list.ts";
 import type { Presences } from "../../board/index.ts";
@@ -20,6 +21,7 @@ const TEXT = {
 interface PresenceShown {
   readonly online: boolean;
   readonly warning: boolean;
+  readonly unreachable: boolean;
   readonly label: string;
   readonly spoken: string;
 }
@@ -59,7 +61,7 @@ function warnedOf(presence: Presence): presence is Warned {
   );
 }
 
-function labelOf(presence: Presence): string {
+function connectedLabel(presence: Presence): string {
   if (presence.online) {
     return TEXT.online;
   }
@@ -67,6 +69,10 @@ function labelOf(presence: Presence): string {
     return TEXT.wentOfflineLabel;
   }
   return offlineText(presence, ", ");
+}
+
+function labelOf(presence: Presence): string {
+  return reachText(presence) ?? connectedLabel(presence);
 }
 
 function connectionOf(connection: LiveConnectionDetail): string {
@@ -93,7 +99,7 @@ function warningDetail(presence: Warned): string {
   return `${TEXT.wentOffline} ${timeAgo(presence.lastSeenAt)}: ${presence.offlineReason}`;
 }
 
-function detailOf(presence: Presence): string {
+function connectedDetail(presence: Presence): string {
   if (warnedOf(presence)) {
     return warningDetail(presence);
   }
@@ -105,6 +111,20 @@ function detailOf(presence: Presence): string {
     return TEXT.online;
   }
   return `${TEXT.online} · ${connectionOf(connection)}`;
+}
+
+function detailOf(presence: Presence): string {
+  return reachText(presence) ?? connectedDetail(presence);
+}
+
+function shownOf(presence: Presence, label: string): PresenceShown {
+  return {
+    label,
+    online: presence.online,
+    spoken: label,
+    unreachable: isUnreachable(presence),
+    warning: warnedOf(presence),
+  };
 }
 
 function usePresences(): Presences {
@@ -122,7 +142,7 @@ function shownIn(among: Among): PresenceShown | null {
     return null;
   }
   const label = labelOf(presence);
-  return { label, online: presence.online, spoken: label, warning: warnedOf(presence) };
+  return shownOf(presence, label);
 }
 
 function useTicking(presence: Presence | null, text: (known: Presence) => string): string | null {
@@ -140,12 +160,15 @@ function usePresence(name: IdentityName): PresenceShown | null {
   if (presence === null || label === null) {
     return null;
   }
-  return { label, online: presence.online, spoken: label, warning: warnedOf(presence) };
+  return shownOf(presence, label);
 }
 
-function briefOf({ online, warning }: PresenceShown): string {
+function briefOf({ online, unreachable, warning }: PresenceShown): string {
   if (online) {
     return TEXT.online;
+  }
+  if (unreachable) {
+    return unreachableBrief;
   }
   if (warning) {
     return TEXT.wentOfflineLabel;

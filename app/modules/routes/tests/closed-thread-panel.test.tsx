@@ -92,7 +92,7 @@ it("opening a closed thread by its address shows it all, who closed it and when,
     "Deploy?",
     "Noon works.",
   ]);
-  expect(inThread().getByRole("button", { name: "Reopen" }).textContent).toBe("Reopen");
+  expect(inThread().getByRole("button", { name: "Reopen thread" }).querySelector("svg")).not.toBeNull();
 
   await feedShows(["Before.", "<1 closed thread>", "After."]);
 
@@ -105,8 +105,8 @@ it("reopen in a closed thread's panel removes its bar, and the thread leaves its
   expect.hasAssertions();
 
   const { close, posted } = await openedClosed("web-reopen-panel");
-  fireEvent.click(inThread().getByRole("button", { name: "Reopen" }));
-  await inThread().findByRole("button", { name: "Close" });
+  fireEvent.click(inThread().getByRole("button", { name: "Reopen thread" }));
+  await inThread().findByRole("button", { name: "Close thread" });
 
   expect(inThread().queryByRole("link", { name: `@${posted.channel}-ada` })).toBeNull();
 
@@ -122,8 +122,8 @@ it("close in the thread panel closes the thread as the person", { timeout: 5000 
 
   const posted = await threadWithReplies("web-close-panel", []);
   const close = openAt({ client: posted.reader, hash: threadHash(posted) });
-  fireEvent.click(await inThread().findByRole("button", { name: "Close" }));
-  await inThread().findByRole("button", { name: "Reopen" });
+  fireEvent.click(await inThread().findByRole("button", { name: "Close thread" }));
+  await inThread().findByRole("button", { name: "Reopen thread" });
 
   await expect(closedBarText(posted.readerName)).resolves.toMatch(CLOSED_JUST_NOW);
   await expect(closedByOf(posted)).resolves.toBe(posted.readerName);
@@ -170,11 +170,11 @@ it("a refused close says why", { timeout: 5000 }, async () => {
   const close = openAt({ client: posted.reader, hash: threadHash(posted) });
   await inThread().findByText("Or one.");
   await adminClient().deleteChannel(posted.channel);
-  fireEvent.click(inThread().getByRole("button", { name: "Close" }));
+  fireEvent.click(inThread().getByRole("button", { name: "Close thread" }));
   const alert = await alertSaying("Couldn't close the thread");
 
   expect(alert.textContent).toMatch(/^Couldn't close the thread \(message_not_found\): /u);
-  expect(inThread().queryByRole("button", { name: "Reopen" })).toBeNull();
+  expect(inThread().queryByRole("button", { name: "Reopen thread" })).toBeNull();
 
   close();
 });
@@ -193,7 +193,7 @@ it("reacting in a closed thread's panel, and taking the reaction back, keeps the
   await feedShows(["Before.", "<1 closed thread>", "After."]);
 
   await expect(closedByOf(posted)).resolves.toBe(`${posted.channel}-ada`);
-  expect(inThread().getByRole("button", { name: "Reopen" }).textContent).toBe("Reopen");
+  expect(inThread().getByRole("button", { name: "Reopen thread" }).querySelector("svg")).not.toBeNull();
 
   close();
 });

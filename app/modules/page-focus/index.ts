@@ -3,7 +3,7 @@
  * focus, the one place the web reads either. `createPageFocus` reads them
  * through an adapter and calls each subscriber when the answer changes, so a
  * view can count time on screen only while someone could be looking (the
- * Inbox's read rule, `docs/adr/0073-the-inbox-reads-a-conversation-after-2-s-on-screen.md`).
+ * Inbox's read rule, in `unread`).
  * The browser's adapter is `documentFocusAdapter()`, which reads
  * `document.visibilityState` and `document.hasFocus()` and listens for
  * `visibilitychange`, `focus` and `blur`. Tests in jsdom, whose page never

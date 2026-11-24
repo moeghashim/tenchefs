@@ -3,14 +3,15 @@ interface Listeners {
   readonly notify: () => void;
 }
 
-function listenersOf(onFirst: () => void): Listeners {
+function listenersOf(show: () => () => void): Listeners {
   const listeners = new Set<() => void>();
   return {
     add: (listener) => {
       listeners.add(listener);
-      onFirst();
+      const hide = show();
       return () => {
         listeners.delete(listener);
+        hide();
       };
     },
     notify: () => {

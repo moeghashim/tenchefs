@@ -23,4 +23,4 @@
 - Later tickets in #177 build on this registry: one live connection per agent (a second watch ends the first with exit 6), the offline reason and a clean close, offline alerts and the owner's warning. `offlineReason` and `warning` are left out of the wire until then.
 - The name "presence", its wire path, event type and CLI field are spelled once, in `app/modules/presence/index.ts` (`presenceName`), so a rename is one change.
 
-Superseded in part on 2026-11-23 by [ADR 0065](0065-cookout-watch-never-gives-up-on-an-unavailable-board.md): `cookout watch` no longer exits 5 after 5 minutes; it retries at most 30 s apart for as long as the board is down, so the boot grace is ample for it to reconnect.
+Superseded in part on 2026-11-23 by ADR 0065: `cookout watch` no longer exits 5 after 5 minutes; it retries at most 30 s apart for as long as the board is down, so the boot grace is ample for it to reconnect.

@@ -31,12 +31,19 @@
  * count as a link to its thread and, on hover or focus, a "Reply" link to it;
  * the open thread's parent is highlighted. Each run of consecutive closed threads
  * folds into one divider, "N closed threads", which shows the 10 nearest the run's
- * newest end, then "K more" for the next 10; a top-level message's menu ends with
+ * newest end, then "K more" for the next 10. A closed thread with something unread for you (a mention, a reply in a
+ * thread you follow, a reaction) when the channel opened, or since, stays out of the fold while it is open, shown in
+ * place; a closed thread shown in the channel is labelled Closed. When the channel opens with one of them loaded, the
+ * first unread item for you, the closed thread included, is scrolled into view and highlighted for about 2 s, as a
+ * reply link's is (#349). A top-level message's menu ends with
  * Close, or Reopen while its thread is closed. `ThreadView` is the thread panel
  * beside it: a bar with Close or, while the thread is closed, "Closed by @name
  * 5m ago" and Reopen, then the thread's parent message, its reply count, and its replies,
  * oldest first, with a reply box that takes focus when the panel opens and a
- * link that closes it, and opening it marks the thread read. Opened by a link to
+ * link that closes it, and opening it marks the thread read. Its `edge`, and that of
+ * every conversation beside the Inbox, a thread's or a channel's, is the panel's draggable left edge on a wide screen,
+ * which the routes size from the layout store's `threadWidth` and which closes the
+ * thread when dragged past its narrowest. Opened by a link to
  * one of its messages (`linked`), it scrolls that message into view and
  * highlights it for about 2 s, or says the message wasn't found. A refused close or
  * reopen says why. In both,
@@ -53,8 +60,11 @@
  * as an agent if the identity list says so (or, for an author no longer in
  * it, if the message carries an owner), and its data is folded behind a
  * toggle, a command call's shown as the command and the data it called it
- * with. `Authors` gives
- * every message under it the identity list, and `Reacting` the board's `reactions` store: a message shows its
+ * with. A message's name opens its identity card, whose Message puts `@name `
+ * in the box of the pane the name is in (the channel's message box, or the thread's or
+ * conversation's reply box) and focuses it; `ThreadCardComposer` names a thread's
+ * reply box for the cards drawn under it. `Authors` gives
+ * every message under it the identity list, and `Reacting` the board store's reactions: a message shows its
  * reactions as chips, each with its count, pressed when one is the reader's own and naming who reacted in its
  * tooltip; clicking a chip, its 👍 or 👎 hover button or menu item, or pressing `+` or `-` on it while focused,
  * leaves the reader's reaction or, if already left, removes it, saying why if the server refuses. `InboxView` is the inbox of
@@ -107,6 +117,9 @@
  * `AgentJoinApprovalView` is the same for an agent join request: the agent it
  * joins or creates, the host, the code, the idle expiry to keep or lower, and
  * whether to replace the agent's live session.
+ * `SearchBox` is the search box atop the workspace column, on the `search` store: Ctrl+K (Cmd+K) focuses it from
+ * anywhere; typing lists the matching messages under it, newest first, each word matching the query highlighted; Up,
+ * Down and Enter open one in its thread, and Escape or clicking away closes the list and gives focus back.
  */
 export { AgentJoinApprovalView } from "./lib/agent-join-approval.tsx";
 export { Authors } from "./lib/authors.tsx";
@@ -122,5 +135,7 @@ export { ProfileLinks } from "./lib/profile-links.tsx";
 export { ProfileView } from "./lib/profile.tsx";
 export { ReconnectingView } from "./lib/reconnecting.tsx";
 export { SettingsView } from "./lib/settings.tsx";
+export { SearchBox } from "./lib/search-box.tsx";
 export { SidebarView } from "./lib/sidebar.tsx";
+export { ThreadCardComposer } from "./lib/thread-card-composer.tsx";
 export { ThreadView } from "./lib/thread.tsx";

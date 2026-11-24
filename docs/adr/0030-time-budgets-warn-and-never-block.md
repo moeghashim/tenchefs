@@ -1,6 +1,6 @@
 # Time budgets warn and never block
 
-2026-11-23 (mattpocock/cookout#81). Supersedes [ADR 0013](0013-a-check-fails-its-budget-only-on-two-slow-runs.md). The decision that budgets only warn is Matt's. Doubling every budget is the chief of staff's proposal, pending Matt's review.
+2026-11-23 (mattpocock/cookout#81). Supersedes ADR 0013. The decision that budgets only warn is Matt's. Doubling every budget is the chief of staff's proposal, pending Matt's review.
 
 ## Context
 

@@ -67,6 +67,7 @@ const HumanIdentitySchema = Schema.Struct({
 
 export const AgentIdentitySchema = Schema.Struct({
   admin: Schema.Boolean,
+  broughtInBy: Schema.optionalKey(IdentityNameSchema),
   createdAt: IsoTimeSchema,
   deactivated: Schema.optionalKey(Schema.Literal(true)),
   description: Schema.optionalKey(DescriptionSchema),

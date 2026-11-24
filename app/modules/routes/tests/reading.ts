@@ -47,10 +47,10 @@ async function startedThread({ channel, poster, reader, text }: Starting): Promi
   const { message: parent } = await poster.createMessage({ channel, text });
   await reader.follow(parent.id);
   await reader.ack(parent.id);
-  const thread = { address: `#/inbox/${channel}/${String(parent.id)}`, channel, parent, poster, reader };
-  await replied({ text: `${FIRST_REPLY} in ${text}`, thread });
-  await replied({ text: `${SECOND_REPLY} in ${text}`, thread });
-  return thread;
+  const started = { address: `#/inbox/${channel}/${String(parent.id)}`, channel, parent, poster, reader };
+  const first = await replied({ text: `${FIRST_REPLY} in ${text}`, thread: started });
+  await replied({ text: `${SECOND_REPLY} in ${text}`, thread: started });
+  return { ...started, address: `${started.address}/messages/${String(first.id)}` };
 }
 
 async function threadToRead(channel: string): Promise<ReadThread> {
@@ -143,8 +143,32 @@ function clicked(name: string): void {
   fireEvent.click(inConversation().getByRole("button", { name }));
 }
 
+interface Acking {
+  readonly acked: () => Promise<void>;
+  readonly client: CookoutClient;
+}
+
+function acking(client: CookoutClient): Acking {
+  let answered = Promise.withResolvers<boolean>();
+  return {
+    acked: async () => {
+      await answered.promise;
+      answered = Promise.withResolvers<boolean>();
+    },
+    client: {
+      ...client,
+      ack: async (messageId) => {
+        const answer = await client.ack(messageId);
+        answered.resolve(true);
+        return answer;
+      },
+    },
+  };
+}
+
 interface Opened extends Omit<HandReading, "reading"> {
   readonly close: () => Promise<void>;
+  readonly read: () => Promise<number>;
   readonly unreadAfter: (millis: number) => Promise<number>;
   readonly readAfter: (millis: number) => Promise<number>;
 }
@@ -158,7 +182,8 @@ async function openReading({ hash, thread }: Opening): Promise<Opened> {
   const { advance, page, reading } = handReading();
   const { live, stream } = watched(thread.reader);
   clockStopped();
-  const unmount = openAt({ client: thread.reader, hash, live, reading });
+  const { acked, client } = acking(thread.reader);
+  const unmount = openAt({ client, hash, live, reading });
   const events: EventStream = await stream;
   return {
     advance,
@@ -167,9 +192,15 @@ async function openReading({ hash, thread }: Opening): Promise<Opened> {
       await events.close();
     },
     page,
+    read: async () => {
+      await acked();
+      const count = await unreadIn(thread);
+      return count;
+    },
     readAfter: async (millis) => {
       advance(millis);
-      const count = await readAtLast(thread);
+      await acked();
+      const count = await unreadIn(thread);
       return count;
     },
     unreadAfter: async (millis) => {

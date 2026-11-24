@@ -29,7 +29,13 @@ import {
   openIdentityRoutes,
   transferRoutes,
 } from "../../../identities/server.ts";
-import { liveRoutes, presenceLayer } from "./live-routes.ts";
+import {
+  liveRoutes,
+  mentionTriggersLayer,
+  presenceLayer,
+  scheduledMessageRoutes,
+  scheduledMessagesLayer,
+} from "./live-routes.ts";
 import { messageRoutes, messagesLayer, reactionsLayer, readReceiptsLayer } from "../../../messages/server.ts";
 import { Layer } from "effect";
 import type { Route } from "../../../http/server.ts";
@@ -46,7 +52,8 @@ type RouteNeeds =
   | NeedsOf<typeof agentSessionRoutes>
   | NeedsOf<typeof inboxRoutes>
   | NeedsOf<typeof liveRoutes>
-  | NeedsOf<typeof commandRoutes>;
+  | NeedsOf<typeof commandRoutes>
+  | NeedsOf<typeof scheduledMessageRoutes>;
 
 type OpenNeeds = NeedsOf<typeof openIdentityRoutes> | NeedsOf<typeof openJoinRequestRoutes>;
 
@@ -66,6 +73,7 @@ export const routes: readonly Route<RouteNeeds>[] = [
   ...inboxRoutes,
   ...liveRoutes,
   ...commandRoutes,
+  ...scheduledMessageRoutes,
 ];
 
 export const openRoutes: readonly Route<OpenNeeds>[] = [
@@ -84,11 +92,14 @@ export const domainLayers = Layer.mergeAll(
   limitsLayer,
   addressLimitLayer,
   presenceLayer,
+  scheduledMessagesLayer,
 ).pipe(
   Layer.provideMerge(Layer.mergeAll(messagesLayer, agentSessionsLayer, deactivationOffersLayer)),
   Layer.provideMerge(
     Layer.mergeAll(identityChangesLayer, commandChangesLayer, readReceiptsLayer, reactionsLayer, offlineAlertsLayer),
   ),
+  (board) => Layer.provideMerge(mentionTriggersLayer, board),
 );
 
 export { SpawnSettings } from "../../../commands/server.ts";
+export { triggerCallerLive } from "./live-routes.ts";

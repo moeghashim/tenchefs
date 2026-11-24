@@ -21,6 +21,7 @@ type FeedPart = Fold | Shown;
 interface Folding {
   readonly messages: readonly TopLevelMessage[];
   readonly expanded: ReadonlyMap<MessageId, number>;
+  readonly held: ReadonlySet<MessageId>;
 }
 
 interface Unfolding {
@@ -28,16 +29,21 @@ interface Unfolding {
   readonly expanded: ReadonlyMap<MessageId, number>;
 }
 
-function isClosed(message: TopLevelMessage): boolean {
-  return "closedAt" in message;
+interface Holding {
+  readonly message: TopLevelMessage;
+  readonly held: ReadonlySet<MessageId>;
 }
 
-function runsOf(messages: readonly TopLevelMessage[]): readonly (readonly TopLevelMessage[])[] {
+function isFolded({ held, message }: Holding): boolean {
+  return "closedAt" in message && !held.has(message.id);
+}
+
+function runsOf({ held, messages }: Folding): readonly (readonly TopLevelMessage[])[] {
   const runs: TopLevelMessage[][] = [];
   let run: TopLevelMessage[] = [];
   let previous: TopLevelMessage | null = null;
   for (const message of messages) {
-    if (previous === null || !isClosed(message) || !isClosed(previous)) {
+    if (previous === null || !isFolded({ held, message }) || !isFolded({ held, message: previous })) {
       run = [];
       runs.push(run);
     }
@@ -69,8 +75,8 @@ function messagesOf(run: readonly TopLevelMessage[]): readonly Shown[] {
   return run.map((message) => ({ afterFold: false, kind: "message", message }));
 }
 
-function partsOfRun(run: readonly TopLevelMessage[], expanded: Folding["expanded"]): readonly FeedPart[] {
-  if (!run.some((message) => isClosed(message))) {
+function partsOfRun(run: readonly TopLevelMessage[], { expanded, held }: Folding): readonly FeedPart[] {
+  if (!run.some((message) => isFolded({ held, message }))) {
     return messagesOf(run);
   }
   const ids = run.map((message) => message.id);
@@ -91,8 +97,8 @@ function afterFoldOf(part: FeedPart, afterFold: boolean): FeedPart {
 function foldClosed(folding: Folding): readonly FeedPart[] {
   const parts: FeedPart[] = [];
   let afterFold = false;
-  for (const run of runsOf(folding.messages)) {
-    for (const part of partsOfRun(run, folding.expanded)) {
+  for (const run of runsOf(folding)) {
+    for (const part of partsOfRun(run, folding)) {
       parts.push(afterFoldOf(part, afterFold));
       afterFold = part.kind === "fold";
     }

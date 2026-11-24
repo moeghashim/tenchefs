@@ -1,3 +1,4 @@
+import { changesetMissing, packageShips } from "./lib/changesets.ts";
 import { fail, oxlint, tool, unwrap } from "./lib/tools.ts";
 import { field, list, parseJson, text } from "./lib/json.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -139,7 +140,7 @@ function validatorsCaught(): ReadonlySet<string> {
 
 const ADR_CANARY = `${ROOT}/adrs/edited-in-place.diff`;
 const ADR_CODE = "append-only";
-const ADR_CANARY_EDITS = "docs/adr/0048-message-text-is-markdown-rendered-by-react-markdown.md";
+const ADR_CANARY_EDITS = "docs/adr/0055-read-receipts-come-from-the-read-position.md";
 
 const adrCanaries: readonly Canary[] = [{ check: "hygiene", code: ADR_CODE, file: ADR_CANARY }];
 
@@ -167,6 +168,25 @@ function migrationsCaught(): ReadonlySet<string> {
   );
 }
 
+const CHANGESET_CANARY = `${ROOT}/changesets/no-changeset.txt`;
+const CHANGESET_CODE = "ship in @ai-hero/cookout (app/modules/sdk/index.ts)";
+
+const changesetCanaries: readonly Canary[] = [{ check: "hygiene", code: CHANGESET_CODE, file: CHANGESET_CANARY }];
+
+async function changesetsCaught(): Promise<ReadonlySet<string>> {
+  const changes = readFileSync(CHANGESET_CANARY, "utf8")
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => {
+      const [status = "", file = ""] = line.split("\t");
+      return { file, status };
+    });
+  const reasons = changesetMissing({ changes, ships: await packageShips() });
+  return new Set(
+    reasons.filter((reason) => reason.includes(CHANGESET_CODE)).map(() => key(CHANGESET_CODE, CHANGESET_CANARY)),
+  );
+}
+
 const escaped = [
   ...missing(lintCanaries, lintCaught()),
   ...missing(tscCanaries, tscCaught()),
@@ -174,6 +194,7 @@ const escaped = [
   ...missing(validatorCanaries, validatorsCaught()),
   ...missing(adrCanaries, adrsCaught()),
   ...missing(migrationCanaries, migrationsCaught()),
+  ...missing(changesetCanaries, await changesetsCaught()),
 ];
 for (const canary of escaped) {
   console.error(`${SCRIPT}: ${canary.check} did not report ${canary.code} for its planted violation in ${canary.file}`);

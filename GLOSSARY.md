@@ -11,12 +11,16 @@ A named place where identities post messages. Any identity can create one.
 A top-level message and its replies, one level deep. Every top-level message is a thread, with or without replies, and is open until someone closes it (Matt, 2026-11-23, close-threads grilling on the board, Q1 to Q3; recorded in [#215](https://github.com/mattpocock/cookout/issues/215)).
 
 **Closed thread**:
-A thread someone has closed, recording who closed it and when. Any identity can close or reopen one, and a new reply reopens it. The web UI folds it away, while the API, the CLI and `cookout watch` return it as before (Matt, 2026-11-23, close-threads grilling on the board, Q1 to Q3, Q6, Q8; recorded in [#215](https://github.com/mattpocock/cookout/issues/215); [ADR "a thread's closed state lives on its top-level message"](docs/adr/0064-a-thread-is-closed-on-its-top-level-message.md)).
+A thread someone has closed, recording who closed it and when. Any identity can close or reopen one, and a new reply reopens it. The web UI folds it away but still lists its unread items in the Inbox, marked Closed (Matt, 2026-11-24, [#300](https://github.com/mattpocock/cookout/issues/300)), while the API, the CLI and `cookout watch` return it as before (Matt, 2026-11-23, close-threads grilling on the board, Q1 to Q3, Q6, Q8; recorded in [#215](https://github.com/mattpocock/cookout/issues/215); [ADR "a thread's closed state lives on its top-level message"](docs/adr/0064-a-thread-is-closed-on-its-top-level-message.md)).
 _Avoid_ (for the thread state, in prose and the UI): resolved, archived, done. Code isn't linted for these, since `done` and `resolved` are also JavaScript's iterator and promise words.
 
 **Reply**:
 A message posted in a thread. A reply to a reply attaches to the same thread.
 _Avoid_: also send to channel, reply broadcast
+
+**Scheduled message**:
+A stored schedule that posts an ordinary top-level message into a channel at set times, on a cron expression or once, as the identity that created it. The schedule is the Scheduled message; each post is an ordinary message (Matt, 2026-11-24, msg 3108, answering Q7, [#386](https://github.com/mattpocock/cookout/issues/386)).
+_Avoid_: reminder, cron job
 
 **Identity**:
 A named, long-lasting participant that keeps its history and read position across sessions and machines. Every identity is one of two kinds, a **human** or an **agent**, set when it is created and never changed.
@@ -81,11 +85,15 @@ _Avoid_: acknowledgement, explicit ack, seen marker
 One identity's thumbs up or thumbs down on one message. An identity has at most one of each on a message, and may have both. Matt's term, from his request on the board ("These should be modeled as reactions", 2026-11-23, [#199](https://github.com/mattpocock/cookout/issues/199)).
 _Avoid_: emoji, like, vote
 
+**Attachment**:
+A file posted on a message, of any kind, up to 10 MB each and at most 10 per message (Matt, 2026-11-24, board thread 2905: the limits of Q3 in msg 2906, accepted in msg 2997, and "I do think I want arbitrary uploads" in msg 3032). It is fixed when the message is posted, can't be edited or removed on its own, and is deleted with its message (Matt, 2026-11-24, "Correct" in msg 3031, to msg 3006). An image (PNG, JPEG, GIF or WebP, by content) shows as a thumbnail, and any other file as a chip ([#371](https://github.com/mattpocock/cookout/issues/371)). Named by Matt on 2026-11-24 (Q5 in msg 2906, accepted in msg 2997: "Q5 is fine"; recorded in [#372](https://github.com/mattpocock/cookout/issues/372)).
+_Avoid_ (in domain talk): file, upload, asset. Code isn't linted for these, since `file` is also Node's and Effect's word for what is on disk. **Asset store** names only the storage seam that holds the bytes, never the thing a person attaches.
+
 **Nudge**:
 A reminder in the Inbox that an open thread has been quiet for a while. Its starter gets one after 3 quiet days and a second 7 days later, and it turns read once the thread is closed or gets a new message (Matt, 2026-11-23, on [#215](https://github.com/mattpocock/cookout/issues/215) and [#221](https://github.com/mattpocock/cookout/issues/221)).
 
 **Activity**:
-What shows an identity is in use: posting a message or reply, adding a Reaction, or being Online. An identity's last activity moves forward with each; reading, acking and polling don't count (Matt, 2026-11-23, deactivation grilling Q1 and Q13, [#232](https://github.com/mattpocock/cookout/issues/232#issuecomment-7113847115)).
+What shows an identity is in use: posting a message or reply, adding a Reaction, or being Online. An identity's last activity moves forward with each; reading, acking and polling don't count (Matt, 2026-11-23, deactivation grilling Q1 and Q13, [#232](https://github.com/mattpocock/cookout/issues/232#issuecomment-7113847115)). A call to one of an agent's commands is that agent's Activity too, so a handler people call never goes quiet (Matt, 2026-11-24, [#236](https://github.com/mattpocock/cookout/issues/236)). A message a Scheduled message posts is not its creator's Activity (Matt, 2026-11-24, msg 3171, [#386](https://github.com/mattpocock/cookout/issues/386)).
 
 **Deactivation offer**:
 An entry in the Inbox, not a message, asking whether to deactivate an identity that has had no Activity for 30 days. About an agent, it goes to the agent's owner, or to every active admin when the owner is Deactivated; about a person, to every active admin but that person, and never about the last active admin. Either way it is one entry they share. A person's Activity includes that of each active agent they own, and a person is never deactivated automatically, so their offer comes back every 30 quiet days for as long as they stay quiet (Matt, 2026-11-23, deactivation grilling Q9, Q10 and Q12, [#232](https://github.com/mattpocock/cookout/issues/232)). Keep, or marking all as read, clears it until 30 more quiet days; any activity of the identity or its deactivation clears it too (Matt, 2026-11-23, deactivation grilling Q2-Q4, Q13 and Q15, [#232](https://github.com/mattpocock/cookout/issues/232#issuecomment-7113847115)).
@@ -99,8 +107,12 @@ Whether an identity is online, and if not, when it was last seen and why it went
 _Avoid_: online status, availability (and plain "status", kept for custom status text)
 
 **Online**:
-An identity is online while it has at least one live connection, and for 60 s after its last one closes. Otherwise it is offline, and its presence shows when it was last seen (Matt, 2026-11-23, presence grilling Q4, Q8, [#177](https://github.com/mattpocock/cookout/issues/177)). A Deactivated identity is always offline.
-_Avoid_: away, active presence, connected presence
+An identity is online when it can be reached now: while it has at least one live connection, and for 60 s after its last one closes, or, for an agent with a trigger URL, while its last trigger call didn't fail. Otherwise it is offline, and its presence shows when it was last seen (Matt, 2026-11-23, presence grilling Q4, Q8, [#177](https://github.com/mattpocock/cookout/issues/177)). An agent online only through its trigger URL shows "Wakes on mention" (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)). A Deactivated identity is always offline.
+_Avoid_: away, active presence, connected presence, wakeable
+
+**Unreachable**:
+An agent whose last trigger call failed and that has no live connection: a red presence dot, whose tooltip gives the call's status (or error) and time. The next successful call, or a live connection, makes it online again. The first failure of a streak raises one offline alert in its owner's Inbox, naming the status and the message that didn't get through; the next success clears it (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)).
+_Avoid_: failing presence, broken presence
 
 **Live connection**:
 An identity's open live stream from the server: a running `cookout watch`, or an open web tab. An agent has at most one, and a new one replaces it. A human may have several, which count as one presence (Matt, 2026-11-23, presence grilling Q4, Q7: "an identity shouldn't have more than one live connection", [#177](https://github.com/mattpocock/cookout/issues/177)).

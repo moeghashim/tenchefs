@@ -1,4 +1,4 @@
-import type { IdentityName, IdentityResponse, Refusal } from "../../sdk/index.ts";
+import type { IdentityName, Refusal } from "../../sdk/index.ts";
 import type { IdentityList } from "./identity-list.ts";
 import { listenersOf } from "./listeners.ts";
 import { refusalOf } from "../../sdk/index.ts";
@@ -21,7 +21,7 @@ interface DisplayNameDraft {
 }
 
 interface DisplayNameOptions {
-  readonly set: (name: IdentityName, text: string | null) => Promise<IdentityResponse>;
+  readonly set: (name: IdentityName, text: string | null) => Promise<void>;
   readonly list: IdentityList;
   readonly name: IdentityName;
 }
@@ -36,7 +36,7 @@ function sentOf(text: string): string | null {
 
 function createDisplayName(options: DisplayNameOptions): DisplayNameDraft {
   const { list, name, set } = options;
-  const listeners = listenersOf(list.load);
+  const listeners = listenersOf(list.show);
   let current: DisplayNameSnapshot = { save: { status: "idle" }, text: null };
   let saving = Promise.resolve();
 
@@ -47,8 +47,7 @@ function createDisplayName(options: DisplayNameOptions): DisplayNameDraft {
 
   async function send(text: string): Promise<void> {
     try {
-      const { identity } = await set(name, sentOf(text));
-      list.put(identity);
+      await set(name, sentOf(text));
       publish({ save: { status: "idle" }, text: null });
     } catch (error: unknown) {
       publish({ save: { ...refusalOf(error), status: "failed" }, text });

@@ -213,3 +213,30 @@ it.effect.each(storageLayers)(
       });
     }),
 );
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): listing the reactions of no messages finds none",
+  ({ layer }) =>
+    Effect.gen(function* listNone() {
+      const storage = yield* storeWithPeople(layer);
+      const message = yield* appendTo(storage)(newMessage("grill", "ship it?", ANN));
+      yield* reactAll(storage, [reacting(message.id, "bob")]);
+      const listed = yield* storage.listReactions([]);
+
+      expect(listed).toStrictEqual([]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): marking the reactions of no messages seen leaves every reaction unseen",
+  ({ layer }) =>
+    Effect.gen(function* markNone() {
+      const storage = yield* storeWithPeople(layer);
+      const message = yield* appendTo(storage)(newMessage("grill", "ship it?", ANN));
+      yield* reactAll(storage, [reacting(message.id, "bob")]);
+      yield* storage.markReactionsSeen(nameOf("ann"), []);
+      const unseen = yield* storage.listUnseenReactions(nameOf("ann"));
+
+      expect(unseen).toMatchObject([{ identity: "bob", messageId: message.id }]);
+    }),
+);

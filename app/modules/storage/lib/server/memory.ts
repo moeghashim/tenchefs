@@ -1,7 +1,7 @@
 import { Effect, Predicate } from "effect";
 import { memoryIdentityLifecycle, memoryIdentitySections } from "./identity-sections.ts";
+import type { MemoryBoard } from "./service.ts";
 import type { Scope } from "effect";
-import type { StorageService } from "./service.ts";
 import { memoryAgentSessionSections } from "./agent-join-requests-memory.ts";
 import { memoryChannels } from "./channels.ts";
 import { memoryCommandCalls } from "./command-calls.ts";
@@ -11,9 +11,9 @@ import { memoryMessages } from "./messages-memory.ts";
 import { openMemoryState } from "./memory-state.ts";
 
 function subscribingCreator(
-  create: StorageService["createChannel"],
-  subscribe: StorageService["subscribeChannel"],
-): StorageService["createChannel"] {
+  create: MemoryBoard["createChannel"],
+  subscribe: MemoryBoard["subscribeChannel"],
+): MemoryBoard["createChannel"] {
   return (channel, creator) =>
     Effect.tap(create(channel), (outcome) => {
       if (outcome === "name_taken" || Predicate.isUndefined(creator)) {
@@ -23,7 +23,7 @@ function subscribingCreator(
     });
 }
 
-export const openMemoryStorage: Effect.Effect<StorageService, never, Scope.Scope> = Effect.map(
+export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> = Effect.map(
   openMemoryState,
   (state) => {
     const { forgetChannel: dropChannel, ...channels } = memoryChannels(state);
@@ -64,10 +64,10 @@ export const openMemoryStorage: Effect.Effect<StorageService, never, Scope.Scope
             return found;
           }
           dropChannel(name);
-          const threadIds = yield* forgetChannel(name);
-          dropCommandTokens(threadIds);
+          const { attachments, messageIds } = yield* forgetChannel(name);
+          dropCommandTokens(messageIds);
           dropDeliveries(name);
-          return found;
+          return { attachments, channel: found };
         }),
     };
   },

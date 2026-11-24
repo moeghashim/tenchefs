@@ -1,8 +1,7 @@
-import { Command, Flag } from "effect/cli";
+import { Argument, Command, Flag } from "effect/cli";
+import type { ListOpenThreadsQuery, SearchRequest } from "../../../messages/client.ts";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
-import type { Argument } from "effect/cli";
 import type { CommandFailed } from "./output.ts";
-import type { ListOpenThreadsQuery } from "../../../messages/client.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import { Option } from "effect";
 import { answer } from "./output.ts";
@@ -42,6 +41,41 @@ const listCommand = Command.make("list", { all: allFlag, cursor: cursorFlag, lim
   ),
 );
 
+interface SearchFlags {
+  readonly query: string;
+  readonly cursor: Option.Option<string>;
+  readonly limit: Option.Option<number>;
+}
+
+const queryArgument = Argument.String("query").pipe(
+  Argument.withDescription(
+    "The words to find, each matching a word it equals or starts, and any of from:@name, in:#channel, " +
+      "before:YYYY-MM-DD and after:YYYY-MM-DD.",
+  ),
+);
+const searchCursorFlag = Flag.String("cursor").pipe(
+  Flag.optional,
+  Flag.withDescription("Only results after this point: the previous page's cursor."),
+);
+const searchLimitFlag = Flag.Int("limit").pipe(Flag.optional, Flag.withDescription("1-200 results. Default 50."));
+
+function searchRequest({ cursor, limit, query }: SearchFlags): SearchRequest {
+  const withCursor = Option.match(cursor, { onNone: () => NOTHING, onSome: (value) => ({ cursor: value }) });
+  const withLimit = Option.match(limit, { onNone: () => NOTHING, onSome: (value) => ({ limit: value }) });
+  return { query, ...withCursor, ...withLimit };
+}
+
+const searchCommand = Command.make(
+  "search",
+  { cursor: searchCursorFlag, limit: searchLimitFlag, query: queryArgument },
+  (flags) => answer((client) => client.search(searchRequest(flags))),
+).pipe(
+  Command.withDescription(
+    "Search every channel's messages and replies by their words, newest first, Closed threads included: search " +
+      "before asking, since it may already be answered. Pass the answer's cursor to --cursor for the next page.",
+  ),
+);
+
 function threadCommandFor(messageIdArgument: Argument.Argument<MessageId>): ThreadCommand {
   const getCommand = Command.make("get", { id: messageIdArgument }, ({ id }) =>
     answer((client) => client.getThread(id)),
@@ -58,4 +92,4 @@ function threadCommandFor(messageIdArgument: Argument.Argument<MessageId>): Thre
   );
 }
 
-export { threadCommandFor };
+export { searchCommand, threadCommandFor };

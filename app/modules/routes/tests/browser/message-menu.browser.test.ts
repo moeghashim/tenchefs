@@ -6,6 +6,7 @@ import { logIn } from "./login.ts";
 const NEAR = 4;
 const INSET = 40;
 const EDGE = 3;
+const CORNER = 0;
 
 interface Point {
   readonly left: number;
@@ -28,6 +29,8 @@ async function openChannel(page: Page, channel: string): Promise<Locator> {
   const message = page.getByRole("list", { name: "Messages" }).getByRole("article");
 
   await expect(message).toBeVisible();
+
+  await message.hover();
 
   return message;
 }
@@ -117,4 +120,21 @@ test("the More actions button stays shown while its menu is open, so Escape can 
   await expect(
     page.getByRole("main", { includeHidden: true }).getByRole("button", { includeHidden: true, name: "More actions" }),
   ).toBeVisible();
+});
+
+test("Escape in the More actions menu gives focus back to its button with the mouse away from the message", async ({
+  page,
+}) => {
+  const message = await openChannel(page, "browser-menu-unhovered");
+  await page.mouse.move(CORNER, CORNER);
+  await message.focus();
+  const more = message.getByRole("button", { name: "More actions" });
+  await more.focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page.getByRole("menuitem", { name: "Reply" })).toBeFocused();
+
+  await page.keyboard.press("Escape");
+
+  await expect(more).toBeFocused();
 });

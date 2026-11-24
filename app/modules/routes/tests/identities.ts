@@ -1,7 +1,7 @@
 import type { CookoutClient, CreateIdentityRequest, Token } from "../../sdk/index.ts";
-import type { Session } from "../../session/index.ts";
+import type { Session } from "../../board/index.ts";
+import { createBoardStore } from "../../board/index.ts";
 import { createCookoutClient } from "../../sdk/index.ts";
-import { createSession } from "../../session/index.ts";
 import { expect } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
@@ -64,6 +64,28 @@ function tracked(client: CookoutClient): Tracked {
   };
 }
 
+interface Refusing {
+  readonly client: CookoutClient;
+  readonly refused: Promise<unknown>;
+}
+
+export function refusalNoticed(client: CookoutClient): Refusing {
+  const refused = Promise.withResolvers<unknown>();
+  return {
+    client: {
+      ...client,
+      ack: async (messageId) => {
+        const answer = await client.ack(messageId).catch((error: unknown) => {
+          refused.resolve(error);
+          throw error;
+        });
+        return answer;
+      },
+    },
+    refused: refused.promise,
+  };
+}
+
 export function anonymousClient(): CookoutClient {
   return createCookoutClient({ env: {}, url: webTestCookout().url });
 }
@@ -76,8 +98,8 @@ export function adminClient(): CookoutClient {
   return clientWith(webTestCookout().adminToken);
 }
 
-export function sessionOf(client: Pick<CookoutClient, "whoami">): Session {
-  return createSession({ client, clientWithToken: clientWith });
+export function sessionOf(client: CookoutClient): Session {
+  return createBoardStore({ client, live: null, url: webTestCookout().url }).session;
 }
 
 export async function newIdentity(request: CreateIdentityRequest): Promise<NewIdentity> {

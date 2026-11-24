@@ -1,12 +1,13 @@
 /**
  * The one source of randomness and hashing: bearer tokens, what the store
  * keeps instead of a token, command secrets, command tokens, call
- * IDs and the signature of a webhook delivery. The live Layer uses `node:crypto`;
+ * IDs, attachment IDs and the signature of a webhook delivery. The live Layer uses `node:crypto`;
  * tests count instead, with the Layer `testing` builds over this one.
  */
 import type { CallId, CommandSecret } from "../commands/index.ts";
 import { Context, Layer } from "effect";
 import type { Token, TokenHash } from "../identities/index.ts";
+import type { AttachmentId } from "../attachments/index.ts";
 import type { Effect } from "effect";
 import { liveSecrets } from "./lib/server/live.ts";
 
@@ -24,6 +25,8 @@ export interface SecretsService {
   readonly newCommandToken: Effect.Effect<Token>;
   /** A new login request's user code: two groups of four letters a person can read aloud, such as `WDJB-MJHT`. */
   readonly newUserCode: Effect.Effect<string>;
+  /** A new attachment ID: 128 random bits as base64url, so it gives nothing away. */
+  readonly newAttachmentId: Effect.Effect<AttachmentId>;
   /** A new call ID: `call_` and 128 random bits. */
   readonly newCallId: Effect.Effect<CallId>;
   /**

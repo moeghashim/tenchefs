@@ -13,7 +13,7 @@ import { expect, it } from "@effect/vitest";
 import { NodeServices } from "@effect/platform-node";
 import { createCookoutClient } from "../../../sdk/index.ts";
 import { secretsLive } from "../../../secrets/server.ts";
-import { sqliteStorage } from "../../../storage/server.ts";
+import { storageLayer } from "../../../storage/server.ts";
 
 interface StoredFiles {
   readonly files: readonly string[];
@@ -25,6 +25,7 @@ const UNAUTHORIZED = 401;
 const NEW_ADMIN_TOKEN = "new-admin-token-0123456789abcdef0123456789";
 const SHORT_ADMIN_TOKEN = "hunter2-but-longer";
 const EXIT_FAILURE = 1;
+const POSTGRES_URL = "postgres://cookout:hunter2-the-password@db.example:5432/board";
 const mentionsAToken = Schema.is(Schema.Struct({ adminToken: Schema.Unknown }));
 
 function filesNextTo(database: string): Effect.Effect<StoredFiles, never, FileSystem.FileSystem | Path.Path> {
@@ -32,7 +33,10 @@ function filesNextTo(database: string): Effect.Effect<StoredFiles, never, FileSy
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const folder = path.dirname(database);
-    const files = yield* fs.readDirectory(folder);
+    const entries = yield* fs.readDirectory(folder, { recursive: true });
+    const files = yield* Effect.filter(entries, (entry) =>
+      Effect.map(fs.stat(path.join(folder, entry)), (info) => info.type === "File"),
+    );
     const contents = yield* Effect.forEach(files, (file) => fs.readFileString(path.join(folder, file), "latin1"), {
       concurrency: 1,
     });
@@ -192,7 +196,7 @@ it.effect(
     Effect.gen(function* printsDefect() {
       const database = yield* freshDatabasePath;
       const crash = Layer.effectDiscard(Effect.die(new Error("the disk caught fire")));
-      const failed = yield* runServe({ database, storage: (path) => Layer.provide(sqliteStorage(path), crash) });
+      const failed = yield* runServe({ database, storage: (setting) => Layer.provide(storageLayer(setting), crash) });
 
       expect(failed).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });
       expect(failed.stderr).toMatch(
@@ -206,7 +210,7 @@ it.effect("cookout serve that crashes while starting with something other than a
   Effect.gen(function* printsBareDefect() {
     const database = yield* freshDatabasePath;
     const crash = Layer.effectDiscard(Effect.die("the disk caught fire"));
-    const failed = yield* runServe({ database, storage: (path) => Layer.provide(sqliteStorage(path), crash) });
+    const failed = yield* runServe({ database, storage: (setting) => Layer.provide(storageLayer(setting), crash) });
 
     expect(failed).toMatchObject({
       exitCode: EXIT_FAILURE,
@@ -227,5 +231,45 @@ it.effect("cookout serve refuses a COOKOUT_ADMIN_NAME that names an agent, namin
     expect(refused).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });
     expect(refused.stderrJson).toMatchObject({ error: { code: "admin_name_agent" } });
     expect(refused.stderr).toContain("release-bot, an agent");
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
+it.effect("cookout serve without DATABASE_URL opens the SQLite file at COOKOUT_DB, as before, and names it", () =>
+  Effect.gen(function* serveSqliteFromSetting() {
+    const fs = yield* FileSystem.FileSystem;
+    const database = yield* freshDatabasePath;
+    const server = yield* startServe({ env: { COOKOUT_DB: database } });
+    const whoami = yield* answer(createCookoutClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
+    const made = yield* fs.exists(database);
+
+    expect(whoami.identity).toMatchObject({ name: "admin" });
+    expect(server.lines).toContainEqual({ database, listening: server.url });
+    expect(made).toBe(true);
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
+it.effect("cookout serve whose start fails quoting DATABASE_URL prints only its host and database", () =>
+  Effect.gen(function* redactsQuotedUrl() {
+    const crash = Layer.effectDiscard(Effect.die(new Error(`could not reach ${POSTGRES_URL}`)));
+    const failed = yield* runServe({
+      env: { DATABASE_URL: POSTGRES_URL },
+      storage: (setting) => Layer.provide(storageLayer(setting), crash),
+    });
+
+    expect(failed).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });
+    expect(failed.stderr).toMatch(
+      /^cookout serve failed to start: Error: could not reach postgres:\/\/db\.example:5432\/board /v,
+    );
+    expect(failed.stderr).not.toContain("hunter2-the-password");
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
+it.effect("cookout serve refuses a DATABASE_URL that isn't a Postgres URL without showing it", () =>
+  Effect.gen(function* refusesBadDatabaseUrl() {
+    const failed = yield* runServe({ env: { DATABASE_URL: "mysql://cookout:hunter2-the-password@db.example/board" } });
+
+    expect(failed).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });
+    expect(failed.stderr).toMatch(/^cookout serve failed to start: ConfigError: .*DATABASE_URL/v);
+    expect(failed.stderr).not.toContain("hunter2-the-password");
   }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
 );

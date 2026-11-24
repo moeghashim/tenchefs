@@ -29,7 +29,14 @@ export function EarlierItems(props: EarlierItemsProps): ReactNode {
   return (
     <FeedList label={props.label}>
       {rows.map((row) => (
-        <InboxRowView key={row.key} me={me} row={row} current={isSelected({ row, selected })} unread={false} />
+        <InboxRowView
+          actions={null}
+          key={row.key}
+          me={me}
+          row={row}
+          current={isSelected({ row, selected })}
+          unread={false}
+        />
       ))}
     </FeedList>
   );

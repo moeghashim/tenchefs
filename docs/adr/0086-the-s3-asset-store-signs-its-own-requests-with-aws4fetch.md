@@ -1,0 +1,17 @@
+# The S3 asset store signs its own requests with aws4fetch
+
+2026-11-24 (mattpocock/cookout#375, a slice of #371). Matt decided on the board on 2026-11-24 (thread 2905, Q2 in msg 2906, accepted in msg 2997) that the asset store has an S3-compatible adapter chosen by config, and that disk stays the default and what the live board uses.
+
+## Decision
+
+- **Config chooses the adapter.** `COOKOUT_ASSET_STORE` is `disk` (the default, also when empty) or `s3`. With `s3`, `cookout serve` needs `COOKOUT_S3_BUCKET`, `COOKOUT_S3_ENDPOINT`, `COOKOUT_S3_REGION`, `COOKOUT_S3_ACCESS_KEY_ID` and `COOKOUT_S3_SECRET_ACCESS_KEY`, and refuses to start naming every one that is unset (`s3_settings_missing`), or when the endpoint isn't a URL (`s3_endpoint_invalid`). Every value is read redacted, and no message shows one. `fly.toml` sets none of them, so the live board stays on disk.
+- **One private object per attachment, keyed by its ID alone**, reached path-style at `<endpoint>/<bucket>/<id>`, which S3, R2 and Tigris all answer. The cookout reads each object and streams it through `/v1/assets/<id>`, so the serving headers and the sign-in check are the disk store's, and no response carries a bucket URL.
+- **aws4fetch signs; Effect's `HttpClient` sends.** `AwsV4Signer` from `aws4fetch` makes each request's SigV4 `Authorization` header, and the request goes out through `FetchHttpClient` with redirects not followed, as webhook deliveries do. The payload is sent `UNSIGNED-PAYLOAD`, as aws4fetch does for S3 by default: the endpoint's TLS covers the bytes, and the body isn't hashed twice. A missing object (404) is the same `StorageUnavailable` as on disk; any other answer that isn't 2xx, and a bucket that can't be reached, is `StorageUnavailable` naming the method and the attachment ID, never a credential. Nothing is retried: a failed put refuses the post whole, as a disk write that fails does, and the poster sends it again.
+- **The contract suite runs on memory, disk and S3 with the same test names** (`app/modules/storage/tests/server/asset-store.contract.test.ts`, in the `s3` Vitest project). `scripts/s3-test-container.ts` starts a throwaway `chrislusf/seaweedfs:4.53` container the way the Postgres one is started; where Docker is missing, each S3 test fails naming Docker, as #330 decided for Postgres. Each test gets a fresh bucket, which SeaweedFS makes on its first upload.
+
+## Considered options
+
+- **`@aws-sdk/client-s3`**: rejected. It adds dozens of packages and megabytes to every `npx @ai-hero/cookout` install, for three calls (put, get, delete). aws4fetch is one small file with no dependencies, uses Web Crypto, and is the signer Cloudflare documents for R2.
+- **The `minio` client**: rejected for the same weight, and it brings its own HTTP stack where the server already has Effect's.
+- **Checking the bucket at boot (HeadBucket)**: rejected for now. A token scoped to objects alone (as R2 and Tigris offer) may be refused HeadBucket though it can read and write every object, so a working setup would fail to start. A wrong bucket or credential shows on the first post instead, as `storage_unavailable`.
+- **`adobe/s3mock` or `localstack/localstack` for the test container**: rejected. S3Mock accepts any signature, so a signing bug would pass; LocalStack is about a gigabyte to pull on every CI shard. SeaweedFS checks SigV4 against the credentials it starts with, pulls in about 100 MB and answers within about four seconds. `minio/minio` is gone from Docker Hub, and Quay is out of reach here.

@@ -1,4 +1,5 @@
 import { NavHeading, NavLink, NavList } from "../../design-system/index.tsx";
+import { useMemo, useSyncExternalStore } from "react";
 import type { Board } from "../../board/index.ts";
 import type { ChannelName } from "../../sdk/index.ts";
 import { ChannelRows } from "./channel-rows.tsx";
@@ -10,7 +11,6 @@ import type { ReactNode } from "react";
 import type { Route } from "../../paths/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { useSidebarCounts } from "./use-unread-levels.ts";
-import { useSyncExternalStore } from "react";
 
 const TEXT = {
   channels: "Channels",
@@ -37,6 +37,10 @@ export function SidebarLinks(props: SidebarLinksProps): ReactNode {
   const { channels } = useSyncExternalStore(props.board.subscribe, props.board.snapshot);
   const unread = useSyncExternalStore(props.unread.subscribe, props.unread.snapshot);
   const counts = useSidebarCounts({ me: props.me, state: unread });
+  const actions = useMemo(
+    () => ({ subscriptions: props.board.subscriptions, unread: props.unread }),
+    [props.board.subscriptions, props.unread],
+  );
   return (
     <>
       <NavList label={TEXT.views}>
@@ -52,7 +56,7 @@ export function SidebarLinks(props: SidebarLinksProps): ReactNode {
       <NavHeading label={TEXT.channels}>
         <NewChannelButton creation={props.board.creation} />
       </NavHeading>
-      <ChannelRows channels={channels} open={openChannel(route)} counts={counts.channels} />
+      <ChannelRows actions={actions} channels={channels} open={openChannel(route)} counts={counts.channels} />
       <NewChannel creation={props.board.creation} />
     </>
   );

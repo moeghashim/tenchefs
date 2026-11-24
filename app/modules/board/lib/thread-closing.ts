@@ -6,8 +6,7 @@ type ClosingAction = "close" | "reopen";
 
 type ClosingRefusal = Refusal & { readonly action: ClosingAction };
 
-interface ThreadClosing {
-  readonly subscribe: (listener: () => void) => () => void;
+interface ClosingCalls {
   readonly refusal: () => ClosingRefusal | null;
   readonly close: (messageId: MessageId) => void;
   readonly reopen: (messageId: MessageId) => void;
@@ -18,6 +17,7 @@ type ClosingClient = Pick<CookoutClient, "closeThread" | "reopenThread">;
 interface ClosingOptions {
   readonly client: ClosingClient;
   readonly changed: (parent: TopLevelMessage) => void;
+  readonly refused: () => void;
 }
 
 interface Asked {
@@ -31,9 +31,6 @@ interface Closed {
 }
 
 function closedAs({ message, parent }: Closed): TopLevelMessage {
-  if (message.id !== parent.id) {
-    return message;
-  }
   const { closedAt, closedBy } = parent;
   return { ...reopened(message), ...(closedAt && closedBy && { closedAt, closedBy }) };
 }
@@ -43,16 +40,15 @@ async function after(previous: Promise<void> | null, step: () => Promise<void>):
   await step();
 }
 
-function createThreadClosing({ changed, client }: ClosingOptions): ThreadClosing {
-  const listeners = new Set<() => void>();
+function createThreadClosing({ changed, client, refused: notify }: ClosingOptions): ClosingCalls {
   const calls = { close: client.closeThread, reopen: client.reopenThread };
   let refused: ClosingRefusal | null = null;
   let queue: Promise<void> | null = null;
 
   function refuse(next: ClosingRefusal | null): void {
-    refused = next;
-    for (const listener of listeners) {
-      listener();
+    if (next !== refused) {
+      refused = next;
+      notify();
     }
   }
 
@@ -80,13 +76,7 @@ function createThreadClosing({ changed, client }: ClosingOptions): ThreadClosing
     reopen: (messageId) => {
       enqueue({ action: "reopen", messageId });
     },
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
   };
 }
 
-export { type ClosingClient, type ThreadClosing, closedAs, createThreadClosing };
+export { type ClosingClient, type ClosingRefusal, closedAs, createThreadClosing };

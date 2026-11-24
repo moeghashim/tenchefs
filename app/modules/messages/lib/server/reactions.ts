@@ -203,4 +203,4 @@ function unreact({ asked, hub, storage }: Reacting): Refuses<ReactionsResponse> 
   });
 }
 
-export { Reactions, react, reactionCounter, reactionsLayer, shownPage, shownThread, unreact };
+export { Reactions, react, reactionCounter, reactionsLayer, shownPage, shownThread, unreact, withReactions };

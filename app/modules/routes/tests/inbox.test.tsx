@@ -92,7 +92,7 @@ it("the inbox lists unread items for you, then activity, newest first, each with
   await waitFor(() => {
     expect([rowsOf("For you"), rowsOf("Activity")]).toStrictEqual([
       [
-        `#/inbox/${channel}/${String(parent.id)} Mentioned you${channel}-posterreplied in a thread in#${channel}just nowre: Deploy at noon? The rollout notes are in the usual place and every da…${reply.text}`,
+        `#/inbox/${channel}/${String(parent.id)}/messages/${String(reply.id)} Mentioned you${channel}-posterreplied in a thread in#${channel}just nowre: Deploy at noon? The rollout notes are in the usual place and every da…${reply.text}`,
       ],
       [
         `#/inbox/${channel} New in #${channel}${channel}-posterposted in#${channel}just now${other.text}`,
@@ -151,14 +151,14 @@ it("clicking a reply's row selects its thread in the inbox", { timeout: 5000 }, 
   expect.hasAssertions();
 
   const channel = "web-inbox-open";
-  const { parent, reader } = await postedIn(channel, `${channel}-also`);
+  const { parent, reader, reply } = await postedIn(channel, `${channel}-also`);
   const unmount = openWithClockStopped({ client: reader, hash: "#/inbox" });
   const unread = await screen.findByRole("list", { name: "For you" });
 
   fireEvent.click(within(unread).getByRole("link", { name: /replied in a thread/u }));
 
   await waitFor(() => {
-    expect(globalThis.location.hash).toBe(`#/inbox/${channel}/${String(parent.id)}`);
+    expect(globalThis.location.hash).toBe(`#/inbox/${channel}/${String(parent.id)}/messages/${String(reply.id)}`);
   });
 
   unmount();

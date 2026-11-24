@@ -47,5 +47,18 @@ function failuresOf(options: Logs & { readonly jobs: readonly Job[]; readonly ru
   return failures.filter((failure) => !budgetOnly(failure));
 }
 
+function stateOf(job: Job): string {
+  if (job.conclusion === "") {
+    return job.status;
+  }
+  return job.conclusion;
+}
+
+function reportJobs({ jobs, log }: { readonly jobs: readonly Job[]; readonly log: (line: string) => void }): void {
+  for (const job of jobs) {
+    log(`${job.name}: ${stateOf(job)}`);
+  }
+}
+
 export type { Failure };
-export { described, failuresOf };
+export { described, failuresOf, reportJobs };

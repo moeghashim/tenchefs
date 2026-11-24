@@ -34,7 +34,7 @@ function deployOf(posted: Posted): MessageId {
 async function closedLive(posted: Posted): Promise<void> {
   await posted.poster.closeThread(deployOf(posted));
   await feedShows(FOLDED);
-  await inThread().findByRole("button", { name: "Reopen" });
+  await inThread().findByRole("button", { name: "Reopen thread" });
 }
 
 it("a close by another identity folds the thread live, and a reopen unfolds it", { timeout: 5000 }, async () => {
@@ -63,9 +63,9 @@ it("a reply by another identity unfolds a closed thread live, and its bar goes",
   await posted.poster.createMessage({ channel: posted.channel, replyTo: parent, text: "Still broken." });
 
   await feedShows(UNFOLDED);
-  await inThread().findByRole("button", { name: "Close" });
+  await inThread().findByRole("button", { name: "Close thread" });
 
-  expect(inThread().queryByRole("button", { name: "Reopen" })).toBeNull();
+  expect(inThread().queryByRole("button", { name: "Reopen thread" })).toBeNull();
 
   await close();
 });

@@ -2,7 +2,7 @@ import { anonymousClient, newIdentity, sessionOf } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { alertSaying } from "./alerts.ts";
-import { createLoginApprovals } from "../../session/index.ts";
+import { createLoginApprovals } from "../../board/index.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
 

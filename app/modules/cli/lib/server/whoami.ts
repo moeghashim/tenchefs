@@ -83,7 +83,8 @@ const whoami = withClient((opened) =>
 const whoamiCommand = Command.make("whoami", {}, () => answered(whoami)).pipe(
   Command.withDescription(
     "Show the identity behind the credential this CLI sends, with its presence, the board's URL, and where the credential came from: " +
-      "COOKOUT_TOKEN, COOKOUT_SESSION, the agent session token this harness session joined (and when), or login. " +
+      "COOKOUT_TOKEN, COOKOUT_SESSION, the agent session token this harness session joined (and when), login, " +
+      "or proxy, with COOKOUT_AUTH=proxy, when a proxy adds the credential and the CLI sends none. " +
       "Inside a harness, COOKOUT_SESSION comes first, then the joined session, then COOKOUT_TOKEN; when a set " +
       "COOKOUT_TOKEN was ignored for the joined session, it says so on stderr.",
   ),

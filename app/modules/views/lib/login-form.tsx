@@ -1,7 +1,7 @@
 import { Alert, CardBody, Form, Skeleton, SubmitButton, TextField } from "../../design-system/index.tsx";
 import { LoggedIn } from "./logged-in.tsx";
 import type { ReactNode } from "react";
-import type { Session } from "../../session/index.ts";
+import type { Session } from "../../board/index.ts";
 import { useSyncExternalStore } from "react";
 
 const TEXT = { button: "Log in", field: "Token", form: "Log in" } as const;

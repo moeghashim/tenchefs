@@ -6,7 +6,7 @@ const AT_SIGN = 1;
 const ONE = 1;
 const STEPS = { down: ONE, up: -ONE } as const;
 
-const typedMention = /(?<![\w.@-])@[a-z0-9-]*$/u;
+const typedMention = /(?<![\w.@-])@[a-z0-9-]*$/iu;
 const typedCommand = /^\/[a-z0-9-]*$/u;
 
 function membersFirst(matches: readonly Identity[], members: readonly IdentityName[]): readonly Identity[] {
@@ -15,16 +15,21 @@ function membersFirst(matches: readonly Identity[], members: readonly IdentityNa
   return [...first, ...matches.filter((identity) => !members.includes(identity.name))];
 }
 
+function startsWithTyped(identity: Identity, prefix: string): boolean {
+  const displayName = identity.displayName ?? "";
+  return identity.name.startsWith(prefix) || displayName.toLowerCase().startsWith(prefix);
+}
+
 function suggestionsFor(sources: Sources, text: string, caret: number): readonly Identity[] {
   const found = typedMention.exec(text.slice(NOTHING, caret));
   if (found === null) {
     return [];
   }
   const [mention] = found;
-  const prefix = mention.slice(AT_SIGN);
+  const prefix = mention.slice(AT_SIGN).toLowerCase();
   const matches = sources
     .identities()
-    .filter((identity) => identity.deactivated !== true && identity.name.startsWith(prefix));
+    .filter((identity) => identity.deactivated !== true && startsWithTyped(identity, prefix));
   return membersFirst(matches, sources.members()).slice(NOTHING, MOST_SUGGESTIONS);
 }
 

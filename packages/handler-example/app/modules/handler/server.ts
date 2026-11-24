@@ -30,11 +30,14 @@ import { NodeHttpServer } from "@effect/platform-node";
 import type { ServeError } from "effect/http/HttpServerError";
 import { createServer } from "node:http";
 
-interface HandlerOptions {
-  readonly cookoutUrl: string;
+interface Listen {
   readonly host: string;
-  readonly onCall: (call: CommandCall, status: number) => Effect.Effect<void>;
   readonly port: number;
+}
+
+interface Handling {
+  readonly cookoutUrl: string;
+  readonly onCall: (call: CommandCall, status: number) => Effect.Effect<void>;
   readonly secret: Redacted.Redacted;
 }
 
@@ -113,7 +116,7 @@ function postResult(cookoutUrl: string, call: CommandCall): Effect.Effect<void> 
   );
 }
 
-function webhook(options: HandlerOptions, receive: Receive): Answer {
+function webhook(options: Handling, receive: Receive): Answer {
   return Effect.gen(function* receiveWebhook() {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const rawBody = yield* request.text;
@@ -133,7 +136,7 @@ function webhook(options: HandlerOptions, receive: Receive): Answer {
   );
 }
 
-function answer(options: HandlerOptions, receive: Receive): Answer {
+function answer(options: Handling, receive: Receive): Answer {
   return Effect.gen(function* route() {
     const request = yield* HttpServerRequest.HttpServerRequest;
     if (request.method === "GET" && request.url === "/health") {
@@ -146,18 +149,27 @@ function answer(options: HandlerOptions, receive: Receive): Answer {
   });
 }
 
-export type { HandlerOptions };
+/**
+ * A Node HTTP server listening on `listen.host` and `listen.port` (0 for a
+ * free port) until the Layer's scope closes. It answers 503 until
+ * `serveHandler` serves on it, and between two of those; read the port it
+ * bound back with `handlerUrl`.
+ * @param listen Where to listen.
+ * @returns The listening server.
+ */
+export function handlerListener(listen: Listen): Layer.Layer<HttpServer.HttpServer, ServeError> {
+  return NodeHttpServer.layer(createServer, { disablePreemptiveShutdown: true, host: listen.host, port: listen.port });
+}
 
 /**
- * The handler's server as a Layer: it listens on `options.host` and
- * `options.port` (0 for a free port) until the Layer's scope closes, and
- * stops any result reply still being posted then.
- * @param options Where to listen, the command's secret, where the cookout is, and who to tell of each call.
- * @returns The running server.
+ * The handler served on an `HttpServer` already listening, such as a
+ * `handlerListener`, until the Layer's scope closes, which stops any result
+ * reply still being posted.
+ * @param options The command's secret, where the cookout is, and who to tell of each call.
+ * @returns A Layer serving the handler on the provided server.
  */
-export function handlerServer(options: HandlerOptions): Layer.Layer<HttpServer.HttpServer, ServeError> {
-  const listen = { disablePreemptiveShutdown: true, host: options.host, port: options.port };
-  const serving = Layer.unwrap(
+export function serveHandler(options: Handling): Layer.Layer<never, never, HttpServer.HttpServer> {
+  return Layer.unwrap(
     Effect.gen(function* startHandling() {
       const replies = yield* FiberSet.make();
       const seen = yield* Ref.make<Seen>(new Map());
@@ -178,10 +190,9 @@ export function handlerServer(options: HandlerOptions): Layer.Layer<HttpServer.H
       return HttpServer.serve(answer(options, receive));
     }),
   ).pipe(Layer.provide(macLayer));
-  return Layer.provideMerge(serving, NodeHttpServer.layer(createServer, listen));
 }
 
-/** The base URL a running `handlerServer` answers on, such as `http://127.0.0.1:54321`. */
+/** The base URL a running `handlerListener` answers on, such as `http://127.0.0.1:54321`. */
 export const handlerUrl: Effect.Effect<string, never, HttpServer.HttpServer> = Effect.map(
   HttpServer.HttpServer,
   (server) => HttpServer.formatAddress(server.address),

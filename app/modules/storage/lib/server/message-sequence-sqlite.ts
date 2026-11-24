@@ -3,7 +3,7 @@ import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import { MessageIdColumn } from "./message-rows-sqlite.ts";
 import type { NewMessage } from "./messages.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isMessageId } from "../../../messages/index.ts";
 import { stampedAfter } from "./messages.ts";
@@ -19,7 +19,7 @@ const LatestRow = Schema.Struct({ last_id: Schema.Int });
 const LatestStampRow = Schema.Struct({ latest_created_at: Schema.NullOr(IsoTimeSchema) });
 
 interface Appending {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly message: NewMessage;
 }
 
@@ -37,7 +37,7 @@ function takeId({ db, message }: Appending): Fails<MessageId> {
   );
 }
 
-function latestOf(db: SqliteDatabase): Fails<MessageId | undefined> {
+function latestOf(db: SqlDatabase): Fails<MessageId | undefined> {
   return db.get("SELECT last_id FROM message_id_sequence WHERE only_row = 1").pipe(
     Effect.flatMap((row) => Schema.decodeUnknownEffect(LatestRow)(row).pipe(Effect.mapError(unreadable))),
     Effect.map(({ last_id: last }) => Option.getOrUndefined(Option.liftPredicate(last, isMessageId))),

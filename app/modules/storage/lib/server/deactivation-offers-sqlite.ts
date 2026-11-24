@@ -5,6 +5,7 @@ import type {
   DeactivatedQuietAgentsSection,
   StoredDeactivatedQuietAgent,
 } from "./deactivated-quiet-agents.ts";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import { IsoTimeSchema, isoTimeOf } from "../../../time/server.ts";
 import { boardOn, deactivationOffersOn } from "./deactivation-offers.ts";
 import { deactivatedQuietAgentsOn, deactivatingWith } from "./deactivated-quiet-agents.ts";
@@ -12,7 +13,6 @@ import { isDeactivatedQuietAgentId, isDeactivationOfferId } from "../../../inbox
 import type { IdentityName } from "../../../identities/index.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { OfferRecord } from "./deactivation-offer-board.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
@@ -139,18 +139,58 @@ function activityRows(rows: readonly unknown[]): Fails<ReadonlyMap<IdentityName,
   );
 }
 
-const SINCE = `INSERT OR IGNORE INTO activity_since (id, since) VALUES (${String(ONLY_ROW)}, ?)`;
-const INSERT = `INSERT INTO deactivation_offers (identity_name, recipients, raised_at, quiet_days, cleared)
-  VALUES (?, ?, ?, ?, ${String(OPEN)}) RETURNING ${COLUMNS}`;
-const RECORD = `INSERT INTO activity (identity_name, last_activity_at) VALUES (?, ?)
-  ON CONFLICT (identity_name) DO UPDATE SET last_activity_at = max(last_activity_at, excluded.last_activity_at)`;
-const CLEAR = `UPDATE deactivation_offers SET cleared = ${String(CLEARED)} WHERE id = ?`;
+const SINCE: DialectForms<string> = {
+  postgres: `INSERT INTO activity_since (id, since) VALUES (${String(ONLY_ROW)}, ?) ON CONFLICT DO NOTHING`,
+  sqlite: `INSERT OR IGNORE INTO activity_since (id, since) VALUES (${String(ONLY_ROW)}, ?)`,
+};
 
-const INSERT_ENTRY = `INSERT INTO deactivated_quiet_agents (identity_name, recipients, deactivated_at, read)
-  VALUES (?, ?, ?, ${String(UNREAD)}) RETURNING ${ENTRY_COLUMNS}`;
-const READ_ENTRY = `UPDATE deactivated_quiet_agents SET read = ${String(READ)} WHERE id = ?`;
+interface OfferSql {
+  readonly insert: string;
+  readonly record: string;
+  readonly clear: string;
+  readonly insertEntry: string;
+  readonly readEntry: string;
+}
 
-function sqliteDeactivatedQuietAgentRecords(db: SqliteDatabase): DeactivatedQuietAgentRecords {
+interface OfferSqlParts {
+  readonly open: string;
+  readonly cleared: string;
+  readonly unread: string;
+  readonly read: string;
+  readonly latest: string;
+}
+
+function offerSql({ cleared, latest, open, read, unread }: OfferSqlParts): OfferSql {
+  return {
+    clear: `UPDATE deactivation_offers SET cleared = ${cleared} WHERE id = ?`,
+    insert: `INSERT INTO deactivation_offers (identity_name, recipients, raised_at, quiet_days, cleared)
+  VALUES (?, ?, ?, ?, ${open}) RETURNING ${COLUMNS}`,
+    insertEntry: `INSERT INTO deactivated_quiet_agents (identity_name, recipients, deactivated_at, read)
+  VALUES (?, ?, ?, ${unread}) RETURNING ${ENTRY_COLUMNS}`,
+    readEntry: `UPDATE deactivated_quiet_agents SET read = ${read} WHERE id = ?`,
+    record: `INSERT INTO activity (identity_name, last_activity_at) VALUES (?, ?)
+  ON CONFLICT (identity_name) DO UPDATE SET last_activity_at = ${latest}`,
+  };
+}
+
+const OFFER_SQL: DialectForms<OfferSql> = {
+  postgres: offerSql({
+    cleared: "TRUE",
+    latest: "greatest(activity.last_activity_at, excluded.last_activity_at)",
+    open: "FALSE",
+    read: "TRUE",
+    unread: "FALSE",
+  }),
+  sqlite: offerSql({
+    cleared: String(CLEARED),
+    latest: "max(last_activity_at, excluded.last_activity_at)",
+    open: String(OPEN),
+    read: String(READ),
+    unread: String(UNREAD),
+  }),
+};
+
+function sqlDeactivatedQuietAgentRecords(db: SqlDatabase): DeactivatedQuietAgentRecords {
   return {
     deactivatedQuietAgents: Effect.flatMap(
       db.all(`SELECT ${ENTRY_COLUMNS} FROM deactivated_quiet_agents ORDER BY id`),
@@ -159,17 +199,18 @@ function sqliteDeactivatedQuietAgentRecords(db: SqliteDatabase): DeactivatedQuie
     insert: ({ deactivatedAt, identity, recipients }) =>
       Schema.encodeEffect(RecipientsColumn)(recipients).pipe(
         Effect.mapError(unreadable),
-        Effect.flatMap((encoded) => db.get(INSERT_ENTRY, identity, encoded, deactivatedAt)),
+        Effect.flatMap((encoded) => db.get(OFFER_SQL[db.dialect].insertEntry, identity, encoded, deactivatedAt)),
         Effect.flatMap(entryRow),
       ),
-    markRead: (ids) => Effect.forEach(ids, (id) => db.run(READ_ENTRY, id), { concurrency: 1, discard: true }),
+    markRead: (ids) =>
+      Effect.forEach(ids, (id) => db.run(OFFER_SQL[db.dialect].readEntry, id), { concurrency: 1, discard: true }),
   };
 }
 
-function sinceOn(db: SqliteDatabase): Fails<IsoTime> {
+function sinceOn(db: SqlDatabase): Fails<IsoTime> {
   return Effect.gen(function* beginActivity() {
     const now = yield* DateTime.now;
-    yield* db.run(SINCE, isoTimeOf(now));
+    yield* db.run(SINCE[db.dialect], isoTimeOf(now));
     const row = yield* db.get("SELECT since FROM activity_since");
     return yield* Schema.decodeUnknownEffect(SinceRow)(row).pipe(
       Effect.mapBoth({ onFailure: unreadable, onSuccess: ({ since }) => since }),
@@ -177,42 +218,43 @@ function sinceOn(db: SqliteDatabase): Fails<IsoTime> {
   });
 }
 
-function sqliteActivityRecords(db: SqliteDatabase, since: IsoTime): ActivityRecords {
+function sqlActivityRecords(db: SqlDatabase, since: IsoTime): ActivityRecords {
   return {
     activity: Effect.flatMap(db.all("SELECT identity_name, last_activity_at FROM activity"), activityRows),
-    clear: (ids) => Effect.forEach(ids, (id) => db.run(CLEAR, id), { concurrency: 1, discard: true }),
+    clear: (ids) =>
+      Effect.forEach(ids, (id) => db.run(OFFER_SQL[db.dialect].clear, id), { concurrency: 1, discard: true }),
     insert: ({ identity, quietDays, raisedAt, recipients }) =>
       Schema.encodeEffect(RecipientsColumn)(recipients).pipe(
         Effect.mapError(unreadable),
-        Effect.flatMap((encoded) => db.get(INSERT, identity, encoded, raisedAt, quietDays)),
+        Effect.flatMap((encoded) => db.get(OFFER_SQL[db.dialect].insert, identity, encoded, raisedAt, quietDays)),
         Effect.flatMap(offerRow),
       ),
     offers: Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM deactivation_offers ORDER BY id`), offerRows),
-    recordActivity: (identity, at) => db.run(RECORD, identity, at),
+    recordActivity: (identity, at) => db.run(OFFER_SQL[db.dialect].record, identity, at),
     since: Effect.succeed(since),
   };
 }
 
-interface SqliteSources {
-  readonly db: SqliteDatabase;
+interface SqlSources {
+  readonly db: SqlDatabase;
   readonly sources: OfferSources;
 }
 
-function sqliteDeactivationOffers({
+function sqlDeactivationOffers({
   db,
   sources,
-}: SqliteSources): Fails<DeactivationOffersSection & DeactivatedQuietAgentsSection> {
+}: SqlSources): Fails<DeactivationOffersSection & DeactivatedQuietAgentsSection> {
   return Effect.map(sinceOn(db), (since) => {
-    const on = { atomically: db.transaction, records: sqliteActivityRecords(db, since), sources };
+    const on = { atomically: db.transaction, records: sqlActivityRecords(db, since), sources };
     return {
       ...deactivationOffersOn(on),
       ...deactivatedQuietAgentsOn({
         board: boardOn(on),
         deactivate: deactivatingWith(sources.deactivateIdentity),
-        records: sqliteDeactivatedQuietAgentRecords(db),
+        records: sqlDeactivatedQuietAgentRecords(db),
       }),
     };
   });
 }
 
-export { DEACTIVATED_QUIET_AGENTS_MIGRATION, DEACTIVATION_OFFERS_MIGRATION, sqliteDeactivationOffers };
+export { DEACTIVATED_QUIET_AGENTS_MIGRATION, DEACTIVATION_OFFERS_MIGRATION, sqlDeactivationOffers };

@@ -1,9 +1,11 @@
 /**
  * The `composer` store: what is written in each message box (a thread's
  * reply box or a channel's message box) and in each display name field of
- * the settings page, and the identities it suggests for an `@` mention. It
- * loads every identity, human and agent, once, when the first reader of any
- * draft subscribes. `draft(key)` is one box's draft, an
+ * the settings page, and the identities it suggests for an `@` mention. Every
+ * identity, human and agent, comes from the board store's identities slice,
+ * shown while any reader of a draft is subscribed; the composer keeps only the
+ * page's state and sends every identity change through the board store's
+ * `identityCalls`. `draft(key)` is one box's draft, an
  * external store read with `useSyncExternalStore`, the same store each time
  * for one key, so a draft is still there on coming back to its box. `edit` takes the box's text
  * and caret: when the caret sits just after `@` and the start of a name, as
@@ -17,14 +19,11 @@
  * `replyTo(name)` puts `@name ` at the start of the box (Reply on a thread's
  * message), unless the text already mentions them or they are deactivated,
  * and asks the box to take focus with the caret at the end.
- * `identities` is the identity list itself, an external store too, loaded
- * when its first reader subscribes, so a view can tell a human from an agent
- * and show each display name. With `live`, an identity that changes (its
- * display name set or cleared anywhere) takes its place in the list at once,
- * and the whole list loads again when the stream's link comes back after being
- * down, since identity events can't be replayed. An identity deleted elsewhere
- * leaves the list, and a profile open on it closes, with `identities.deletion`
- * naming it for a notice until dismissed.
+ * `identities` is the identity list itself, an external store too, over the
+ * board store's identities slice, so a view can tell a human from an agent
+ * and show each display name, as the board store keeps it up to date. An
+ * identity deleted elsewhere leaves the list, and a profile open on it closes,
+ * with `identities.deletion` naming it for a notice until dismissed.
  * Until the identities load, or if the server refuses them, nobody is
  * suggested. `setAdmin` makes an identity an admin or removes admin from it,
  * putting the identity the server answers in the list, and `adminChange` is
@@ -36,7 +35,7 @@
  * text and the refusal. `description(name)` is an agent's description as it
  * is edited, and saves the same way.
  * `identities.actions(name)` is what an agent's owner or an admin does to
- * that identity: rotate its token, list and revoke its agent session (listed again, with `live`, whenever it joins, leaves, is revoked or deactivated elsewhere, and once it expires),
+ * that identity: rotate its token, list and revoke its agent session (the board store's agent sessions for it, shown while `subscribeToSessions` has a reader),
  * deactivate it, reactivate it, delete it and transfer it. Each is asked
  * first (`ask.rotate()` and so on puts it in `confirming`), runs on `confirm`
  * and stays `confirming` while it runs and if the server refuses it, so the
@@ -48,29 +47,29 @@
  * `identities.creation` creates an agent the caller owns, whose token then
  * shows in that agent's `actions`.
  * `channelDraft(channel)`, a channel's box, also suggests the registered
- * commands (from the `commands` store given, read once the identities load)
+ * commands (from the board store's command list, read once the identities load)
  * whose names start with what follows `/` when that is the whole text;
  * choosing one makes it the draft's `command`, whose data the box prompts
  * for, until `clear`, or `unpick`, which brings back the text as it was; `dismiss` hides any suggestions until the next edit. A
  * thread's reply box suggests no commands, since a call is a top-level message.
  */
-import type { ActionsClient, IdentityActions } from "./lib/identity-actions.ts";
-import type { AdminChanges, AdminClient } from "./lib/admin-change.ts";
-import type { Command, CookoutClient, Identity, IdentityName, Token } from "../sdk/index.ts";
+import type { Command, Identity, IdentityName, Token } from "../sdk/index.ts";
+import type { DisplayNameDraft, TriggerSettings } from "./lib/profile-stores.ts";
 import type { DraftSnapshot, Sources } from "./lib/snapshot.ts";
 import { EMPTY, changesFor } from "./lib/snapshot.ts";
+import type { IdentityList, IdentityStore } from "./lib/identity-list.ts";
+import type { AdminChanges } from "./lib/admin-change.ts";
 import type { AgentCreation } from "./lib/agent-creation.ts";
-import type { DisplayNameDraft } from "./lib/display-name.ts";
+import type { IdentityActions } from "./lib/identity-actions.ts";
 import type { IdentityDeletion } from "./lib/identity-deletion.ts";
-import type { IdentityList } from "./lib/identity-list.ts";
-import type { Live } from "../live/index.ts";
+import { commandList } from "../board/index.ts";
 import { createAdminChanges } from "./lib/admin-change.ts";
 import { createAgentCreation } from "./lib/agent-creation.ts";
-import { createDisplayName } from "./lib/display-name.ts";
 import { createIdentityActions } from "./lib/identity-actions.ts";
 import { createIdentityDeletion } from "./lib/identity-deletion.ts";
 import { createIdentityList } from "./lib/identity-list.ts";
 import { listenersOf } from "./lib/listeners.ts";
+import { profileStoresOf } from "./lib/profile-stores.ts";
 
 const NO_COMMANDS: readonly Command[] = [];
 const NO_MEMBERS: readonly IdentityName[] = [];
@@ -79,8 +78,8 @@ function noMembers(): readonly IdentityName[] {
   return NO_MEMBERS;
 }
 
-function createDraft(list: IdentityList, sources: Sources, load: () => void): Draft {
-  const listeners = listenersOf(load);
+function createDraft(list: IdentityList, sources: Sources): Draft {
+  const listeners = listenersOf(list.show);
   const changes = changesFor(sources);
   let current: DraftSnapshot = EMPTY;
 
@@ -136,49 +135,15 @@ function storeIn<Store>(stores: Map<string, Store>, key: string, make: () => Sto
   return store;
 }
 
-function loaderOf(list: IdentityList, commands: CommandList): () => void {
-  let watching = false;
-  return () => {
-    list.load();
-    if (!watching) {
-      watching = true;
-      commands.subscribe(() => {
-        list.publish(list.identities());
-      });
-    }
-  };
-}
-
-interface CommandList {
-  readonly subscribe: (listener: () => void) => () => void;
-  readonly snapshot: () => { readonly status: string; readonly commands?: readonly Command[] };
-}
-
-function ownerPowersOf(
-  { client, live }: ComposerOptions,
-  list: IdentityList,
-): Pick<Identities, "actions" | "creation"> {
+function ownerPowersOf(list: IdentityList): Pick<Identities, "actions" | "creation"> {
   const stores = new Map<string, IdentityActions>();
   function actions(name: IdentityName): IdentityActions {
-    return storeIn(stores, name, () => createIdentityActions({ client, list, live: live ?? null, name }));
+    return storeIn(stores, name, () => createIdentityActions({ list, name }));
   }
   function created(name: IdentityName, token: Token): void {
     actions(name).showToken(token);
   }
-  return { actions, creation: createAgentCreation({ client, created, list }) };
-}
-
-function identityListOf(options: ComposerOptions): {
-  readonly deletion: IdentityDeletion;
-  readonly list: IdentityList;
-} {
-  const deletion = createIdentityDeletion();
-  const list = createIdentityList({
-    client: options.client,
-    deleted: deletion.closeIfOpen,
-    live: options.live ?? null,
-  });
-  return { deletion, list };
+  return { actions, creation: createAgentCreation({ created, list }) };
 }
 
 /** One message box's draft. `subscribe` and `snapshot` are the two halves `useSyncExternalStore` takes. */
@@ -239,50 +204,46 @@ export interface Composer {
   readonly description: (name: IdentityName) => DisplayNameDraft;
   /** The identity list the suggestions come from. */
   readonly identities: Identities;
+  /** This agent's trigger URL for its owner: read when first shown, set with a write-only token, or cleared (#378). */
+  readonly trigger: (name: IdentityName) => TriggerSettings;
 }
 
-/** What the composer store needs: the SDK, the commands a channel's box suggests, and the live stream that keeps the identity list up to date, if any. */
+/** What the composer store needs: the board store, which holds the identities and the commands a channel's box suggests, and makes the identities' changes on the server. */
 export interface ComposerOptions {
-  readonly client: ActionsClient &
-    AdminClient &
-    Pick<CookoutClient, "createIdentity" | "listIdentities" | "setDescription" | "setDisplayName">;
-  readonly commands: CommandList;
-  readonly live?: Live;
+  readonly boardStore: IdentityStore;
 }
 
 /**
- * Makes a composer store that loads identities through `options.client`.
- * @param options The client, the commands and the live stream.
+ * Makes a composer store whose identities come from `options.boardStore`.
+ * @param options The board store.
  * @returns The store.
  */
 export function createComposer(options: ComposerOptions): Composer {
-  const { client } = options;
   const drafts = new Map<string, Draft>();
-  const displayNames = new Map<string, DisplayNameDraft>();
-  const descriptions = new Map<string, DisplayNameDraft>();
-  const { deletion, list } = identityListOf(options);
-  const load = loaderOf(list, options.commands);
-  const readers = listenersOf(load);
+  const list = createIdentityList(options.boardStore);
+  const deletion = createIdentityDeletion(options.boardStore);
+  const readers = listenersOf(list.show);
   function registered(): readonly Command[] {
-    return options.commands.snapshot().commands ?? NO_COMMANDS;
+    const commands = commandList(options.boardStore.snapshot());
+    if (commands.status !== "loaded") {
+      return NO_COMMANDS;
+    }
+    return commands.commands;
   }
   list.onChange(readers.notify);
   return {
+    ...profileStoresOf(list),
     channelDraft: (channel) =>
       storeIn(drafts, channel, () =>
-        createDraft(list, { commands: registered, identities: list.identities, members: noMembers }, load),
+        createDraft(list, { commands: registered, identities: list.identities, members: noMembers }),
       ),
-    description: (name) =>
-      storeIn(descriptions, name, () => createDisplayName({ list, name, set: client.setDescription })),
-    displayName: (name) =>
-      storeIn(displayNames, name, () => createDisplayName({ list, name, set: client.setDisplayName })),
     draft: (key, members = noMembers) =>
       storeIn(drafts, key, () =>
-        createDraft(list, { commands: () => NO_COMMANDS, identities: list.identities, members }, load),
+        createDraft(list, { commands: () => NO_COMMANDS, identities: list.identities, members }),
       ),
     identities: {
-      ...createAdminChanges({ client, identities: list.identities, publish: list.publish }),
-      ...ownerPowersOf(options, list),
+      ...createAdminChanges(list),
+      ...ownerPowersOf(list),
       deletion,
       snapshot: list.identities,
       subscribe: readers.add,
@@ -290,6 +251,7 @@ export function createComposer(options: ComposerOptions): Composer {
   };
 }
 
-export type { DisplayNameDraft } from "./lib/display-name.ts";
+export type { DisplayNameDraft } from "./lib/profile-stores.ts";
+export { type TriggerSettings, type TriggerSnapshot, savedUrl } from "./lib/trigger-settings.ts";
 export type { AgentCreation } from "./lib/agent-creation.ts";
 export type { IdentityAction, IdentityActions, MessageCount } from "./lib/identity-actions.ts";

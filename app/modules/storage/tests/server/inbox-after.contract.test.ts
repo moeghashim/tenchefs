@@ -17,6 +17,8 @@ import { tokenHash } from "../../../identities/index.ts";
 
 const HASH_LENGTH = 64;
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
+const AT_ONCE = 20;
+const ALL_AT_ONCE = { concurrency: "unbounded" } as const;
 const ANN = { author: { name: "ann" }, mentions: ["bob"] } as const;
 const PEOPLE = [
   ["ann", "a"],
@@ -84,5 +86,26 @@ it.effect.each(storageLayers)(
         Option.none(),
         Option.none(),
       ]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): the inbox after a message ID never skips a smaller ID that commits later",
+  ({ layer }) =>
+    Effect.gen(function* noGapsWhileAppending() {
+      const storage = yield* storeWithPeople(layer);
+      const first = yield* appendTo(storage)(newMessage("grill", "@bob first", ANN));
+      const append = appendTo(storage);
+      const appends = Arr.makeBy(AT_ONCE, (index) => append(newMessage("grill", `@bob ${String(index)}`, ANN)));
+      const inboxAfterFirst = Effect.map(storage.listInboxAfter(nameOf("bob"), first.id), idsIn);
+      const reads = Arr.makeBy(AT_ONCE, () => inboxAfterFirst);
+      const [, seen] = yield* Effect.all(
+        [Effect.all(appends, ALL_AT_ONCE), Effect.all(reads, ALL_AT_ONCE)],
+        ALL_AT_ONCE,
+      );
+      const every = yield* inboxAfterFirst;
+
+      expect(every).toHaveLength(AT_ONCE);
+      expect(seen).toStrictEqual(Arr.map(seen, (ids) => Arr.take(every, ids.length)));
     }),
 );

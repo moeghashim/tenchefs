@@ -190,6 +190,27 @@ function requireOwnerOrAdmin(name: IdentityName): Effect.Effect<void, Refusal | 
   });
 }
 
+function broughtInBy({ caller, target }: Ownership): boolean {
+  if (Predicate.isUndefined(target) || caller.kind !== "agent" || target.kind !== "agent") {
+    return false;
+  }
+  return target.broughtInBy === caller.name && target.owner === caller.owner;
+}
+
+function requireOwnerBringerOrAdmin(
+  name: IdentityName,
+): Effect.Effect<void, Refusal | StorageUnavailable, Caller | Storage> {
+  return Effect.gen(function* checkOwnerBringerOrAdmin() {
+    const caller = yield* Caller;
+    if (!caller.admin) {
+      const storage = yield* Storage;
+      const target = yield* storage.findIdentityByName(name);
+      const allowed = ownsAgent({ caller, target }) || broughtInBy({ caller, target });
+      yield* Effect.when(Effect.fail(notOwner(name)), Effect.succeed(!allowed));
+    }
+  });
+}
+
 export const authenticate =
   (storage: Storage["Service"], secrets: Secrets["Service"]) =>
   (credentials: Credentials): Effect.Effect<Principal, Refusal | StorageUnavailable> =>
@@ -228,6 +249,7 @@ export {
   credentialsOf,
   ownsAgent,
   requireCommandRoute,
+  requireOwnerBringerOrAdmin,
   requireOwnerOrAdmin,
   sentHarness,
   sentToken,

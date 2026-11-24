@@ -1,13 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { identityResponseSchemas, loginResponseSchemas } from "../app/modules/identities/server.ts";
-import { agentSessionResponseSchemas } from "../app/modules/agent-sessions/server.ts";
-import { channelResponseSchemas } from "../app/modules/channels/server.ts";
-import { commandResponseSchemas } from "../app/modules/commands/server.ts";
-import { eventResponseSchemas } from "../app/modules/events/server.ts";
 import { generateValidators } from "./lib/validators.ts";
-import { httpResponseSchemas } from "../app/modules/http/server.ts";
-import { inboxResponseSchemas } from "../app/modules/inbox/server.ts";
-import { messageResponseSchemas } from "../app/modules/messages/server.ts";
+import { responseSchemas } from "./lib/response-schemas.ts";
 
 interface GeneratedFile {
   readonly contents: string;
@@ -19,17 +12,7 @@ const EXIT_FAILURE = 1;
 const EXIT_SUCCESS = 0;
 const NONE = 0;
 const OUT_DIR = "app/modules/sdk/lib/generated";
-const generated = generateValidators({
-  "agent-sessions": agentSessionResponseSchemas,
-  channels: channelResponseSchemas,
-  commands: commandResponseSchemas,
-  events: eventResponseSchemas,
-  http: httpResponseSchemas,
-  identities: identityResponseSchemas,
-  inbox: inboxResponseSchemas,
-  logins: loginResponseSchemas,
-  messages: messageResponseSchemas,
-});
+const generated = generateValidators(responseSchemas);
 const files: readonly GeneratedFile[] = [
   { contents: generated.javascript, path: `${OUT_DIR}/validators.js` },
   { contents: generated.declarations, path: `${OUT_DIR}/validators.d.ts` },

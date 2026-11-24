@@ -7,7 +7,7 @@ import type { ThreadClosing } from "../../board/index.ts";
 import type { TopLevelMessage } from "../../sdk/index.ts";
 import { useCallback } from "react";
 
-const TEXT = { close: "Close", reopen: "Reopen" } as const;
+const TEXT = { close: "Close thread", reopen: "Reopen thread" } as const;
 
 interface ThreadClosingBarProps {
   readonly closing: ThreadClosing;
@@ -34,9 +34,9 @@ export function ThreadClosingBar(props: ThreadClosingBarProps): ReactNode {
   }, [closing, id]);
   return (
     <>
-      {closed === null && <ThreadBar actionLabel={TEXT.close} onAction={handleClose} />}
+      {closed === null && <ThreadBar actionIcon="close" actionName={TEXT.close} onAction={handleClose} />}
       {closed !== null && (
-        <ThreadBar actionLabel={TEXT.reopen} onAction={handleReopen}>
+        <ThreadBar actionIcon="reopen" actionName={TEXT.reopen} onAction={handleReopen}>
           <ClosedBy closing={closed} />
         </ThreadBar>
       )}

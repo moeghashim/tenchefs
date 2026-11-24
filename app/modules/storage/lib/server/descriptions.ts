@@ -3,7 +3,7 @@ import { AgentRow, toIdentity } from "./identity-row.ts";
 import { Effect, Predicate, Schema } from "effect";
 import type { Description } from "../../../identities/client.ts";
 import type { Fails } from "./errors.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { unreadable } from "./errors.ts";
 
 type SetDescriptionResult = { readonly status: "set"; readonly identity: Identity } | { readonly status: "not_found" };
@@ -46,7 +46,7 @@ function decodeRow(row: unknown): Fails<typeof AgentRow.Type> {
   return Schema.decodeUnknownEffect(AgentRow)(row).pipe(Effect.mapError(unreadable));
 }
 
-function sqliteDescriptions(db: SqliteDatabase): DescriptionsSection {
+function sqlDescriptions(db: SqlDatabase): DescriptionsSection {
   return {
     setDescription: (name, description) =>
       db.transaction(
@@ -63,4 +63,4 @@ function sqliteDescriptions(db: SqliteDatabase): DescriptionsSection {
   };
 }
 
-export { type DescriptionsSection, memoryDescriptions, sqliteDescriptions };
+export { type DescriptionsSection, memoryDescriptions, sqlDescriptions };

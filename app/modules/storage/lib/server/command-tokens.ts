@@ -6,7 +6,7 @@ import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
 import type { MessageId } from "../../../messages/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isMessageId } from "../../../messages/index.ts";
 import { unreadable } from "./errors.ts";
@@ -93,10 +93,10 @@ function toGrant(row: unknown): Fails<CommandTokenGrant> {
   );
 }
 
-const FIND_GRANT = `SELECT i.name, i.kind, i.owner, i.admin, i.created_at, i.display_name, i.description, i.deactivated, t.thread_id, t.expires_at
+const FIND_GRANT = `SELECT i.name, i.kind, i.owner, i.admin, i.created_at, i.display_name, i.description, i.deactivated, i.brought_in_by, t.thread_id, t.expires_at
   FROM command_tokens AS t JOIN identities AS i ON i.name = t.handler_name WHERE t.hash = ?`;
 
-function sqliteCommandTokens(db: SqliteDatabase): CommandTokensSection {
+function sqlCommandTokens(db: SqlDatabase): CommandTokensSection {
   return {
     addCommandToken: ({ expiresAt, handler, hash, threadId }) =>
       db.run(
@@ -124,5 +124,5 @@ export {
   type MemoryCommandTokensSection,
   type StoredCommandToken,
   memoryCommandTokens,
-  sqliteCommandTokens,
+  sqlCommandTokens,
 };

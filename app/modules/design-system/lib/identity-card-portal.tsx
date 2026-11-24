@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 export function IdentityCardPortal(parts: IdentityCardBoxParts): ReactNode {
   return (
     <Portal>
-      <IdentityCardBox card={parts.card} />
+      <IdentityCardBox card={parts.card} control={parts.control} />
     </Portal>
   );
 }

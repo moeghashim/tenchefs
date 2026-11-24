@@ -9,7 +9,7 @@ import { exitCodeAfterFailure, runCookout } from "./modules/cli/server.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
 import { runMain } from "@effect/platform-node/NodeRuntime";
 import { secretsLive } from "./modules/secrets/server.ts";
-import { sqliteStorage } from "./modules/storage/server.ts";
+import { storageLayer } from "./modules/storage/server.ts";
 
 const webFolder = `${import.meta.dirname}/web`;
 const args = process.argv.slice(2);
@@ -22,7 +22,7 @@ const exitWithCode: Runtime.Teardown = (exit, onExit) => {
   }
 };
 
-runCookout(args, { storage: sqliteStorage, webFolder }).pipe(
+runCookout(args, { storage: storageLayer, webFolder }).pipe(
   Effect.provide(Layer.merge(nodeServices, secretsLive)),
   runMain({ disableErrorReporting: true, teardown: exitWithCode }),
 );

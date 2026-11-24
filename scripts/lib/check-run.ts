@@ -30,6 +30,22 @@ interface Gh {
 }
 
 const FAILURE = "failure";
+const COMPLETED = "completed";
+const SUCCESS = "success";
+const SKIPPED = "skipped";
+const NONE = 0;
+
+function completedAs(job: Job, ...conclusions: readonly string[]): boolean {
+  return job.status === COMPLETED && conclusions.includes(job.conclusion);
+}
+
+function redJobs(checkRun: CheckRun): readonly Job[] {
+  const failed = checkRun.jobs.filter((job) => job.status === COMPLETED && !completedAs(job, SUCCESS, SKIPPED));
+  if (failed.length > NONE || !checkRun.jobs.every((job) => completedAs(job, SUCCESS, SKIPPED))) {
+    return failed;
+  }
+  return checkRun.jobs.filter((job) => completedAs(job, SKIPPED));
+}
 
 function failedStepsOf(value: unknown): readonly string[] {
   return (list(field(value, "steps")) ?? []).flatMap((step) => {
@@ -82,4 +98,4 @@ function readCheckRun({ cwd, gh, runNumber }: Gh & { readonly runNumber: number 
 }
 
 export type { CheckRun, Job, Unreadable };
-export { readCheckRun };
+export { readCheckRun, redJobs };

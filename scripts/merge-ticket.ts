@@ -1,8 +1,9 @@
-import type { MergeOptions, MergeRules, Merged } from "./lib/merge-ticket.ts";
+import type { MergeOptions, Merged } from "./lib/merge-ticket.ts";
 import { continueMerge, mergeTicket } from "./lib/merge-ticket.ts";
 import { failedJobsOr, mergedLine, verdictOnExit } from "./lib/verdict.ts";
 import type { Step } from "./lib/merge-steps.ts";
 import { fail } from "./lib/tools.ts";
+import { mergeRules } from "./lib/merge-rules.ts";
 import { spawnSync } from "node:child_process";
 import { waitForCi } from "./lib/ci-wait.ts";
 
@@ -17,10 +18,6 @@ const resuming = process.argv.includes("--continue");
 const fixesRedV1 = process.argv.includes("--fixes-red-v1");
 const reordersUndeployed = process.argv.includes("--reorders-undeployed-migrations");
 
-function pnpm(...args: readonly string[]): readonly string[] {
-  return ["pnpm", "run", "--silent", ...args];
-}
-
 function titleOf(ticket: number): string {
   const issue = spawnSync("gh", ["issue", "view", String(ticket), "--json", "title", "--jq", ".title"], {
     encoding: "utf8",
@@ -30,20 +27,6 @@ function titleOf(ticket: number): string {
   }
   return issue.stdout.trim();
 }
-
-const rules: MergeRules = {
-  adrs: "docs/adr",
-  appendOnly: ["app/modules/storage/lib/server/migrations.ts"],
-  hunks: [
-    { file: "app/modules/storage/lib/server/migrations.ts", resolve: "append" },
-    { file: "vitest.config.ts", resolve: "lower" },
-  ],
-  regenerate: [
-    { command: pnpm("validators"), files: String.raw`^app/modules/sdk/lib/generated/` },
-    { command: pnpm("api:write"), files: String.raw`^api/[^/]+\.api\.md$` },
-    { command: pnpm("lint:baseline"), files: String.raw`^lint-baseline\.json$` },
-  ],
-};
 
 const ticket = Number(argument);
 if (!Number.isInteger(ticket) || ticket <= NONE) {
@@ -68,13 +51,15 @@ interface Gate {
   readonly advice: string;
   readonly args: readonly string[];
   readonly base: readonly string[];
+  readonly rerunRed: boolean;
   readonly subject: string;
   readonly vouchedBy: string;
 }
 
-function requireGreen({ advice, args, base, subject, vouchedBy }: Gate): void {
+function requireGreen(gate: Gate): void {
+  const { advice, subject } = gate;
   verdict.failingAt(`${subject}'s Check run`);
-  const step = waitForCi({ args, base, log, subject, vouchedBy });
+  const step = waitForCi({ ...gate, log });
   if (step.kind === "stopped") {
     verdict.failingAt(`${subject}'s Check run: ${failedJobsOr({ jobs: step.jobs, step: "not green" })}`);
     fail(SCRIPT, `${step.reason}\nNothing was merged. ${advice}`);
@@ -98,14 +83,16 @@ if (fixesRedV1) {
     advice: `If ticket-${ticket} is the fix for that red, run pnpm merge-ticket ${ticket} --fixes-red-v1.`,
     args: ["--branch", "v1"],
     base: [],
+    rerunRed: false,
     subject: "v1",
     vouchedBy: "merge-ticket-",
   });
 }
 requireGreen({
-  advice: `Push ticket-${ticket} and wait until every job of its Check run passes.`,
+  advice: `A red ticket-${ticket} run's failed jobs are rerun once, by a fresh run or --continue alike. If they failed again, fix ticket-${ticket}, push it and wait until every job of its Check run passes.`,
   args: ["--branch", `ticket-${ticket}`, "--commit", gitOutput("rev-parse", `ticket-${ticket}`)],
   base: ["--branch", "v1", "--commit", gitOutput("merge-base", `ticket-${ticket}`, "origin/v1")],
+  rerunRed: true,
   subject: `ticket-${ticket}`,
   vouchedBy: "",
 });
@@ -115,9 +102,12 @@ function migrationsBase(): string {
   if (!reordersUndeployed) {
     return "origin/v1";
   }
-  const [tag = ""] = gitOutput("tag", "--list", "deploy/*", "--sort=-creatordate").split("\n");
+  const [tag = ""] = gitOutput("tag", "--list", "deploy/*", "--merged", "origin/v1", "--sort=-creatordate").split("\n");
   if (tag === "") {
-    return fail(SCRIPT, "found no deploy/* tag to compare the migrations list with. Run git fetch --tags.");
+    return fail(
+      SCRIPT,
+      "found no deploy/* tag on origin/v1 to compare the migrations list with. Run git fetch --tags.",
+    );
   }
   log(
     `WARNING: --reorders-undeployed-migrations compares the migrations list with ${tag}'s, not v1's. Use it only for the ticket that moves a migration production hasn't run.`,
@@ -129,8 +119,8 @@ const FAST_CHECKS = ["typecheck", "lint --base=origin/v1", "hygiene"]
   .map((script) => `pnpm run --silent ${script}`)
   .join(" && ");
 
-function ciOf(branch: string, sha: string): Step {
-  return waitForCi({ args: ["--branch", branch, "--commit", sha], base: [], log, subject: branch });
+function ciOf(branch: string, sha: string, rerunRed: boolean): Step {
+  return waitForCi({ args: ["--branch", branch, "--commit", sha], base: [], log, rerunRed, subject: branch });
 }
 
 function failedStepOf(files: readonly string[]): string {
@@ -149,7 +139,7 @@ const merged: Merged = run({
   install: ["pnpm", "install", "--frozen-lockfile"],
   log,
   migrationsBase: migrationsBase(),
-  rules,
+  rules: mergeRules,
   ticket,
   title: titleOf(ticket),
 });

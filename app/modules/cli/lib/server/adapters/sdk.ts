@@ -1,44 +1,17 @@
-import type {
-  AgentSessionState,
-  AgentSessionStateFailure,
-  AgentSessionStateFile,
-  AgentSessionStateNeeds,
-} from "../agent-session-state.ts";
-import type { CookoutClient, CookoutErrorCode } from "../../../../sdk/index.ts";
+import type { AgentSessionState, AgentSessionStateFile, AgentSessionStateNeeds } from "../agent-session-state.ts";
+import type { CallFailure, CallFailureCode } from "./call-failure.ts";
 import type { CookoutConnection, HarnessSession } from "../../../../config/index.ts";
 import { Effect, Option, Predicate } from "effect";
 import { agentSessionExpired, agentSessionRevoked } from "../../../../agent-sessions/index.ts";
 import { boardUrlOrEmpty, loginFor } from "../logins.ts";
-import { cookoutSession, cookoutToken, harnessEnvironment } from "../../../../config/server.ts";
+import { cookoutAuth, cookoutSession, cookoutToken, harnessEnvironment } from "../../../../config/server.ts";
 import { harnessIn, harnessSessionIn } from "../../../../config/index.ts";
+import { loginMissing, notJoined, unknownAuth } from "./call-failure.ts";
 import { throughProxy, toFailure, toFailureAt } from "./http.ts";
-import type { LoginFailure } from "../logins.ts";
+import type { CookoutClient } from "../../../../sdk/index.ts";
 import { agentSessionStateFile } from "../agent-session-state.ts";
 import { baseUrlOf } from "../../../../http/client.ts";
 import { createCookoutClient } from "../../../../sdk/index.ts";
-
-type CallFailureCode =
-  | CookoutErrorCode
-  | AgentSessionStateFailure["code"]
-  | LoginFailure["code"]
-  | "harness_missing"
-  | "harness_session_missing"
-  | "already_joined"
-  | "login_missing"
-  | "agent_join_request_expired"
-  | "not_joined"
-  | "usage"
-  | "login_request_expired"
-  | "not_a_cookout"
-  | "timeout"
-  | "unreachable";
-
-interface CallFailure {
-  readonly code: CallFailureCode;
-  readonly message: string;
-  readonly status?: number;
-  readonly details?: unknown;
-}
 
 type CredentialSource =
   | "COOKOUT_TOKEN"
@@ -47,6 +20,7 @@ type CredentialSource =
   | "agent-join-request"
   | "join-code"
   | "login"
+  | "proxy"
   | "none";
 
 interface JoinedSession {
@@ -68,6 +42,7 @@ interface ClientWithAgentSessionState {
 }
 
 interface CliEnvironment {
+  readonly auth: string;
   readonly markers: Readonly<Record<string, string>>;
   readonly session: string;
   readonly token: string;
@@ -77,16 +52,6 @@ interface CliEnvironment {
 type Call<Value> = (client: CookoutClient) => Promise<Value>;
 
 const NOTHING = {};
-
-const notJoined: CallFailure = {
-  code: "not_joined",
-  message: "join as an agent first: cookout join --as <name>",
-};
-
-const loginMissing: CallFailure = {
-  code: "login_missing",
-  message: "log in first: cookout login",
-};
 
 function isEnded(code: CallFailureCode): boolean {
   return code === agentSessionRevoked || code === agentSessionExpired;
@@ -110,12 +75,22 @@ function onAgentSessionEnded({
 }
 
 const variables = Effect.orDie(
-  Effect.all({ markers: harnessEnvironment, session: cookoutSession, token: cookoutToken }, { concurrency: 1 }),
+  Effect.all(
+    { auth: cookoutAuth, markers: harnessEnvironment, session: cookoutSession, token: cookoutToken },
+    { concurrency: 1 },
+  ),
 );
 
 const cliEnvironment = Effect.zipWith(boardUrlOrEmpty, variables, (url, found): CliEnvironment => ({ ...found, url }));
 
-function connectionFrom(url: string, token: string, harness: { readonly harness?: string }): CookoutConnection {
+function connectionFrom(
+  url: string,
+  { source, token }: Credential,
+  harness: { readonly harness?: string },
+): CookoutConnection {
+  if (source === "proxy") {
+    return { ...harness, url: baseUrlOf(url) };
+  }
   if (token === "") {
     return { url: baseUrlOf(url) };
   }
@@ -194,6 +169,12 @@ function variablesOr(env: CliEnvironment, stored: (url: string) => Found): Found
 }
 
 function credentialFor(env: CliEnvironment): Found {
+  if (env.auth === "proxy") {
+    return Effect.succeed(given("proxy", ""));
+  }
+  if (env.auth !== "") {
+    return Effect.fail(unknownAuth);
+  }
   const place = harnessSessionIn(env.markers);
   if (Predicate.isUndefined(place.harness)) {
     return variablesOr(env, loginCredential);
@@ -203,9 +184,10 @@ function credentialFor(env: CliEnvironment): Found {
 
 function clientFor(
   env: CliEnvironment,
-  { joined, source, token }: Credential,
+  credential: Credential,
 ): Effect.Effect<ClientWithAgentSessionState, CallFailure> {
-  const connection = connectionFrom(env.url, token, harnessIn(env.markers));
+  const { joined, source } = credential;
+  const connection = connectionFrom(env.url, credential, harnessIn(env.markers));
   return Effect.map(
     Effect.try({ catch: toFailure, try: () => createCookoutClient({ ...connection, env: NOTHING }) }),
     (client) => ({ client, connection, joined, source }),
@@ -275,7 +257,6 @@ const joinPlace: Effect.Effect<JoinPlace, CallFailure, AgentSessionStateNeeds> =
 
 export {
   type Call,
-  type CallFailure,
   type ClientWithAgentSessionState,
   type CredentialSource,
   type JoinPlace,
@@ -285,4 +266,5 @@ export {
   withClient,
   withJoinClient,
 };
+export type { CallFailure } from "./call-failure.ts";
 export { toFailure } from "./http.ts";

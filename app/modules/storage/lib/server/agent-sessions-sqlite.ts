@@ -8,10 +8,11 @@ import type {
   UseAgentSessionResult,
 } from "./agent-sessions.ts";
 import { AgentRow, toIdentity } from "./identity-row.ts";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import { Effect, Option, Predicate, Schema } from "effect";
+import { FALSE, TRUE, isFalse } from "./adapters/sql-database.ts";
 import { isLive, listedSession, renewedExpiry } from "./agent-sessions.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { unreadable } from "./errors.ts";
 
@@ -37,16 +38,31 @@ const SessionRow = Schema.Struct({
   revoked: Schema.Literals([NOT_REVOKED, REVOKED]),
 });
 
-const FIND_LIVE = `SELECT expires_at FROM agent_session_tokens
-  WHERE identity_name = ? AND revoked = 0 AND expires_at > ? ORDER BY expires_at DESC LIMIT 1`;
+interface SessionSql {
+  readonly findLive: string;
+  readonly findListed: string;
+  readonly revokeLive: string;
+  readonly insert: string;
+  readonly revoke: string;
+}
 
-const FIND_LISTED = `SELECT issued_at, expires_at, last_used_at, host FROM agent_session_tokens
-  WHERE identity_name = ? AND revoked = 0 AND expires_at > ? ORDER BY expires_at DESC LIMIT 1`;
+function sessionSql(dialect: SqlDatabase["dialect"]): SessionSql {
+  const live = `identity_name = ? AND ${isFalse[dialect]("revoked")} AND expires_at > ?`;
+  return {
+    findListed: `SELECT issued_at, expires_at, last_used_at, host FROM agent_session_tokens
+  WHERE ${live} ORDER BY expires_at DESC LIMIT 1`,
+    findLive: `SELECT expires_at FROM agent_session_tokens
+  WHERE ${live} ORDER BY expires_at DESC LIMIT 1`,
+    insert: `INSERT INTO agent_session_tokens (hash, identity_name, issued_at, expires_at, idle_seconds, revoked, host)
+        VALUES (?, ?, ?, ?, ?, ${FALSE[dialect]}, ?)`,
+    revoke: `UPDATE agent_session_tokens SET revoked = ${TRUE[dialect]} WHERE hash = ?`,
+    revokeLive: `UPDATE agent_session_tokens SET revoked = ${TRUE[dialect]} WHERE ${live}`,
+  };
+}
 
-const REVOKE_LIVE =
-  "UPDATE agent_session_tokens SET revoked = 1 WHERE identity_name = ? AND revoked = 0 AND expires_at > ?";
+const SESSION_SQL: DialectForms<SessionSql> = { postgres: sessionSql("postgres"), sqlite: sessionSql("sqlite") };
 
-const FIND_SESSION = `SELECT i.name, i.kind, i.owner, i.admin, i.created_at, i.display_name, i.description, i.deactivated,
+const FIND_SESSION = `SELECT i.name, i.kind, i.owner, i.admin, i.created_at, i.display_name, i.description, i.deactivated, i.brought_in_by,
   t.expires_at, t.idle_seconds, t.revoked
   FROM agent_session_tokens AS t JOIN identities AS i ON i.name = t.identity_name WHERE t.hash = ?`;
 
@@ -77,8 +93,8 @@ function listed(row: typeof ListedRow.Type): LiveAgentSession {
   });
 }
 
-function findListed(db: SqliteDatabase, { identity, now }: AgentAt): Fails<Option.Option<LiveAgentSession>> {
-  return db.get(FIND_LISTED, identity, now).pipe(
+function findListed(db: SqlDatabase, { identity, now }: AgentAt): Fails<Option.Option<LiveAgentSession>> {
+  return db.get(SESSION_SQL[db.dialect].findListed, identity, now).pipe(
     Effect.flatMap((row) => {
       if (!Predicate.isObject(row)) {
         return Effect.succeedNone;
@@ -90,30 +106,29 @@ function findListed(db: SqliteDatabase, { identity, now }: AgentAt): Fails<Optio
   );
 }
 
-function revokeLive(db: SqliteDatabase, { identity, now }: AgentAt): Fails<boolean> {
+function revokeLive(db: SqlDatabase, { identity, now }: AgentAt): Fails<boolean> {
   return db.transaction(
     Effect.gen(function* revokeLiveSession() {
-      const live = yield* Effect.flatMap(db.get(FIND_LIVE, identity, now), liveOf);
+      const live = yield* Effect.flatMap(db.get(SESSION_SQL[db.dialect].findLive, identity, now), liveOf);
       if (Option.isNone(live)) {
         return false;
       }
-      yield* db.run(REVOKE_LIVE, identity, now);
+      yield* db.run(SESSION_SQL[db.dialect].revokeLive, identity, now);
       return true;
     }),
   );
 }
 
-function issue(db: SqliteDatabase, { force, session }: IssueAgentSession): Fails<IssueAgentSessionResult> {
+function issue(db: SqlDatabase, { force, session }: IssueAgentSession): Fails<IssueAgentSessionResult> {
   return Effect.gen(function* issueAgentSession() {
-    const row = yield* db.get(FIND_LIVE, session.identity, session.issuedAt);
+    const row = yield* db.get(SESSION_SQL[db.dialect].findLive, session.identity, session.issuedAt);
     const live = yield* liveOf(row);
     if (Option.isSome(live) && !force) {
       return { expiresAt: live.value.expires_at, status: "live" } as const;
     }
-    yield* db.run(REVOKE_LIVE, session.identity, session.issuedAt);
+    yield* db.run(SESSION_SQL[db.dialect].revokeLive, session.identity, session.issuedAt);
     yield* db.run(
-      `INSERT INTO agent_session_tokens (hash, identity_name, issued_at, expires_at, idle_seconds, revoked, host)
-        VALUES (?, ?, ?, ?, ?, 0, ?)`,
+      SESSION_SQL[db.dialect].insert,
       session.hash,
       session.identity,
       session.issuedAt,
@@ -125,7 +140,7 @@ function issue(db: SqliteDatabase, { force, session }: IssueAgentSession): Fails
   });
 }
 
-function useFound(db: SqliteDatabase, { hash, now }: UseAgentSession) {
+function useFound(db: SqlDatabase, { hash, now }: UseAgentSession) {
   return (session: typeof SessionRow.Type): Fails<UseAgentSessionResult> => {
     if (session.deactivated === DEACTIVATED) {
       return Effect.succeed({ status: "deactivated" });
@@ -150,25 +165,25 @@ function useFound(db: SqliteDatabase, { hash, now }: UseAgentSession) {
 
 const UNKNOWN: Fails<UseAgentSessionResult> = Effect.succeed({ status: "unknown" });
 
-function use(db: SqliteDatabase, request: UseAgentSession): Fails<UseAgentSessionResult> {
+function use(db: SqlDatabase, request: UseAgentSession): Fails<UseAgentSessionResult> {
   const renew = useFound(db, request);
   return db
     .get(FIND_SESSION, request.hash)
     .pipe(Effect.flatMap(sessionOf), Effect.flatMap(Option.match({ onNone: () => UNKNOWN, onSome: renew })));
 }
 
-function sqliteAgentSessions(db: SqliteDatabase): AgentSessionsSection {
+function sqlAgentSessions(db: SqlDatabase): AgentSessionsSection {
   return {
     findLiveAgentSession: (at) => findListed(db, at),
     issueAgentSession: (request) => db.transaction(issue(db, request)),
-    revokeAgentSession: (hash) => db.run("UPDATE agent_session_tokens SET revoked = 1 WHERE hash = ?", hash),
+    revokeAgentSession: (hash) => db.run(SESSION_SQL[db.dialect].revoke, hash),
     revokeLiveAgentSession: (at) => revokeLive(db, at),
     useAgentSession: (request) => db.transaction(use(db, request)),
   };
 }
 
-function agentSessionIssuer(db: SqliteDatabase): (request: IssueAgentSession) => Fails<IssueAgentSessionResult> {
+function agentSessionIssuer(db: SqlDatabase): (request: IssueAgentSession) => Fails<IssueAgentSessionResult> {
   return (request) => issue(db, request);
 }
 
-export { agentSessionIssuer, sqliteAgentSessions };
+export { agentSessionIssuer, sqlAgentSessions };

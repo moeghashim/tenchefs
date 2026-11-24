@@ -4,15 +4,21 @@ import { MENU } from "./menu-style.ts";
 import { MenuChoice } from "./menu-choice.tsx";
 import type { ReactNode } from "react";
 import { useAfterClose } from "./use-after-close.ts";
+import { useCallback } from "react";
 
 interface MoreActionsContentParts {
   readonly choices: readonly Choice[];
+  readonly onReturned: () => void;
 }
 
 export function MoreActionsContent(parts: MoreActionsContentParts): ReactNode {
   const after = useAfterClose();
+  const { onReturned } = parts;
   const handleChoose = after.onChoose;
-  const handleCloseAutoFocus = after.onCloseAutoFocus;
+  const handleCloseAutoFocus = useCallback(() => {
+    after.onCloseAutoFocus();
+    onReturned();
+  }, [after, onReturned]);
   return (
     <Content align="end" asChild onCloseAutoFocus={handleCloseAutoFocus}>
       <div className={MENU}>

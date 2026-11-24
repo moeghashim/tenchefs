@@ -1,17 +1,11 @@
-import type { IdentityCardParts, IdentityCardSource } from "../../design-system/index.tsx";
+import type { IdentityCardLink, IdentityCardParts, IdentityCardSource } from "../../design-system/index.tsx";
+import { identityList, presences } from "../../board/index.ts";
 import type { BoardStore } from "../../board/index.ts";
-import type { Identities } from "../../composer/index.ts";
 import type { Identity } from "../../sdk/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { kindOf } from "./kind-of.ts";
 import { onTick } from "./use-time-ago.ts";
-import { presences } from "../../board/index.ts";
 import { shownIn } from "./use-presence.ts";
-
-interface Lists {
-  readonly identities: Identities;
-  readonly boardStore: BoardStore;
-}
 
 interface Drawn {
   readonly key: string;
@@ -25,28 +19,40 @@ function descriptionOf(identity: Identity): string | null {
   return null;
 }
 
-function cardFor(lists: Lists, identity: Identity): IdentityCardParts {
+function broughtInByOf(identity: Identity): IdentityCardLink | null {
+  if (identity.kind !== "agent") {
+    return null;
+  }
+  const name = identity.broughtInBy ?? null;
+  if (name === null) {
+    return null;
+  }
+  return { href: hrefOf({ identity: name, name: "profile" }), name };
+}
+
+function cardFor(boardStore: BoardStore, identity: Identity): IdentityCardParts {
   return {
     agent: identity.kind === "agent",
+    broughtInBy: broughtInByOf(identity),
     deactivated: identity.deactivated === true,
     description: descriptionOf(identity),
     displayName: identity.displayName ?? null,
     kind: kindOf(identity),
     name: identity.name,
-    presence: shownIn({ name: identity.name, presences: presences(lists.boardStore.snapshot()) }),
+    presence: shownIn({ name: identity.name, presences: presences(boardStore.snapshot()) }),
     profileHref: hrefOf({ identity: identity.name, name: "profile" }),
   };
 }
 
-export function createIdentityCards(lists: Lists): IdentityCardSource {
+export function createIdentityCards(boardStore: BoardStore): IdentityCardSource {
   const drawn = new Map<string, Drawn>();
   return {
     cardOf: (name) => {
-      const identity = lists.identities.snapshot().find((listed) => listed.name === name) ?? null;
+      const identity = identityList(boardStore.snapshot()).find((listed) => listed.name === name) ?? null;
       if (identity === null) {
         return null;
       }
-      const card = cardFor(lists, identity);
+      const card = cardFor(boardStore, identity);
       const key = JSON.stringify(card);
       const before = drawn.get(name) ?? { card, key: "" };
       if (before.key === key) {
@@ -57,8 +63,8 @@ export function createIdentityCards(lists: Lists): IdentityCardSource {
     },
     subscribe: (listener) => {
       const stops = [
-        lists.identities.subscribe(listener),
-        lists.boardStore.subscribeShowing("presence")(listener),
+        boardStore.subscribeShowing("identities")(listener),
+        boardStore.subscribeShowing("presence")(listener),
         onTick(listener),
       ];
       return () => {

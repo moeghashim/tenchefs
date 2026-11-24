@@ -3,6 +3,10 @@ import type { IdentityName } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import type { Route } from "../../paths/index.ts";
 import type { Stores } from "./stores.ts";
+import { hrefOf } from "../../paths/index.ts";
+import { useThreadEdge } from "./use-thread-edge.ts";
+
+const INBOX = hrefOf({ name: "inbox", selected: null });
 
 interface PagePanesProps {
   readonly me: IdentityName;
@@ -12,11 +16,13 @@ interface PagePanesProps {
 
 export function PagePanes(props: PagePanesProps): ReactNode {
   const { route, stores } = props;
+  const edge = useThreadEdge({ closeHref: INBOX, layout: stores.layout });
   if (route.name === "inbox") {
     return (
       <InboxView
         board={stores.board}
         composer={stores.composer}
+        edge={edge}
         me={props.me}
         reading={stores.reading}
         selected={route.selected}

@@ -14,6 +14,7 @@ type FeedRow =
 interface FeedOf {
   readonly messages: readonly TopLevelMessage[];
   readonly expanded: ReadonlyMap<MessageId, number>;
+  readonly held: ReadonlySet<MessageId>;
   readonly readPosition: number | null;
   readonly me: string;
 }

@@ -1,4 +1,4 @@
 packages:
-  # The root is listed so Changesets sees @ai-hero/cookout as a workspace package (ADR 0031).
+  # The root is listed so Changesets sees @ai-hero/cookout as a workspace package (ADR 0050).
   - "."
   - "packages/*"

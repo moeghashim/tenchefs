@@ -4,20 +4,25 @@ import { presenceNameOf } from "./presence-name.ts";
 
 const PLACES = {
   avatar: "absolute -right-0.5 -bottom-0.5 size-3 ring-2 ring-background",
+  card: "size-2.5",
   inline: "size-2 self-center",
 } as const;
 
-type Shown = "online" | "offline" | "warning";
+type Shown = "online" | "offline" | "unreachable" | "warning";
 
 const LOOKS: Readonly<Record<Shown, string>> = {
   offline: "fill-background stroke-muted-foreground",
   online: "fill-online",
+  unreachable: "fill-destructive",
   warning: "fill-background stroke-mention-bar",
 };
 
-function presenceOf({ online, warning }: PresenceDotParts): Shown {
+function presenceOf({ online, unreachable, warning }: PresenceDotParts): Shown {
   if (online) {
     return "online";
+  }
+  if (unreachable) {
+    return "unreachable";
   }
   if (warning) {
     return "warning";

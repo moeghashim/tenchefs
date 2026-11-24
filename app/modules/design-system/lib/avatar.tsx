@@ -1,48 +1,7 @@
+import { hueOf, initialsOf } from "./avatar-look.ts";
 import type { AvatarParts } from "./avatar-parts.ts";
 import { PresenceDot } from "./presence-dot.tsx";
 import type { ReactNode } from "react";
-
-const HUES = [
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_250)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_290)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_335)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_20)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_60)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_145)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_180)]",
-  "bg-[oklch(var(--avatar-lightness)_var(--avatar-chroma)_215)]",
-] as const;
-
-const LARGEST = 2_147_483_647;
-const MULTIPLIER = 31;
-const FIRST = 0;
-const BOTH = 2;
-const ONE = 1;
-
-function hashOf(name: string): number {
-  let value = 0;
-  for (const character of name) {
-    value = (value * MULTIPLIER + Number(character.codePointAt(FIRST))) % LARGEST;
-  }
-  return value;
-}
-
-function hueOf(name: string): string {
-  const hue = hashOf(name) % HUES.length;
-  return HUES.slice(hue, hue + ONE).join("");
-}
-
-function initialsOf(name: string): string {
-  const parts = name.split("-").filter((part) => part !== "");
-  if (parts.length < BOTH) {
-    return name.charAt(FIRST).toUpperCase();
-  }
-  return parts
-    .slice(FIRST, BOTH)
-    .map((part) => part.charAt(FIRST))
-    .join("")
-    .toUpperCase();
-}
 
 const SIZES = {
   large: { box: "h-14 w-14 text-lg", testId: "avatar" },
@@ -75,6 +34,7 @@ export function Avatar(parts: AvatarParts): ReactNode {
           name={parts.name}
           online={presence.online}
           spoken={presence.spoken}
+          unreachable={presence.unreachable}
           warning={presence.warning}
         />
       )}

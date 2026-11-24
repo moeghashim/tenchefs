@@ -21,6 +21,7 @@ interface Started {
 interface Replies {
   readonly first: Message;
   readonly last: Message;
+  readonly after: readonly Message[];
 }
 
 type Thread = Started & Replies;
@@ -32,11 +33,11 @@ interface Watching {
 async function repliesIn(thread: Started, text: string, ...rest: readonly string[]): Promise<Replies> {
   const { message } = await thread.poster.createMessage({ channel: thread.channel, replyTo: thread.parent.id, text });
   if (rest.length === NONE) {
-    return { first: message, last: message };
+    return { after: [], first: message, last: message };
   }
   const [next = "", ...more] = rest;
-  const { last } = await repliesIn(thread, next, ...more);
-  return { first: message, last };
+  const later = await repliesIn(thread, next, ...more);
+  return { after: [later.first, ...later.after], first: message, last: later.last };
 }
 
 async function followedThread(channel: string, text: string, ...rest: readonly string[]): Promise<Thread> {
@@ -88,13 +89,17 @@ async function postedTwice({ channel, poster }: Started): Promise<void> {
   await poster.createMessage({ channel, text: "Tea?" });
 }
 
-function threadRow({ channel, parent }: Started, row: string): string {
-  return `#/inbox/${channel}/${String(parent.id)} ${row}`;
+function threadRow({ channel, first, parent }: Thread, row: string, opened: Message = first): string {
+  return `#/inbox/${channel}/${String(parent.id)}/messages/${String(opened.id)} ${row}`;
 }
 
-function followedRow(thread: Started, row: string): string {
+function followedRow(thread: Thread, row: string, opened: Message = thread.first): string {
   const { channel } = thread;
-  return threadRow(thread, `New reply in a thread you follow${channel}-posterreplied in a thread in#${channel}${row}`);
+  return threadRow(
+    thread,
+    `New reply in a thread you follow${channel}-posterreplied in a thread in#${channel}${row}`,
+    opened,
+  );
 }
 
 function channelRow(channel: string, row: string): string {
@@ -159,13 +164,13 @@ it("a live reply joins its thread's row and moves it to the top, and a reply in 
   const { channel, poster } = thread;
   await repliesIn(thread, "Two");
   await screen.findByText("2 new");
-  await poster.createMessage({ channel, replyTo: other.id, text: "Yes" });
+  const { message: yes } = await poster.createMessage({ channel, replyTo: other.id, text: "Yes" });
   await screen.findByRole("heading", { level: 2, name: "For you 1" });
 
   expect([rowsOf("Activity"), rowsOf("For you")]).toStrictEqual([
     [followedRow(thread, "2 newjust nowre: Deploy at noon?Two"), channelRow(channel, "just nowLunch?")],
     [
-      `#/inbox/${channel}/${String(other.id)} Replied to you${channel}-posterreplied in a thread in#${channel}just nowre: Tea?Yes`,
+      `#/inbox/${channel}/${String(other.id)}/messages/${String(yes.id)} Replied to you${channel}-posterreplied in a thread in#${channel}just nowre: Tea?Yes`,
     ],
   ]);
 
@@ -223,12 +228,13 @@ it("earlier groups read messages by thread or channel, and a thread across two p
   await thread.reader.ack(thread.last.id);
   const { close } = await watching(thread.reader, TWO_A_PAGE);
   const before = rowsOf("Earlier");
+  const [second = thread.first] = thread.after;
 
   fireEvent.click(inPane().getByRole("button", { name: "Show earlier" }));
   await screen.findByText("That's everything.");
 
   expect([before, rowsOf("Earlier")]).toStrictEqual([
-    [followedRow(thread, "just nowre: Deploy at noon?Three")],
+    [followedRow(thread, "just nowre: Deploy at noon?Three", second)],
     [followedRow(thread, "just nowre: Deploy at noon?Three"), channelRow(thread.channel, "just nowDeploy at noon?")],
   ]);
 

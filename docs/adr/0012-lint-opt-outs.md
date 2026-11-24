@@ -1,6 +1,6 @@
 # Lint opt-outs
 
-Superseded in part by [ADR 0044](0044-the-lint-opt-out-list-lives-outside-the-adrs.md): the list of opt-outs below is as it stood on 2026-11-23, and the live list is in [docs/lint-opt-outs.md](../lint-opt-outs.md).
+Superseded in part by ADR 0044: the list of opt-outs below is as it stood on 2026-11-23, and the live list is in [docs/lint-opt-outs.md](../lint-opt-outs.md).
 
 2026-11-22 (mattpocock/cookout#32, part of mattpocock/cookout#17). Every Oxlint category (`nursery` included) is `"error"`, and `plugins` lists every Oxlint plugin for the stack: `effecttsgo` (Effect's official linter for TypeScript 7), `react`, `vitest` and the rest. The React Compiler and Vitest rules Oxlint lacks load as the JS plugins `react-hooks-js` and `vitest-js`. Lint runs as `effect-tsgo oxlint`, so stock `oxlint` fails on the config with `Unknown plugin: 'effecttsgo'`. A rule is off or loosened only for a contradiction: two rules that can't both pass, a rule that fights the cookout's layout, or a false positive on a library's documented API. A rule that is only harsh stays on, and what the code broke when the rulesets were turned on is in `lint-baseline.json`, so it can only go down.
 

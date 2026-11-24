@@ -1,6 +1,11 @@
+import type { KeyboardEvent, ReactNode } from "react";
 import type { PresenceShown } from "./avatar-parts.ts";
-import type { ReactNode } from "react";
 import { createContext } from "react";
+
+interface IdentityCardLink {
+  readonly name: string;
+  readonly href: string;
+}
 
 interface IdentityCardParts {
   readonly name: string;
@@ -11,6 +16,7 @@ interface IdentityCardParts {
   readonly description: string | null;
   readonly deactivated: boolean;
   readonly profileHref: string;
+  readonly broughtInBy: IdentityCardLink | null;
 }
 
 interface IdentityCardSource {
@@ -23,7 +29,23 @@ interface IdentityCardTriggerParts {
   readonly children: ReactNode;
 }
 
+type IdentityCardComposerParts = ((name: string) => void) | null;
+
+interface IdentityCardControl {
+  readonly mark: string;
+  readonly canMessage: boolean;
+  readonly onClose: () => void;
+  readonly onEscape: () => void;
+  readonly onMessage: () => void;
+  readonly onStopKeyDown: (event: KeyboardEvent) => void;
+}
+
 interface IdentityCardBoxParts {
+  readonly card: IdentityCardParts;
+  readonly control: IdentityCardControl;
+}
+
+interface IdentityCardShownParts {
   readonly card: IdentityCardParts;
 }
 
@@ -42,5 +64,16 @@ function subscribe(listener: () => void): () => void {
 
 const IdentityCards = createContext<IdentityCardSource>({ cardOf: noCard, subscribe });
 
-export { IdentityCards };
-export type { IdentityCardBoxParts, IdentityCardParts, IdentityCardSource, IdentityCardTriggerParts };
+const IdentityCardComposer = createContext<IdentityCardComposerParts>(null);
+
+export { IdentityCardComposer, IdentityCards };
+export type {
+  IdentityCardBoxParts,
+  IdentityCardComposerParts,
+  IdentityCardControl,
+  IdentityCardLink,
+  IdentityCardParts,
+  IdentityCardShownParts,
+  IdentityCardSource,
+  IdentityCardTriggerParts,
+};

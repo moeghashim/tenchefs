@@ -1,9 +1,0 @@
-# A dev program entry runs the local cookout
-
-2026-11-22 (mattpocock/cookout#29, part of mattpocock/cookout#17, extending [ADR 0008](0008-one-root-app-with-two-program-entries.md)). A chief-of-staff choice, pending Matt's review.
-
-`pnpm dev` starts `cookout serve` on a temporary SQLite file and the webhook fake, and `pnpm seed` fills it with a small board. The fake is an Effect Layer, and effects run only in a program entry or a test runner, so a plain script can't start it. A `dev` verb in the `cookout` binary could, but the published binary must not reach test code (`published-entries-ship-no-test-code`). So there is a third program entry, `app/dev.ts`, with the same lint and seam status as `app/main.ts`. It is never built or published: tsdown and the package's `bin` and `exports` don't name it. Its commands live in `testing` (`devCommandLine`: `start` and `seed`), the module of fakes and fixtures, which `app/dev.ts` is the one non-test file allowed to import. That keeps the dev code out of the published graph, adds no module, and lets tests run the same commands in process (`startDev`, `runDev`). The seed goes through the SDK as an admin would, so it needs no access to storage.
-
-`start` serves on `127.0.0.1` on a free port unless `--port` says otherwise, and prints one JSON line with the URL, the first-boot admin token, the database path and the fake's URL. Ctrl-C interrupts it: the server and the fake stop, the temporary folder is deleted, and the exit code is 0.
-
-The two Node program entries, `app/main.ts` and `app/dev.ts`, are left out of test coverage. Each only provides Layers and runs one Effect, and tests reach them only by spawning a process (`runCookoutBinary`, `interruptDevBinary` in `cli.test.ts`), which in-process coverage can't see: `app/main.ts` already sat at 0% and pulled the totals down. Everything they run is in modules, which coverage still counts.

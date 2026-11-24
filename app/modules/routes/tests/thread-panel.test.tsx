@@ -48,7 +48,7 @@ it("a thread's address opens its channel with the thread panel beside it, and cl
   close();
 });
 
-it("the panel's X link is named Close panel, apart from the Close button that closes the thread", {
+it("the panel's X link is named Close panel, apart from the Close thread icon button that closes the thread", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
@@ -57,12 +57,14 @@ it("the panel's X link is named Close panel, apart from the Close button that cl
   const close = openWithClockStopped({ client: adminClient(), hash: hashOf(parent) });
 
   const panel = await threadPanel();
-  const button = await within(panel).findByRole("button", { name: "Close" });
+  const button = await within(panel).findByRole("button", { name: "Close thread" });
 
-  expect([within(panel).getByRole("link", { name: "Close panel" }).tagName, button.tagName]).toStrictEqual([
-    "A",
-    "BUTTON",
-  ]);
+  expect([
+    within(panel).getByRole("link", { name: "Close panel" }).tagName,
+    button.tagName,
+    button.textContent,
+    button.querySelector("svg[aria-hidden='true']") === null,
+  ]).toStrictEqual(["A", "BUTTON", "", false]);
 
   close();
 });

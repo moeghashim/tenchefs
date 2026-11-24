@@ -107,6 +107,8 @@ export type HumanIdentity = IdentityFields & {
 export type AgentIdentity = Described<IdentityFields> & {
   readonly kind: "agent";
   readonly owner: Owner;
+  /** The agent whose approval of a join created this agent (#370); never changed. Absent when a person approved. */
+  readonly broughtInBy?: IdentityName;
   /** Present, and true, on a command's handler identity in `GET /v1/identities`. */
   readonly handler?: true;
 };

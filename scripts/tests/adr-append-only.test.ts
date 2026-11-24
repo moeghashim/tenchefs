@@ -49,7 +49,19 @@ it("names the ADR and the line when an existing ADR gains other text or loses a 
   ]);
 });
 
-it("passes a new ADR, renumbered or not, and fails a deleted one", { timeout: 1000 }, () => {
+const DELETED = "docs/adr/0001-old.md";
+const DELETED_LINK = "[ADR 0001](0001-old.md)";
+const DELETE_OLD = [
+  `diff --git a/${DELETED} b/${DELETED}`,
+  "deleted file mode 100644",
+  "index 4444444..0000000",
+  `--- a/${DELETED}`,
+  "+++ /dev/null",
+  "@@ -1 +0,0 @@",
+  "-# Old",
+].join("\n");
+
+it("passes a new ADR, renumbered or not, and a deleted one", { timeout: 1000 }, () => {
   expect.hasAssertions();
 
   const diff = [
@@ -61,19 +73,41 @@ it("passes a new ADR, renumbered or not, and fails a deleted one", { timeout: 10
     "@@ -0,0 +1,2 @@",
     "+# Anything at all",
     "+--- a horizontal rule, not a header",
-    "diff --git a/docs/adr/0001-old.md b/docs/adr/0001-old.md",
-    "deleted file mode 100644",
-    "index 4444444..0000000",
-    "--- a/docs/adr/0001-old.md",
-    "+++ /dev/null",
-    "@@ -1 +0,0 @@",
-    "-# Old",
+    DELETE_OLD,
   ].join("\n");
 
-  expect(
-    adrEdits({ diff, locked: new Set(["docs/adr/0001-old.md", "docs/adr/0053-new.md"]), originals: new Map() }),
-  ).toStrictEqual([
-    "docs/adr/0001-old.md is append-only, but this change deletes it. Restore it, and mark it superseded with a dated line instead.",
+  expect(adrEdits({ diff, locked: new Set([DELETED, "docs/adr/0053-new.md"]), originals: new Map() })).toStrictEqual(
+    [],
+  );
+});
+
+it("passes unlinking an ADR deleted in the same change, and nothing else on that line", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const unlinked = `- Replaces ${DELETED_LINK}: the old way.`;
+  const originals = new Map([[ADR, [unlinked]]]);
+  const locked = new Set([ADR, DELETED]);
+  function edit(added: string): string {
+    return changed(ADR, [`-${unlinked}`, `+${added}`].join("\n"));
+  }
+  function withDeletion(added: string): string {
+    return [edit(added), DELETE_OLD].join("\n");
+  }
+
+  expect([
+    adrEdits({ diff: withDeletion("- Replaces ADR 0001: the old way."), locked, originals }),
+    adrEdits({ diff: withDeletion("- Replaces ADR 0001: a new way."), locked, originals }),
+    adrEdits({ diff: edit("- Replaces ADR 0001: the old way."), locked, originals }),
+  ]).toStrictEqual([
+    [],
+    [
+      `${ADR} is append-only, but this change removes the line "${unlinked}". Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+      `${ADR} is append-only, but this change adds the line "- Replaces ADR 0001: a new way.", which is not a dated note. Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+    ],
+    [
+      `${ADR} is append-only, but this change removes the line "${unlinked}". Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+      `${ADR} is append-only, but this change adds the line "- Replaces ADR 0001: the old way.", which is not a dated note. Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+    ],
   ]);
 });
 

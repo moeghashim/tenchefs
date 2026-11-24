@@ -2,7 +2,8 @@
  * The web UI's paths: the one owner of its location hashes. A hash names a
  * `Route` (`#/`, no hash, and `#/inbox` the inbox, `#/inbox/<channel>` the
  * same with that channel's row selected and `#/inbox/<channel>/<thread id>`
- * with that thread's, `#/login`,
+ * with that thread's, `#/inbox/<channel>/<thread id>/messages/<message id>` the same
+ * with that message in view and highlighted, `#/login`,
  * `#/people` the people and agents, `#/people/<name>` the same with that
  * identity's profile open, `#/settings` the settings page and
  * `#/settings/<section>` the same with the focus on that section (`profile`,
@@ -12,9 +13,9 @@
  * top-level message), `#/approve/<user code>` the approval
  * page for a login request and `#/approve-join/<user code>` for an agent join request); a channel name
  * that isn't a `ChannelName`, an identity name that isn't an `IdentityName`,
- * a thread ID that isn't a message ID, a section the settings page doesn't
- * have, or any other hash is `missing`, except that `#/threads` and
- * `#/threads/all`, where the removed Open threads page was, open the inbox.
+ * a thread ID that isn't a message ID, or a section the settings page doesn't
+ * have is `missing`; `#/threads` and `#/threads/all`, where the removed Open
+ * threads page was, and any hash no page has open the inbox, the homepage.
  * `hrefOf(route)` builds the hash a link to a route
  * goes to, so no view writes a path by hand.
  *
@@ -58,6 +59,7 @@ type Matcher = (hash: string) => Route | false;
 
 const INBOX = /^(?:#\/?|#\/inbox)?$/u;
 const INBOX_THREAD = /^#\/inbox\/(?<channel>[^/]+)(?:\/(?<thread>[^/]+))?$/u;
+const INBOX_MESSAGE = /^#\/inbox\/(?<channel>[^/]+)\/(?<thread>[^/]+)\/messages\/(?<message>[^/]+)$/u;
 const LOGIN = /^#\/login$/u;
 const SETTINGS = /^#\/settings$/u;
 const SECTION = /^#\/settings\/(?<section>[^/]+)$/u;
@@ -132,11 +134,24 @@ function inboxRoute(channel: string, thread: string): Route {
   return { name: "inbox", selected };
 }
 
+function inboxMessageRoute(hash: string): Route {
+  const selected = selectionOf({
+    channel: hash.replace(INBOX_MESSAGE, "$<channel>"),
+    thread: hash.replace(INBOX_MESSAGE, "$<thread>"),
+  });
+  const message = messageIdOf(hash.replace(INBOX_MESSAGE, "$<message>"));
+  if (selected === null || message === null) {
+    return MISSING;
+  }
+  return { name: "inbox", selected: { ...selected, message } };
+}
+
 const matchers: readonly Matcher[] = [
   (hash) => INBOX.test(hash) && { name: "inbox", selected: null },
   (hash) =>
     INBOX_THREAD.test(hash) &&
     inboxRoute(hash.replace(INBOX_THREAD, "$<channel>"), hash.replace(INBOX_THREAD, "$<thread>")),
+  (hash) => INBOX_MESSAGE.test(hash) && inboxMessageRoute(hash),
   (hash) => LOGIN.test(hash) && { name: "login" },
   (hash) => SETTINGS.test(hash) && { name: "settings", section: null },
   (hash) => SECTION.test(hash) && sectionRoute(hash.replace(SECTION, "$<section>")),
@@ -216,7 +231,7 @@ function routeOf(hash: string): Route {
       return route;
     }
   }
-  return MISSING;
+  return { name: "inbox", selected: null };
 }
 
 /**
@@ -278,4 +293,4 @@ export function closedHref(route: Route): string {
 }
 
 export type { LinkedRoute, Place, Route, SettingsSection };
-export type { InboxSelection, ThreadSelection } from "./lib/thread-selection.ts";
+export type { InboxSelection, InboxThreadSelection, ThreadSelection } from "./lib/thread-selection.ts";

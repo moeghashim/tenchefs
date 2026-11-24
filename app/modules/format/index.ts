@@ -12,6 +12,9 @@
  * calls back once that much time has passed, unless the function it returns
  * is called first: `browserClock` waits on the page's timers, and tests bring
  * a clock they move on by hand, so time on screen passes without waiting.
+ * `browserTimeZone()` is the browser's own IANA time zone, and
+ * `runTimeIn({ iso, timeZone })` writes a Scheduled message's run in the zone it
+ * is scheduled in (`Mon, 1 Dec 2026, 09:00`).
  * This is the web UI's one reader of `Date` and its one clock.
  */
 const DAY = 1;
@@ -152,6 +155,39 @@ export function everySecond(listener: () => void): () => void {
   return () => {
     clearInterval(ticking);
   };
+}
+
+/**
+ * The browser's own time zone, which a Scheduled message is read in unless another is chosen.
+ * @returns Its IANA name, such as `Europe/London`.
+ */
+export function browserTimeZone(): string {
+  return new Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/** A Scheduled message's run, and the zone it is scheduled in. */
+export interface RunTime {
+  readonly iso: string;
+  readonly timeZone: string;
+}
+
+/**
+ * A Scheduled message's run as the zone it is scheduled in shows it.
+ * @param run The run's ISO time, and the IANA time zone to write it in, one the server has accepted.
+ * @returns Its weekday, date and 24-hour time, such as `Mon, 1 Dec 2026, 09:00`.
+ */
+export function runTimeIn(run: RunTime): string {
+  const { iso, timeZone } = run;
+  const shape = {
+    day: "numeric",
+    hour: "2-digit",
+    hourCycle: "h23",
+    minute: "2-digit",
+    month: "short",
+    weekday: "short",
+    year: "numeric",
+  } as const;
+  return new Intl.DateTimeFormat("en-GB", { ...shape, timeZone }).format(new Date(iso));
 }
 
 export { type Clock, browserClock } from "./lib/browser-clock.ts";

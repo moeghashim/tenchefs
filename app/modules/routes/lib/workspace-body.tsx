@@ -1,4 +1,4 @@
-import { IdentityDeletedNotice, ReconnectingView } from "../../views/index.tsx";
+import { IdentityDeletedNotice, ReconnectingView, SearchBox } from "../../views/index.tsx";
 import { WorkspaceColumn, WorkspaceMain } from "../../design-system/index.tsx";
 import type { IdentityName } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
@@ -17,6 +17,7 @@ export function WorkspaceBody(props: WorkspaceBodyProps): ReactNode {
   const { stores } = props;
   return (
     <WorkspaceColumn>
+      <SearchBox search={stores.search} />
       {stores.live !== null && <ReconnectingView live={stores.live} />}
       <IdentityDeletedNotice identities={stores.composer.identities} />
       <WorkspaceMain>

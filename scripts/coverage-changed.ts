@@ -1,3 +1,4 @@
+import { SUITE_LOCK_FILE, holdMachineLock, waitingLine } from "./lib/machine-lock.ts";
 import { fail, unwrap } from "./lib/tools.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import type { Outcome } from "./lib/tools.ts";
@@ -12,6 +13,7 @@ const BASE = "origin/v1";
 const EXIT_SUCCESS = 0;
 const NONE = 0;
 const MAX_BUFFER = 268_435_456;
+const LOCK_POLL_MS = 1000;
 
 function git(...args: readonly string[]): readonly string[] {
   const ran = spawnSync("git", args, { encoding: "utf8", maxBuffer: MAX_BUFFER });
@@ -52,7 +54,16 @@ function coverageReport(directory: string): Outcome<unknown> {
 
 const changed = changedFiles();
 const directory = mkdtempSync(path.join(tmpdir(), "coverage-changed-"));
+const release = await holdMachineLock({
+  file: SUITE_LOCK_FILE,
+  onWait: (holder) => {
+    console.error(waitingLine({ holder, script: SCRIPT }));
+  },
+  pollMs: LOCK_POLL_MS,
+  worktree: process.cwd(),
+});
 const report = coverageReport(directory);
+release();
 rmSync(directory, { force: true, recursive: true });
 const found = uncoveredLines({ changed, coverage: unwrap(SCRIPT, report), root: process.cwd() });
 

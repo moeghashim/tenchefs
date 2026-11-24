@@ -29,7 +29,7 @@ async function threadOf(channel: string): Promise<Thread> {
 
 async function replyBox(): Promise<HTMLTextAreaElement> {
   const panel = await screen.findByRole("complementary", { name: "Thread" });
-  const box = await within(panel).findByLabelText("Reply");
+  const box = await within(panel).findByRole("textbox", { name: "Reply" });
   if (!(box instanceof HTMLTextAreaElement)) {
     throw new TypeError("No reply box");
   }
@@ -71,6 +71,11 @@ async function parentMessage(): Promise<HTMLElement> {
   return parent;
 }
 
+async function repliedFromMenu(message: Promise<HTMLElement>): Promise<void> {
+  fireEvent.contextMenu(await message);
+  await chose("Reply");
+}
+
 it("reply on a reply in a thread puts @its-author at the start of the reply box, keeping the text, with the cursor at the end", {
   timeout: 5000,
 }, async () => {
@@ -80,7 +85,7 @@ it("reply on a reply in a thread puts @its-author at the start of the reply box,
   const close = openAt({ client: reader, hash });
   await typed("sounds good");
 
-  fireEvent.click(within(await replyNamed("Noon works")).getByRole("button", { name: "Reply" }));
+  await repliedFromMenu(replyNamed("Noon works"));
 
   await boxShows(shown("@web-thread-reply-ada sounds good"));
 
@@ -123,7 +128,7 @@ it("reply doesn't mention an author the reply box already mentions", { timeout: 
   const close = openAt({ client: reader, hash });
   await typed("thanks @web-thread-reply-twice-ada");
 
-  fireEvent.click(within(await replyNamed("Noon works")).getByRole("button", { name: "Reply" }));
+  await repliedFromMenu(replyNamed("Noon works"));
 
   await boxShows(shown("thanks @web-thread-reply-twice-ada"));
 
@@ -137,7 +142,7 @@ it("reply on your own message mentions nobody and puts the cursor in the reply b
   const close = openAt({ client: reader, hash });
   await typed("also");
 
-  fireEvent.click(within(await replyNamed("Or one")).getByRole("button", { name: "Reply" }));
+  await repliedFromMenu(replyNamed("Or one"));
 
   await boxShows(shown("also"));
 
@@ -154,7 +159,7 @@ it("reply on a deactivated author's message mentions nobody and puts the cursor 
   const close = openAt({ client: reader, hash });
   await screen.findAllByText("(deactivated)");
 
-  fireEvent.click(within(await parentMessage()).getByRole("button", { name: "Reply" }));
+  await repliedFromMenu(parentMessage());
 
   await boxShows(shown(""));
 

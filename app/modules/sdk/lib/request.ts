@@ -1,6 +1,6 @@
 import { CookoutError, isServerErrorCode } from "./errors.ts";
 import type { HttpMethod, HttpRequest, HttpResponse, OpenEventStream } from "../../http/client.ts";
-import { openEventStream, request } from "../../http/client.ts";
+import { openEventStream, request, requestBytes } from "../../http/client.ts";
 import type { CookoutConnection } from "../../config/index.ts";
 import { harnessHeader } from "../../identities/index.ts";
 import { isErrorResponse } from "./generated/validators.js";
@@ -89,6 +89,28 @@ export async function send<Answer>(connection: ClientConnection, call: Call<Answ
     throw badBody(method, path, response);
   }
   return response.json;
+}
+
+export async function sendForBytes({
+  connection,
+  method,
+  path,
+  params = {},
+}: Pick<Call<unknown>, "method" | "path" | "params"> & { readonly connection: ClientConnection }): Promise<{
+  readonly bytes: Uint8Array;
+  readonly headers: Headers;
+}> {
+  const answered = await requestBytes({
+    baseUrl: connection.url,
+    headers: headersFor(connection),
+    method,
+    params,
+    path,
+  });
+  if (!answered.ok) {
+    throw refusal(method, path, answered.response);
+  }
+  return answered;
 }
 
 export async function openEvents({ connection, headers, path, query = {} }: EventsCall): Promise<OpenEventStream> {

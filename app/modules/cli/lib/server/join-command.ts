@@ -101,4 +101,5 @@ const leaveCommand = Command.make("leave", {}, () => answered(leave)).pipe(
   ),
 );
 
+export { approveJoinCommand } from "./approve-join.ts";
 export { joinCommand, leaveCommand };

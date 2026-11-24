@@ -35,7 +35,7 @@ test("typing @ and a prefix in the reply box suggests the matching identities, a
   const token = await mentionerAndReviewers();
 
   await openThread(page, token, "browser-composer");
-  const box = page.getByLabel("Reply", { exact: true });
+  const box = page.getByRole("textbox", { exact: true, name: "Reply" });
   await box.pressSequentially("Could @browser-rev");
   const suggestions = page.getByRole("list", { name: "Mention suggestions" });
 

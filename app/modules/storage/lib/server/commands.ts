@@ -4,12 +4,13 @@ import type { CommandName, CommandSecret, RegisteredCommand } from "../../../com
 import type { CommandTokensSection, MemoryCommandTokensSection } from "./command-tokens.ts";
 import type { DeliveriesSection, MemoryDeliveriesSection } from "./deliveries.ts";
 import { isCommandName, isCommandSecret } from "../../../commands/index.ts";
-import { memoryCommandTokens, sqliteCommandTokens } from "./command-tokens.ts";
-import { memoryDeliveries, sqliteDeliveries } from "./deliveries.ts";
+import { memoryCommandTokens, sqlCommandTokens } from "./command-tokens.ts";
+import { memoryDeliveries, sqlDeliveries } from "./deliveries.ts";
+import { FALSE } from "./adapters/sql-database.ts";
 import type { FindIdentity } from "./identity-row.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
@@ -127,7 +128,7 @@ function toStored(row: unknown): Fails<StoredCommand> {
 
 const encodeSchema = Schema.encodeEffect(JsonSchemaFromText);
 
-function insertCommand(db: SqliteDatabase, { command, secret }: StoredCommand): Fails<void> {
+function insertCommand(db: SqlDatabase, { command, secret }: StoredCommand): Fails<void> {
   return Effect.flatMap(Effect.mapError(encodeSchema(command.schema), unreadable), (schema) =>
     db.run(
       `INSERT INTO commands (${COMMAND_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -142,7 +143,7 @@ function insertCommand(db: SqliteDatabase, { command, secret }: StoredCommand): 
   );
 }
 
-function kindOf(db: SqliteDatabase, name: IdentityName): Fails<"human" | "agent" | undefined> {
+function kindOf(db: SqlDatabase, name: IdentityName): Fails<"human" | "agent" | undefined> {
   return db.get("SELECT kind FROM identities WHERE name = ?", name).pipe(
     Effect.flatMap((row) => {
       if (typeof row === "object" && row !== null) {
@@ -155,16 +156,16 @@ function kindOf(db: SqliteDatabase, name: IdentityName): Fails<"human" | "agent"
   );
 }
 
-function insertHandler(db: SqliteDatabase, handler: AgentIdentity): Fails<void> {
+function insertHandler(db: SqlDatabase, handler: AgentIdentity): Fails<void> {
   return db.run(
-    "INSERT INTO identities (name, kind, owner, admin, created_at) VALUES (?, 'agent', ?, 0, ?)",
+    `INSERT INTO identities (name, kind, owner, admin, created_at) VALUES (?, 'agent', ?, ${FALSE[db.dialect]}, ?)`,
     handler.name,
     handler.owner,
     handler.createdAt,
   );
 }
 
-function sqliteCommands(db: SqliteDatabase): CommandsSection {
+function sqlCommands(db: SqlDatabase): CommandsSection {
   function find(name: CommandName): Fails<StoredCommand | undefined> {
     return db.get(`SELECT ${COMMAND_COLUMNS} FROM commands WHERE name = ?`, name).pipe(
       Effect.flatMap((row) => {
@@ -176,8 +177,8 @@ function sqliteCommands(db: SqliteDatabase): CommandsSection {
     );
   }
   return {
-    ...sqliteCommandTokens(db),
-    ...sqliteDeliveries(db),
+    ...sqlCommandTokens(db),
+    ...sqlDeliveries(db),
     addCommand: (stored, handler) =>
       db.transaction(
         Effect.gen(function* addCommand() {
@@ -210,4 +211,4 @@ function sqliteCommands(db: SqliteDatabase): CommandsSection {
   };
 }
 
-export { type CommandsSection, type PlaceHandler, type StoredCommand, memoryCommands, sqliteCommands };
+export { type CommandsSection, type PlaceHandler, type StoredCommand, memoryCommands, sqlCommands };

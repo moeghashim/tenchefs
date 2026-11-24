@@ -1,7 +1,7 @@
 /**
  * The design system: hand-written Tailwind components styled after shadcn/ui
  * (its token names and its card), in a Vercel-like neutral look with small
- * pops of colour (ADR 0034, ADR 0040). Every view builds from these and none
+ * pops of colour (ADR 0080). Every view builds from these and none
  * styles itself, so no component takes classes. `styles.css` is the Tailwind
  * theme, which `index.html` loads: its tokens are CSS variables, dark by
  * default, light under `data-theme="light"` on the root element, and light
@@ -12,7 +12,9 @@
  * `Workspace` is the page around every route once logged in: a `Sidebar` on
  * the left (on a narrow screen, behind a button that opens and closes it),
  * which a button at its top collapses to a narrow rail holding only that
- * button on a wide screen (`collapsed`),
+ * button on a wide screen (`collapsed`), and, given an `edge`, is as wide as
+ * it says, its right edge a `PanelEdge` (`side` `right`; no `onClose`, so a
+ * drag stops at its narrowest),
  * with its `SidebarBody` of links (following one, but not pressing a button, closes it on a narrow screen)
  * and its `SidebarFooter`, and a `WorkspaceMain` of the route's panes on the
  * right, in a `WorkspaceColumn` under any `StatusBar`: a named polite live
@@ -20,7 +22,10 @@
  * `shown`, such as "Reconnecting…". In the sidebar, `NavLink` is one link, bold when
  * it has something new (`marked`), highlighted when it is the open item, with
  * an icon and any `Pill` after it: a count read out by its label, loud (the
- * unread colour), quiet, or unseen (read out only); `NavHeading` heads a
+ * unread colour), quiet, or unseen (read out only); a `menu` is its `ActionMenu`.
+ * `ActionMenu` is a menu outside a message: right-clicking its children, or Shift+F10 or the menu key in them, opens
+ * its `choices` as a context menu named by its `label`; a More actions button (or `buttonLabel`), shown on hover or
+ * focus (`inline`: before a name), opens them as a dropdown. `PersonMenu` is a name's. `NavHeading` heads a
  * `NavList` of links, with any `HeadingButton` on its line, a plus named by
  * its label that starts something new, such as a channel; in the footer, `FooterLink` is a link
  * with a gear, such as Settings, highlighted when open. `Pane` is
@@ -33,12 +38,18 @@
  * scrolled up, and anything under it, such as a message box in a `BoxFrame`
  * with its keyboard hint; `SidePanel` is a
  * named column on its right with a close link (the whole width on a narrow
- * screen). A split view, such as the inbox's, is a `ListPane` (the main column,
+ * screen), its title an `ActionMenu`'s target given a `menu`. Given an `edge`, a `SidePanel` or `ConversationPanel` is as wide as
+ * its edge says on a wide screen (never more than 60% of the space beside it),
+ * and its left edge is a `PanelEdge`: a focusable vertical separator, a line on
+ * hover and focus, that a drag or the arrow keys resize (Left widens), Home and
+ * End take to its narrowest and widest, and a drag released past its
+ * narrowest closes (`onClose`); it isn't shown on a narrow screen. A split view, such as the inbox's, is a `ListPane` (the main column,
  * hidden on a narrow screen while `hiddenWhenNarrow`) beside a
  * `ConversationPanel`, a named column with a `BackLink` arrow (shown only on a
  * narrow screen, where the panel takes the whole width), its detail, its
  * header's `actions` as small buttons (each naming its key in `aria-keyshortcuts` and a tooltip), and any open link (naming its key, `CONVERSATION_KEYS.open`, in
- * `aria-keyshortcuts` and a tooltip; `CONVERSATION_KEYS` also holds the keys for Mark read and Mark unread), or beside
+ * `aria-keyshortcuts` and a tooltip; `CONVERSATION_KEYS` also holds the keys for Mark read and Mark unread), its
+ * `message` being what an identity card's Message does in it (an `IdentityCardComposer`), or beside
  * a `ConversationEmpty`, a named column holding only a
  * muted line (hidden on a narrow screen); a
  * `DividerButton` is a divider line led by a quiet button, such as one that
@@ -65,13 +76,13 @@
  * to one thing, `ButtonRow` puts buttons side by side, and `TokenText` shows a
  * secret, such as a fresh token, to copy.
  * `ConfirmDialog` asks before an action, in a modal shadcn AlertDialog on
- * Radix's primitives (ADR 0058), the one part built on a library: its title, a
+ * Radix's primitives (ADR 0080), the one part built on a library: its title, a
  * body naming exactly what happens, Cancel and a confirm button, in the
  * destructive colour when the action can't be undone. It holds focus inside
  * while open, Escape or Cancel calls `onCancel`, and focus goes back to what
  * opened it when it closes. While `pending` both buttons are disabled and the
  * confirm button says so; an `error` shows inside it. Its owner decides
- * when it is `open`, so it never closes on its own.
+ * when it is `open`, so it never closes. `FormDialog` is a Radix modal form; `RunList`, `FieldNote`; `MoreActions`.
  * `PaneHeader`'s title is mono, as a channel's name, unless `sans`. A
  * `Toolbar` under it holds a `FilterField` (a labelled box whose text its
  * owner holds) and `Chip`s, buttons pressed or not; a named `ListArea` scrolls
@@ -88,7 +99,7 @@
  * link, to `authorHref`, above the row's), what they did (`action`) and in which channel, a
  * short time, a `Closed` marker when it is `closed` (its thread is closed), any `count` of how many of its messages are new ("3 new") and any
  * `context` line (a reply's thread), then what it holds: its `FeedText`, up to
- * two lines, and any `RowButton`, a small button raised above the row's link. A `for-you` row has an accent dot and why,
+ * two lines, and any `RowButton`, a small button raised above the row's link; given a `menu`, it is an `ActionMenu`'s target. A `for-you` row has an accent dot and why,
  * a bold name and bright text; an `activity` row has a muted dot and why, a
  * bold name and bright text; a `read` one is muted. A `current` row, the one
  * whose conversation is shown, is highlighted and its link marked as the current page. A `FeedNoticeRow` sits in
@@ -103,19 +114,22 @@
  * `MessageList` is a named list of `MessageItem`s: one message each, which
  * takes focus, with its avatar, name and time, or only its time on hover when
  * `grouped` under the one before; the day's separator and the "New" line above it when it starts them; a
- * mark (`for-you`, the filled accent block, when it mentions or answers the reader, or `open`); and an action (such as Reply: a link, or a button with `onAction`) and
- * a More actions button shown on hover or focus, after a button for each of its `menu`'s `reactions`; a reaction's
- * `key`, pressed while the message itself has focus, leaves it too. Its `menu` gives it one actions menu (the action,
- * then each reaction, then Mark unread, then the thread choice, such as Close, if any), drawn two ways on Radix: right-clicking the message opens it as a context menu at the pointer, and the
- * More actions button opens it as a dropdown. Every menu item draws its `icon` (a `ThreadChoice` names one too), which its type requires, before its label. Radix gives both their keyboard and focus behaviour; a chosen item's
+ * mark (`for-you`, the filled accent block, when it mentions or answers the reader, or `open`); and, shown on hover or
+ * focus, a "Quick actions" group of icon buttons, each with no text and named by its tooltip: a button for each of its
+ * `menu`'s `reactions` that is `inHoverBar`, then, when `replyOnHover`, its action (such as Reply: a link, or a button
+ * with `onAction`), then its thread choice when `threadOnHover`, then More actions. A reaction's
+ * `key`, pressed while the message itself has focus, leaves it too, in or out of the hover bar. Its `menu` gives it one actions menu (the action,
+ * then each reaction, then Mark unread, then the thread choice, such as Close, if any), drawn two ways on Radix: right-clicking the message, or the context-menu key or Shift+F10 on it, opens it as a context menu at the pointer, and the
+ * More actions button opens it as a dropdown. Every menu item draws its `icon` (a `ThreadChoice` names one too), which its type requires, before its label. An item may be `disabled`, dimmed and not chosen. Radix gives both their keyboard and focus behaviour; a chosen item's
  * action runs once the menu has closed. Mark unread's tooltip names its shortcut, `Alt-click`: an Alt-click (Option-click
  * on macOS) on the message, but not on a link, button or other interactive element in it, runs Mark unread at once and
  * focuses and selects nothing; `StandaloneMessage` does the same. `StandaloneMessage` is one named message on its own, such as a
  * thread's parent. A message's author name and an `@name` in its text are each an `IdentityCard`: hovering it
- * (after a short delay) or focusing it opens a card, a Radix tooltip whose pointer can rest on it. The card leads
- * with a header like `Profile`'s: the identity's large `Avatar` (with its presence dot, and none when its presence
- * isn't known) beside its shown name, its `@name` handle and an agent's tag. Below come its presence words, its kind
- * (an agent's owner), any description, Deactivated, and a View profile link; pointer leave, Escape or blur closes it, and focus stays on the name. Its card comes from the
+ * (after a short delay) or focusing it opens a card, a Radix tooltip beside the name, kept inside the window: a
+ * labelled `dialog` led by a square avatar tile (grey when deactivated; an Agent chip on an agent's), then its name,
+ * `@name` handle, presence or a red Deactivated, kind, description, and Message (calls the nearest
+ * `IdentityCardComposer`; disabled when deactivated or with none) and View profile. Tab on the name moves into it;
+ * Escape or Tab past either end closes it, focus back on the name. Its card comes from the
  * `IdentityCards` source the views provide; with none, the name is drawn alone. In a message, `MessageBody` holds its rendered Markdown text, `Mention` an
  * `@name` in it, `CallChip` a command call
  * and its data, `DataToggle` its data folded away, and `ThreadSummary` a link to
@@ -126,8 +140,9 @@
  * channel has nothing older, and `QuietButton` is a muted centred button,
  * such as loading older messages. `ClosedFold` is a row of a message list standing for closed threads folded away,
  * a button on a dashed line that unfolds them; given a `day`, the day's label (a separator to a screen reader) shares
- * that line, in place of a day separator of its own beside it. `ThreadBar` is a muted bar across the top of a thread: a line of text
- * and one button, such as who closed it and Reopen; `QuietLink` is a muted link in such a line, such as a name
+ * that line, in place of a day separator of its own beside it: the label in the line's centre, the button at its right end,
+ * shortening rather than overlapping the label on a narrow line. `ThreadBar` is a muted bar across the top of a thread: a line of text
+ * and one icon button named by its tooltip, such as who closed it and Reopen thread; `QuietLink` is a muted link in such a line, such as a name
  * linking to its profile. `TextArea` takes focus when it first appears
  * if `focused`.
  *
@@ -154,108 +169,132 @@
  * text its owner holds. `PromptForm` is a named card in place of a message
  * box that asks for a command's data, titled, with a Cancel and a submit
  * button, its first field focused, and Escape anywhere in it calls
- * `onEscape`; in it `InputField` (text, a number or an
- * integer), `PickField` (one of a list, or none) and `CheckField` (a checkbox)
+ * `onEscape`; in it `InputField` (text, a number, an
+ * integer, a date or a time), `PickField` (one of a list, or none) and `CheckField` (a checkbox)
  * are labelled fields whose value their owner holds, each marked when
  * required, with its help text and any error under it, both read out as its
  * description.
  */
-export { ActionGroup } from "./lib/action-group.tsx";
-export { Alert } from "./lib/alert.tsx";
-export { ConfirmDialog } from "./lib/confirm-dialog.tsx";
-export { ButtonRow } from "./lib/button-row.tsx";
-export { TokenText } from "./lib/token-text.tsx";
-export { CallChip } from "./lib/call-chip.tsx";
-export { ChannelStart } from "./lib/channel-start.tsx";
-export { DataToggle } from "./lib/data-toggle.tsx";
-export { MessageBody } from "./lib/message-body.tsx";
-export { MessageItem } from "./lib/message-item.tsx";
-export { MessageList } from "./lib/message-list.tsx";
-export { QuietButton } from "./lib/quiet-button.tsx";
-export { ClosedFold } from "./lib/closed-fold.tsx";
-export { ThreadBar } from "./lib/thread-bar.tsx";
-export { MoreButton } from "./lib/more-button.tsx";
-export { RepliesDivider } from "./lib/replies-divider.tsx";
-export { ThreadSummary } from "./lib/thread-summary.tsx";
-export { StandaloneMessage } from "./lib/standalone-message.tsx";
-export { AppShell } from "./lib/app-shell.tsx";
-export { BoxFrame } from "./lib/box-frame.tsx";
-export { Button } from "./lib/button.tsx";
-export { Card } from "./lib/card.tsx";
-export { CheckField } from "./lib/check-field.tsx";
-export { CardBody } from "./lib/card-body.tsx";
-export { CardHeader } from "./lib/card-header.tsx";
-export { ChoiceGroup } from "./lib/choice-group.tsx";
-export { DataArea } from "./lib/data-area.tsx";
-export { Feed } from "./lib/feed.tsx";
-export { FeedHeading } from "./lib/feed-heading.tsx";
-export { FeedList } from "./lib/feed-list.tsx";
-export { FeedNote } from "./lib/feed-note.tsx";
-export { FeedNoticeRow } from "./lib/feed-notice-row.tsx";
-export { FeedRow } from "./lib/feed-row.tsx";
-export { FeedText } from "./lib/feed-text.tsx";
-export { Form } from "./lib/form.tsx";
-export { LineForm } from "./lib/line-form.tsx";
-export { AreaForm } from "./lib/area-form.tsx";
-export { Heading } from "./lib/heading.tsx";
-export { InputField } from "./lib/input-field.tsx";
-export { ItemList } from "./lib/item-list.tsx";
-export { ItemRow } from "./lib/item-row.tsx";
-export { LinkList } from "./lib/link-list.tsx";
-export { LinkRow } from "./lib/link-row.tsx";
-export { Mention } from "./lib/mention.tsx";
-export { IdentityCard } from "./lib/identity-card.tsx";
-export { IdentityCards } from "./lib/identity-card-parts.ts";
-export type { IdentityCardParts, IdentityCardSource } from "./lib/identity-card-parts.ts";
-export { Muted } from "./lib/muted.tsx";
-export { MutedLines } from "./lib/muted-lines.tsx";
-export { ReactionChip } from "./lib/reaction-chip.tsx";
-export { ReactionChips } from "./lib/reaction-chips.tsx";
-export type { ReactionChoice, ThreadChoice } from "./lib/menu-parts.ts";
-export { QuietLink } from "./lib/quiet-link.tsx";
-export { Notice } from "./lib/notice.tsx";
-export { HeadingButton } from "./lib/heading-button.tsx";
-export { NavHeading } from "./lib/nav-heading.tsx";
-export { NavLink } from "./lib/nav-link.tsx";
-export { NavList } from "./lib/nav-list.tsx";
-export { Pane } from "./lib/pane.tsx";
-export { ListPane } from "./lib/list-pane.tsx";
-export { ConversationEmpty } from "./lib/conversation-empty.tsx";
-export { ConversationPanel } from "./lib/conversation-panel.tsx";
-export type { PanelAction } from "./lib/panel-action-button.tsx";
-export { CONVERSATION_KEYS } from "./lib/conversation-keys.ts";
-export { DividerButton } from "./lib/divider-button.tsx";
-export { PaneHeader } from "./lib/pane-header.tsx";
-export { Page } from "./lib/page.tsx";
-export { PageSection } from "./lib/page-section.tsx";
-export { FooterLink } from "./lib/footer-link.tsx";
-export { PressButton } from "./lib/press-button.tsx";
-export { PickField } from "./lib/pick-field.tsx";
-export { Pill } from "./lib/pill.tsx";
-export { PromptForm } from "./lib/prompt-form.tsx";
-export { SidePanel } from "./lib/side-panel.tsx";
-export { ScrollArea } from "./lib/scroll-area.tsx";
-export { Sidebar } from "./lib/sidebar.tsx";
-export { SidebarBody } from "./lib/sidebar-body.tsx";
-export { SidebarFooter } from "./lib/sidebar-footer.tsx";
-export { Skeleton } from "./lib/skeleton.tsx";
-export { Suggestions } from "./lib/suggestions.tsx";
-export { SendButton } from "./lib/send-button.tsx";
-export { SubmitButton } from "./lib/submit-button.tsx";
-export { Tag } from "./lib/tag.tsx";
-export { TextArea } from "./lib/text-area.tsx";
-export { TextField } from "./lib/text-field.tsx";
-export { Workspace } from "./lib/workspace.tsx";
-export { WorkspaceMain } from "./lib/workspace-main.tsx";
-export { WorkspaceColumn } from "./lib/workspace-column.tsx";
-export { StatusBar } from "./lib/status-bar.tsx";
-export { IdentityLink } from "./lib/identity-link.tsx";
-export { Chip } from "./lib/chip.tsx";
-export { RowButton } from "./lib/row-button.tsx";
-export { DateText } from "./lib/date-text.tsx";
-export { FilterField } from "./lib/filter-field.tsx";
-export { IdentityRow } from "./lib/identity-row.tsx";
-export { ListArea } from "./lib/list-area.tsx";
-export { Profile } from "./lib/profile.tsx";
-export { ProfileName } from "./lib/profile-name.tsx";
-export { Toolbar } from "./lib/toolbar.tsx";
+export {
+  AppShell,
+  BoxFrame,
+  Card,
+  CardBody,
+  CardHeader,
+  HeadingButton,
+  NavHeading,
+  NavLink,
+  NavList,
+  Pane,
+  ListPane,
+  ConversationEmpty,
+  ConversationPanel,
+  CONVERSATION_KEYS,
+  PaneHeader,
+  Page,
+  PageSection,
+  FooterLink,
+  SidePanel,
+  ScrollArea,
+  Sidebar,
+  SidebarBody,
+  SidebarFooter,
+  Workspace,
+  WorkspaceMain,
+  WorkspaceColumn,
+  StatusBar,
+  ListArea,
+  Toolbar,
+} from "./lib/layout.ts";
+export type { PanelAction, PanelEdgeParts } from "./lib/layout.ts";
+export {
+  CallChip,
+  ChannelStart,
+  DataToggle,
+  MessageBody,
+  MessageItem,
+  MessageList,
+  ClosedFold,
+  ThreadBar,
+  RepliesDivider,
+  ThreadSummary,
+  StandaloneMessage,
+  Mention,
+  IdentityCard,
+  PersonMenu,
+  IdentityCardComposer,
+  IdentityCards,
+  ReactionChip,
+  ReactionChips,
+} from "./lib/messages.ts";
+export type {
+  IdentityCardLink,
+  IdentityCardParts,
+  IdentityCardSource,
+  ActionMenuParts,
+  MenuChoice,
+  ReactionChoice,
+  ThreadChoice,
+} from "./lib/messages.ts";
+export {
+  FeedRowClosed,
+  MoreButton,
+  Feed,
+  FeedHeading,
+  FeedList,
+  FeedNote,
+  FeedNoticeRow,
+  FeedRow,
+  FeedText,
+  RowButton,
+} from "./lib/feed-rows.ts";
+export {
+  ActionGroup,
+  ConfirmDialog,
+  FormDialog,
+  FieldNote,
+  RunList,
+  MoreActions,
+  ButtonRow,
+  TokenText,
+  QuietButton,
+  Button,
+  CheckField,
+  ChoiceGroup,
+  DataArea,
+  Form,
+  LineForm,
+  AreaForm,
+  InputField,
+  DividerButton,
+  PressButton,
+  PickField,
+  PromptForm,
+  Suggestions,
+  SendButton,
+  SubmitButton,
+  TextArea,
+  TextField,
+  Chip,
+  FilterField,
+} from "./lib/controls.ts";
+export {
+  Alert,
+  Heading,
+  ItemList,
+  ItemRow,
+  LinkList,
+  LinkRow,
+  Muted,
+  MutedLines,
+  QuietLink,
+  Notice,
+  Pill,
+  Skeleton,
+  Tag,
+  IdentityLink,
+  DateText,
+  IdentityRow,
+  Profile,
+  ProfileName,
+} from "./lib/content.ts";

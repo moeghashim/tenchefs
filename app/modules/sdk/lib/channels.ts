@@ -3,6 +3,8 @@ import { channelPath, channelsPath } from "../../channels/index.ts";
 import { getJson, send } from "./request.ts";
 import { isChannelResponse, isListChannelsResponse } from "./generated/validators.js";
 import type { ClientConnection } from "./request.ts";
+import type { ScheduledMessageCalls } from "../../scheduled-messages/client.ts";
+import { scheduledMessageCalls } from "./scheduled-messages.ts";
 
 interface ChannelCalls {
   readonly createChannel: (request: CreateChannelRequest) => Promise<ChannelResponse>;
@@ -12,8 +14,9 @@ interface ChannelCalls {
   readonly deleteChannel: (name: string) => Promise<ChannelResponse>;
 }
 
-function channelCalls(server: ClientConnection): ChannelCalls {
+function channelCalls(server: ClientConnection): ChannelCalls & ScheduledMessageCalls {
   return {
+    ...scheduledMessageCalls(server),
     createChannel: async (body) => {
       const created = await send(server, { body, isExpected: isChannelResponse, method: "POST", path: channelsPath });
       return created;

@@ -1,11 +1,12 @@
 import { closedHref, hrefOf, locationOf } from "../../paths/index.ts";
+import type { BoardStore } from "../../board/index.ts";
 import type { IdentityName } from "../../sdk/index.ts";
+import { deletedIdentities } from "../../board/index.ts";
 
 interface IdentityDeletion {
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () => IdentityName | null;
   readonly dismiss: () => void;
-  readonly closeIfOpen: (name: IdentityName) => void;
 }
 
 function closingHref(name: IdentityName): string | null {
@@ -19,7 +20,23 @@ function closingHref(name: IdentityName): string | null {
   return null;
 }
 
-function createIdentityDeletion(): IdentityDeletion {
+function followDeletions(
+  store: Pick<BoardStore, "snapshot" | "subscribe">,
+  closeIfOpen: (name: IdentityName) => void,
+): void {
+  let seen = deletedIdentities(store.snapshot());
+  store.subscribe(() => {
+    const deleted = deletedIdentities(store.snapshot());
+    for (const name of deleted) {
+      if (!seen.has(name)) {
+        closeIfOpen(name);
+      }
+    }
+    seen = deleted;
+  });
+}
+
+function createIdentityDeletion(store: Pick<BoardStore, "snapshot" | "subscribe">): IdentityDeletion {
   const listeners = new Set<() => void>();
   let notice: IdentityName | null = null;
 
@@ -30,14 +47,16 @@ function createIdentityDeletion(): IdentityDeletion {
     }
   }
 
+  function closeIfOpen(name: IdentityName): void {
+    const href = closingHref(name);
+    if (href !== null) {
+      globalThis.location.hash = href;
+      show(name);
+    }
+  }
+
+  followDeletions(store, closeIfOpen);
   return {
-    closeIfOpen: (name) => {
-      const href = closingHref(name);
-      if (href !== null) {
-        globalThis.location.hash = href;
-        show(name);
-      }
-    },
     dismiss: () => {
       show(null);
     },

@@ -11,7 +11,7 @@ import type {
   ApproveAgentJoinRequest,
 } from "../../index.ts";
 import { Effect, Function, Option } from "effect";
-import type { HumanIdentity, IdentityName, Token } from "../../../identities/index.ts";
+import type { Identity, IdentityName, Token } from "../../../identities/index.ts";
 import {
   agentJoinRequestNotFound,
   lifetime,
@@ -38,13 +38,13 @@ interface StartAgentJoin {
 }
 
 interface Approving {
-  readonly caller: HumanIdentity;
+  readonly caller: Identity;
   readonly userCode: string;
   readonly approval: ApproveAgentJoinRequest;
 }
 
 interface Viewing {
-  readonly caller: HumanIdentity;
+  readonly caller: Identity;
   readonly userCode: string;
 }
 

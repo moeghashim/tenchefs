@@ -176,6 +176,36 @@ it.effect.each(storageLayers)(
     }),
 );
 
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): a login request approved twice at once is approved once, and collected once",
+  ({ layer }) =>
+    Effect.gen(function* approvedOnce() {
+      const { storage } = yield* openStore(layer);
+      yield* withAda(storage);
+      yield* storage.createIdentity(identity("bob", { kind: "human" }), tokenHash("hash:bob"));
+      yield* storage.addLoginRequest(request, created);
+      const approvals = yield* Effect.all(
+        [
+          storage.approveLoginRequest("WDJB-MJHT", ada.name, before),
+          storage.approveLoginRequest("WDJB-MJHT", identityName("bob"), before),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const collections = yield* Effect.all(
+        [
+          storage.collectLoginRequest({ credentialHash, now: before, requestHash }),
+          storage.collectLoginRequest({ credentialHash: late, now: before, requestHash }),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const lateCredential = yield* storage.findLoginCredential(late);
+
+      expect(approvals).toStrictEqual(["approved", "approved"]);
+      expect(collections).toMatchObject([{ identity: { name: "ada" }, status: "collected" }, { status: "gone" }]);
+      expect(lateCredential).toBeUndefined();
+    }),
+);
+
 it.effect.each(storageLayers)("storage contract ($adapter): a closed store can't keep login requests", ({ layer }) =>
   Effect.gen(function* closed() {
     const { close, storage } = yield* openStore(layer);

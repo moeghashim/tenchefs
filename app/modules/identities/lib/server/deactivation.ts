@@ -1,4 +1,12 @@
-import { Caller, announced, issueToken, reactivated, requireAdmin, tokensEnded } from "./auth.ts";
+import {
+  Caller,
+  announced,
+  issueToken,
+  reactivated,
+  requireAdmin,
+  requireOwnerBringerOrAdmin,
+  tokensEnded,
+} from "./auth.ts";
 import type { DeactivateIdentityResponse, Identity, IdentityName } from "../../index.ts";
 import { DeactivateIdentityResponseSchema, IdentityWithTokenResponseSchema } from "./wire.ts";
 import type {
@@ -85,7 +93,7 @@ const deactivateRoute: Route<Caller | Storage | IdentityChanges> = {
   handle: (params) =>
     Effect.gen(function* deactivateIdentityRoute() {
       const name = yield* nameParam(params);
-      yield* requireAdminOrOwner(name);
+      yield* requireOwnerBringerOrAdmin(name);
       const storage = yield* Storage;
       const answer = yield* Effect.flatMap(storage.deactivateIdentity(name), (result) =>
         deactivatedOrRefused(name, result),

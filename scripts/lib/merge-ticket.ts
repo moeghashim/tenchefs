@@ -2,11 +2,11 @@ import type { Attempt, PushOptions, Pushed } from "./merge-push.ts";
 import type { Command, Ran, Step, Stopped } from "./merge-steps.ts";
 import { DONE, RERERE, firstStop, git, lines, run, stepOf, stop, tail } from "./merge-steps.ts";
 import type { FirstSide, HunkResolve } from "./conflicts.ts";
+import { appendOnlyMigrations, remergeMigrations } from "./merge-migrations.ts";
 import { asOneTicketMerge, cleanTree, messageOf } from "./merge-branch.ts";
 import { branchOf, deleteRemoteBranch, push } from "./merge-push.ts";
 import { readFileSync, writeFileSync } from "node:fs";
 import { renumberAdrs, renumberOpenMerge } from "./merge-adrs.ts";
-import { appendOnlyMigrations } from "./merge-migrations.ts";
 import path from "node:path";
 import { resolveHunks } from "./conflicts.ts";
 
@@ -127,7 +127,11 @@ function merge(options: MergeOptions, into: string, first: FirstSide): Step {
   if (merged.ok) {
     return DONE;
   }
-  const conflicted = lines(git(options, "diff", "--name-only", "--diff-filter=U").output);
+  const appended = options.rules.hunks.filter((rule) => rule.resolve === "append").map((rule) => rule.file);
+  const unmerged = remergeMigrations({ cwd: options.cwd, files: appended, first });
+  const conflicted = [
+    ...new Set([...lines(git(options, "diff", "--name-only", "--diff-filter=U").output), ...unmerged]),
+  ];
   if (conflicted.length === NONE && !git(options, "rev-parse", "-q", "--verify", "MERGE_HEAD").ok) {
     return stop(`git merge failed.\n${tail(merged.output)}`);
   }
@@ -253,7 +257,9 @@ function afterAttempt(options: MergeOptions, outcome: Attempt, count: number): M
 }
 
 function cleanedUp(options: MergeOptions, merged: Merged): Merged {
-  deleteRemoteBranch(options);
+  if (merged.ok) {
+    deleteRemoteBranch(options);
+  }
   return merged;
 }
 

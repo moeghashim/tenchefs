@@ -153,7 +153,7 @@ it("a thread's reply box offers no commands", { timeout: 5000 }, async () => {
   const { message } = await adminClient().createMessage({ channel: "web-command-thread", text: "The parent" });
   const close = openAt({ client: adminClient(), hash: `#/channels/web-command-thread/threads/${String(message.id)}` });
 
-  fireEvent.change(await screen.findByLabelText("Reply"), { target: { value: "/web-call-th" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Reply" }), { target: { value: "/web-call-th" } });
   type("/web-call-th");
   await screen.findByRole("list", { name: "Command suggestions" });
 

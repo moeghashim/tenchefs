@@ -191,4 +191,5 @@ function follow(following: Following): void {
 }
 
 export type { DeactivatedQuietAgents, DeactivationOffers } from "./notices.ts";
+export type { MarkChannel } from "./mark-channel.ts";
 export { type UnreadState, follow, loadedOf, loadedOrFailed, partsOf };

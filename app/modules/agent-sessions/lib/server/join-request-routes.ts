@@ -7,9 +7,8 @@ import {
   CollectAgentJoinRequestSchema,
   StartAgentJoinRequestSchema,
 } from "./wire.ts";
-import { Effect, Option } from "effect";
+import { Effect, Function, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import type { HumanIdentity, Identity } from "../../../identities/index.ts";
 import {
   agentJoinRequestApprovalPath,
   agentJoinRequestPath,
@@ -25,23 +24,6 @@ import { token } from "../../../identities/index.ts";
 const ALL_ERRORS = { errors: "all" } as const;
 const CREATED = 201;
 const ACCEPTED = 202;
-const FORBIDDEN = 403;
-
-const humanOnly: Refusal = {
-  code: "human_only",
-  message: "Only a human identity can approve an agent join request.",
-  status: FORBIDDEN,
-};
-
-function isHuman(caller: Identity): caller is HumanIdentity {
-  return caller.kind === "human";
-}
-
-const humanCaller: Effect.Effect<HumanIdentity, Refusal, Caller> = Effect.filterOrFail(
-  Caller,
-  isHuman,
-  () => humanOnly,
-);
 
 function withinAddressLimit<Value, Failure, Needs>(
   effect: Effect.Effect<Value, Failure, Needs>,
@@ -49,7 +31,7 @@ function withinAddressLimit<Value, Failure, Needs>(
   return Effect.gen(function* admitAddressThenRun() {
     const limit = yield* AddressLimit;
     const request = yield* HttpServerRequest.HttpServerRequest;
-    yield* limit.admit(Option.getOrElse(request.remoteAddress, () => "unknown"));
+    yield* limit.admit(Option.getOrElse(request.remoteAddress, Function.constant("unknown")));
     return yield* effect;
   });
 }
@@ -100,7 +82,7 @@ const collectRoute: Route<AgentSessions | AddressLimit> = {
 const showRoute: Route<Caller | AgentSessions> = {
   handle: (params) =>
     Effect.gen(function* showAgentJoinRequest() {
-      const caller = yield* humanCaller;
+      const caller = yield* Caller;
       const agentSessions = yield* AgentSessions;
       const shown = yield* agentSessions.showJoin({ caller, userCode: codeParam(params) });
       return yield* requestResponse({ agentJoinRequest: shown });
@@ -113,7 +95,7 @@ const showRoute: Route<Caller | AgentSessions> = {
 const approveRoute: Route<Caller | AgentSessions> = {
   handle: (params) =>
     Effect.gen(function* approveAgentJoinRequest() {
-      const caller = yield* humanCaller;
+      const caller = yield* Caller;
       const approval = yield* HttpServerRequest.schemaBodyJson(ApproveAgentJoinRequestSchema, ALL_ERRORS);
       const agentSessions = yield* AgentSessions;
       const approved = yield* agentSessions.approveJoin({ approval, caller, userCode: codeParam(params) });

@@ -46,9 +46,9 @@ async function threadWithNews(channel: string, earlierOnes: readonly string[] = 
   await reader.follow(parent.id);
   const thread = { channel, parent, poster, reader };
   await reader.ack(await earlierReplies(thread, earlierOnes));
-  await replied(thread, "Unread one");
+  const { id: first } = await replied(thread, "Unread one");
   await replied(thread, "Unread two");
-  return { ...thread, address: `#/inbox/${channel}/${String(parent.id)}` };
+  return { ...thread, address: `#/inbox/${channel}/${String(parent.id)}/messages/${String(first)}` };
 }
 
 function shownTexts(): readonly string[] {
@@ -80,8 +80,11 @@ function currentRows(label: string): readonly string[] {
   return hrefs;
 }
 
+const OPENED_AT = /\/messages\/\d+$/u;
+
 function rowsAt(label: string, address: string): readonly string[] {
-  return rowsOf(label).filter((row) => row.startsWith(address));
+  const thread = `${address.replace(OPENED_AT, "")}/`;
+  return rowsOf(label).filter((row) => row.startsWith(thread));
 }
 
 function isUnreadRow(row: string): boolean {

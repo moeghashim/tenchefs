@@ -43,6 +43,7 @@ export function StandaloneEntry(props: StandaloneEntryProps): ReactNode {
       note={note}
       presence={presence}
       onAction={handleReply}
+      replyOnHover={props.reply !== null}
       threadOnHover={false}
       time={useMessageTime({ message, parent: null, receipts: props.receipts })}
       unreadLine={false}

@@ -40,6 +40,14 @@ function joinNotOwned(name: IdentityName): Refusal {
   };
 }
 
+function notBroughtIn(name: IdentityName): Refusal {
+  return {
+    code: "not_brought_in",
+    message: `${name} already exists and you didn't bring it in, so an agent can't approve its join. Its owner can.`,
+    status: FORBIDDEN,
+  };
+}
+
 function identityDeactivated(name: IdentityName): Refusal {
   return {
     code: "identity_deactivated",
@@ -98,6 +106,7 @@ export {
   identityDeactivated,
   idleExpiryTooLong,
   joinNotOwned,
+  notBroughtIn,
   notYourIdentity,
   onlyAgentsJoin,
 };

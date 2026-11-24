@@ -1,10 +1,12 @@
 import { hoverThread, useMessageChoices } from "./message-choices.ts";
-import { MessageContextMenu } from "./message-context-menu.tsx";
+import { ActionContextMenu } from "./action-context-menu.tsx";
 import { MessageLayout } from "./message-layout.tsx";
 import type { ReactNode } from "react";
 import type { StandaloneMessageParts } from "./parts.ts";
 import { messageClass } from "./message-class.ts";
 import { useScrollWhenLinked } from "./use-scroll-when-linked.ts";
+
+const TEXT = { menu: "Message actions" } as const;
 
 interface StandaloneArticleParts {
   readonly message: StandaloneMessageParts;
@@ -21,7 +23,7 @@ export function StandaloneArticle(parts: StandaloneArticleParts): ReactNode {
   });
   const article = useScrollWhenLinked({ linked: message.mark === "linked", menu: message.menu });
   return (
-    <MessageContextMenu choices={choices}>
+    <ActionContextMenu choices={choices} label={TEXT.menu}>
       <article
         aria-current={message.mark === "linked"}
         aria-label={message.label}
@@ -42,12 +44,13 @@ export function StandaloneArticle(parts: StandaloneArticleParts): ReactNode {
           onAction={handleAction}
           presence={message.presence}
           reactions={message.menu.reactions}
+          replyOnHover={message.replyOnHover}
           thread={hoverThread(message)}
           time={message.time}
         >
           {message.children}
         </MessageLayout>
       </article>
-    </MessageContextMenu>
+    </ActionContextMenu>
   );
 }

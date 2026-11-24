@@ -1,12 +1,12 @@
 import { Array as Arr, Effect, Predicate, Schema } from "effect";
 import type { CallId, CommandName } from "../../../commands/index.ts";
+import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import type { JsonValue, MessageId } from "../../../messages/index.ts";
 import { isCallId, isCommandName } from "../../../commands/index.ts";
 import type { ChannelName } from "../../../channels/index.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isChannelName } from "../../../channels/index.ts";
 import { isMessageId } from "../../../messages/index.ts";
@@ -106,7 +106,12 @@ const encodeData = Schema.encodeEffect(JsonText);
 
 const DELIVERY_COLUMNS = "call_id, command, channel, thread_id, data, attempts, next_attempt_at, outcome";
 
-function sqliteDeliveries(db: SqliteDatabase): DeliveriesSection {
+const PENDING: DialectForms<string> = {
+  postgres: `SELECT ${DELIVERY_COLUMNS} FROM deliveries WHERE outcome = 'pending' ORDER BY added_order`,
+  sqlite: `SELECT ${DELIVERY_COLUMNS} FROM deliveries WHERE outcome = 'pending' ORDER BY rowid`,
+};
+
+function sqlDeliveries(db: SqlDatabase): DeliveriesSection {
   return {
     addDelivery: (delivery) =>
       Effect.flatMap(Effect.mapError(encodeData(delivery.data), unreadable), (data) =>
@@ -123,7 +128,7 @@ function sqliteDeliveries(db: SqliteDatabase): DeliveriesSection {
         ),
       ),
     listPendingDeliveries: Effect.suspend(() =>
-      db.all(`SELECT ${DELIVERY_COLUMNS} FROM deliveries WHERE outcome = 'pending' ORDER BY rowid`).pipe(
+      db.all(PENDING[db.dialect]).pipe(
         Effect.flatMap((rows) =>
           Effect.forEach(rows, (row) => Effect.mapBoth(decodeRow(row), { onFailure: unreadable, onSuccess: fromRow }), {
             concurrency: 1,
@@ -148,5 +153,5 @@ export {
   type MemoryDeliveriesSection,
   type StoredDelivery,
   memoryDeliveries,
-  sqliteDeliveries,
+  sqlDeliveries,
 };

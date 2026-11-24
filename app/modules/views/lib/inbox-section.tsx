@@ -1,4 +1,5 @@
 import { FeedHeading, FeedList } from "../../design-system/index.tsx";
+import type { InboxRowActions } from "./use-inbox-row-menu.ts";
 import { InboxRowView } from "./inbox-row-view.tsx";
 import type { InboxRows } from "./use-inbox-rows.ts";
 import type { InboxSelection } from "../../paths/index.ts";
@@ -8,6 +9,7 @@ import { isSelected } from "./use-inbox-rows.ts";
 const NONE = 0;
 
 interface InboxSectionProps {
+  readonly actions: InboxRowActions;
   readonly title: string;
   readonly rows: InboxRows;
   readonly selected: InboxSelection | null;
@@ -38,6 +40,7 @@ export function InboxSection(props: InboxSectionProps): ReactNode {
           {props.children}
           {rows.map((row) => (
             <InboxRowView
+              actions={props.actions}
               key={row.key}
               me={me}
               row={row}

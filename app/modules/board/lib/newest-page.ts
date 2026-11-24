@@ -1,4 +1,4 @@
-import type { ChannelName, CookoutClient, ReadReceipt, TopLevelMessage } from "../../sdk/index.ts";
+import type { ChannelName, CookoutClient, MessageId, ReadReceipt, TopLevelMessage } from "../../sdk/index.ts";
 
 interface Page {
   readonly hasMore: boolean;
@@ -35,13 +35,13 @@ async function reachingBack({ newestShown, page, paging }: Reaching): Promise<Pa
 }
 
 interface Since extends Paging {
-  readonly shown: readonly TopLevelMessage[];
+  readonly shown: readonly MessageId[];
 }
 
 async function newestSince(paging: Since): Promise<Page> {
   const { shown } = paging;
   const newest = await paging.client.listMessages(paging.name, { limit: paging.pageSize });
-  const newestShown = Math.max(NOTHING_SHOWN, ...shown.map((message) => message.id));
+  const newestShown = Math.max(NOTHING_SHOWN, ...shown);
   const page = await reachingBack({ newestShown, page: newest, paging });
   return page;
 }

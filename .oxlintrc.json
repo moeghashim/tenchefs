@@ -417,6 +417,10 @@
       {
         "allow": [
           {
+            "from": "lib",
+            "name": ["Uint8Array"]
+          },
+          {
             "from": "package",
             "name": ["Methods", "MethodsNonLive"],
             "package": "@effect/vitest"
@@ -430,6 +434,7 @@
               "Exit",
               "HttpClientRequest",
               "HttpClientResponse",
+              "HttpServerResponse",
               "Layer",
               "Option",
               "Stream",
@@ -512,6 +517,12 @@
       "excludeFiles": ["app/modules/routes/tests/browser/clock.ts"],
       "rules": {
         "test-rules/own-clock": "error"
+      }
+    },
+    {
+      "files": ["app/modules/design-system/lib/panel-edge.tsx"],
+      "rules": {
+        "jsx-a11y/prefer-tag-over-role": "off"
       }
     },
     {

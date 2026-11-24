@@ -19,9 +19,10 @@ import {
 import { followersOf, newestPerScope, reasonsIn } from "./inbox.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { InboxReason } from "../../../inbox/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { inboxReasons } from "../../../inbox/index.ts";
+import { isFalse } from "./adapters/sql-database.ts";
 import { threadIdOf } from "./messages.ts";
 import { unreadable } from "./errors.ts";
 
@@ -34,12 +35,12 @@ interface MessageReader {
 }
 
 interface Appended {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly message: Message;
 }
 
 interface InboxOn {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly reader: MessageReader;
 }
 
@@ -50,6 +51,8 @@ interface Reasoned {
 }
 
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
+
+const FOLLOW = "INSERT INTO follows (identity_name, thread_id) VALUES (?, ?) ON CONFLICT DO NOTHING";
 
 const READ = 1;
 const UNREAD = 0;
@@ -85,16 +88,18 @@ const REACTED = `SELECT DISTINCT r.message_id AS id, 'reaction' AS reason
     FROM reactions AS r JOIN messages AS m ON m.id = r.message_id
     WHERE m.author_name = ?1 AND r.identity_name <> ?1`;
 
-const SEEN_REACTIONS = `NOT EXISTS (SELECT 1 FROM reactions AS u
-    WHERE u.message_id = messages.id AND u.seen = 0 AND u.identity_name <> ?1)`;
+function seenReactionsSql(db: SqlDatabase): string {
+  return `NOT EXISTS (SELECT 1 FROM reactions AS u
+    WHERE u.message_id = messages.id AND ${isFalse[db.dialect]("u.seen")} AND u.identity_name <> ?1)`;
+}
 
-function historySql(columns: string): string {
+function historySql(db: SqlDatabase, columns: string): string {
   return `WITH reasons (id, reason) AS (${REASONS}),
     listed (id, reason) AS (SELECT reasons.id, reasons.reason FROM reasons JOIN messages USING (id)
       WHERE messages.author_name <> ?1 UNION ALL ${REACTED}),
     page (id) AS (SELECT DISTINCT id FROM listed WHERE id < ?2 ORDER BY id DESC LIMIT ?3)
     SELECT ${columns}, listed.reason AS reason,
-      CASE WHEN listed.reason = 'reaction' THEN ${SEEN_REACTIONS} ELSE messages.id <= ${MARKER} END AS read
+      CASE WHEN listed.reason = 'reaction' THEN ${seenReactionsSql(db)} ELSE messages.id <= ${MARKER} END AS read
     FROM messages JOIN page USING (id) JOIN listed USING (id)
     ORDER BY messages.id DESC, listed.reason`;
 }
@@ -105,14 +110,14 @@ function recordAppended({ db, message }: Appended): Fails<readonly ReadReceipt[]
     yield* Effect.forEach(
       message.mentions,
       (name) =>
-        db.run("INSERT OR IGNORE INTO message_mentions (identity_name, message_id) VALUES (?, ?)", name, message.id),
+        db.run(
+          "INSERT INTO message_mentions (identity_name, message_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+          name,
+          message.id,
+        ),
       ONE_AT_A_TIME,
     );
-    yield* Effect.forEach(
-      followersOf(message),
-      (name) => db.run("INSERT OR IGNORE INTO follows (identity_name, thread_id) VALUES (?, ?)", name, thread),
-      ONE_AT_A_TIME,
-    );
+    yield* Effect.forEach(followersOf(message), (name) => db.run(FOLLOW, name, thread), ONE_AT_A_TIME);
     const { receipts } = yield* ackIn({ at: message.createdAt, db, identity: message.author.name, message });
     return receipts;
   });
@@ -191,13 +196,13 @@ function historyOf(
   page: HistoryPageRequest,
 ): Fails<StoredHistoryPage> {
   return Effect.gen(function* readHistory() {
-    const rows = yield* db.all(historySql(reader.columns), identity, page.before ?? ALL_IDS, page.limit + ONE_MORE);
+    const rows = yield* db.all(historySql(db, reader.columns), identity, page.before ?? ALL_IDS, page.limit + ONE_MORE);
     const items = yield* itemsOf(reader, rows);
     return { hasMore: items.length > page.limit, items: Arr.take(items, page.limit) };
   });
 }
 
-function changeFollow(db: SqliteDatabase, reader: MessageReader, sql: string) {
+function changeFollow(db: SqlDatabase, reader: MessageReader, sql: string) {
   return (identity: IdentityName, id: MessageId): Fails<MessageId | undefined> =>
     db.transaction(
       Effect.flatMap(reader.findMessage(id), (message) => {
@@ -210,7 +215,7 @@ function changeFollow(db: SqliteDatabase, reader: MessageReader, sql: string) {
     );
 }
 
-function changeSubscription(db: SqliteDatabase, sql: string): InboxSection["subscribeChannel"] {
+function changeSubscription(db: SqlDatabase, sql: string): InboxSection["subscribeChannel"] {
   return (identity, channel) =>
     db.transaction(
       Effect.flatMap(db.get("SELECT 1 AS found FROM channels WHERE name = ?", channel), (row) => {
@@ -225,7 +230,7 @@ function changeSubscription(db: SqliteDatabase, sql: string): InboxSection["subs
 const SUBSCRIBED_CHANNELS = `SELECT ${CHANNEL_COLUMNS} FROM channels
   WHERE name IN (SELECT channel FROM subscriptions WHERE identity_name = ?) ORDER BY name`;
 
-function sqliteInbox({ db, reader }: InboxOn): InboxSection {
+function sqlInbox({ db, reader }: InboxOn): InboxSection {
   return {
     ackInbox: (identity, upTo, at) =>
       db.transaction(
@@ -243,7 +248,7 @@ function sqliteInbox({ db, reader }: InboxOn): InboxSection {
         }),
       ),
     findInboxItem: (identity, id) => inboxItemOf({ db, reader }, identity, id),
-    followThread: changeFollow(db, reader, "INSERT OR IGNORE INTO follows (identity_name, thread_id) VALUES (?, ?)"),
+    followThread: changeFollow(db, reader, FOLLOW),
     listInbox: (identity) => inboxOf({ db, reader }, identity, NOTHING_SEEN),
     listInboxAfter: (identity, after) => inboxOf({ db, reader }, identity, after),
     listInboxHistory: (identity, page) => historyOf({ db, reader }, identity, page),
@@ -264,11 +269,11 @@ function sqliteInbox({ db, reader }: InboxOn): InboxSection {
       ),
     subscribeChannel: changeSubscription(
       db,
-      "INSERT OR IGNORE INTO subscriptions (identity_name, channel) VALUES (?, ?)",
+      "INSERT INTO subscriptions (identity_name, channel) VALUES (?, ?) ON CONFLICT DO NOTHING",
     ),
     unfollowThread: changeFollow(db, reader, "DELETE FROM follows WHERE identity_name = ? AND thread_id = ?"),
     unsubscribeChannel: changeSubscription(db, "DELETE FROM subscriptions WHERE identity_name = ? AND channel = ?"),
   };
 }
 
-export { type MessageReader, recordAppended, sqliteInbox };
+export { type MessageReader, recordAppended, sqlInbox };

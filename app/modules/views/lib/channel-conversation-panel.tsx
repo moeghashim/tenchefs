@@ -2,9 +2,9 @@ import type { Board, ThreadMessagesState } from "../../board/index.ts";
 import type { ChannelName, ReadReceipt, Reply, TopLevelMessage } from "../../sdk/index.ts";
 import { ConversationPanel, ScrollArea } from "../../design-system/index.tsx";
 import type { MessageMenu, Reader, Selection } from "../../unread/index.ts";
+import type { PanelAction, PanelEdgeParts } from "../../design-system/index.tsx";
 import { ChannelConversationBody } from "./channel-conversation-body.tsx";
 import type { Composer } from "./use-channel-reply.ts";
-import type { PanelAction } from "../../design-system/index.tsx";
 import type { ReactNode } from "react";
 import { ReadNote } from "./read-note.tsx";
 import { ReplyFooter } from "./reply-footer.tsx";
@@ -23,6 +23,7 @@ interface ChannelConversationPanelProps {
   readonly composer: Composer;
   readonly selection: Selection;
   readonly channel: ChannelName;
+  readonly edge: PanelEdgeParts;
   readonly first: TopLevelMessage;
   readonly newest: TopLevelMessage;
   readonly posts: readonly TopLevelMessage[];
@@ -66,7 +67,9 @@ export function ChannelConversationPanel(props: ChannelConversationPanelProps): 
       backHref={hrefOf({ name: "inbox", selected: null })}
       backLabel={TEXT.back}
       detail={`#${channel}`}
+      edge={props.edge}
       label={TEXT.conversation}
+      message={reply.draft.replyTo}
       openHref={hrefOf({ channel, name: "channel" })}
       openLabel={`Open in #${channel}`}
     >

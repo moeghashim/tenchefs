@@ -52,7 +52,7 @@ it("the page's title follows the route", { timeout: 10_000 }, async () => {
     "#/people/web-title-poster",
     "#/settings",
     "#/login",
-    "#/nowhere",
+    "#/settings/nowhere",
   ]);
 
   expect([inbox, ...others]).toStrictEqual([

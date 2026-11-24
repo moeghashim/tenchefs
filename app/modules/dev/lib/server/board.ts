@@ -1,4 +1,4 @@
-import { Array as Arr, Effect } from "effect";
+import { Array as Arr, Effect, Function } from "effect";
 import type {
   CookoutClient,
   CreateIdentityRequest,
@@ -26,6 +26,7 @@ interface SeededIdentity {
 
 interface SeededMessages {
   readonly adaReply: MessageId;
+  readonly broughtInPost: MessageId;
   readonly deployed: MessageId;
   readonly graceReply: MessageId;
   readonly lunch: MessageId;
@@ -187,6 +188,35 @@ function callCommand(
   });
 }
 
+type Collected = Awaited<ReturnType<CookoutClient["collectAgentJoin"]>>;
+
+type Approved = Extract<Collected, { readonly status: "approved" }>;
+
+function isApproved(collected: Collected): collected is Approved {
+  return collected.status === "approved";
+}
+
+const notApproved: SeedFailure = { code: "not_approved", message: "release-bot's approval of build-worker was lost." };
+
+function postBroughtIn(
+  { url }: BoardConnection,
+  cast: Cast,
+): Effect.Effect<Pick<SeededMessages, "broughtInPost">, SeedFailure> {
+  return Effect.gen(function* broughtIn() {
+    const box = createCookoutClient({ env: {}, url });
+    const started = yield* call(() => box.startAgentJoin({ as: "build-worker", host: "build-box" }));
+    yield* call(() => cast.releaseBot.client.approveAgentJoin(started.userCode));
+    const collected = yield* Effect.filterOrFail(
+      call(() => box.collectAgentJoin(started.requestId)),
+      isApproved,
+      Function.constant(notApproved),
+    );
+    const worker = clientAt(url, collected.agentSession.agentSessionToken);
+    const posted = yield* call(() => worker.createMessage({ channel: "deploys", text: "Picked up the 1.4.1 build." }));
+    return { broughtInPost: posted.message.id };
+  });
+}
+
 function postLast(
   { token, url }: BoardConnection,
   cast: Cast,
@@ -218,9 +248,10 @@ function seedBoard(connection: BoardConnection): Effect.Effect<SeededBoard, Seed
     const conversation = yield* postConversation(cast);
     yield* react(cast, conversation);
     const command = yield* callCommand(connection, cast);
+    const broughtIn = yield* postBroughtIn(connection, cast);
     const last = yield* postLast(connection, cast);
     const identities = Arr.map([cast.ada, cast.grace, cast.releaseBot, cast.triageAgent], ({ created }) => created);
-    const messages = { ...conversation, ...command, ...last };
+    const messages = { ...conversation, ...command, ...broughtIn, ...last };
     return { channels: channelNames, identities, messages, thread: conversation.threadStart };
   });
 }

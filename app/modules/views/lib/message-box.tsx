@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { Draft } from "../../composer/index.ts";
 import type { PostState } from "../../board/index.ts";
 import type { ReactNode } from "react";
+import { ScheduleChoice } from "./schedule-choice.tsx";
 import { useSuggestions } from "./use-suggestions.ts";
 
 interface MessageBoxText {
@@ -18,6 +19,7 @@ interface MessageBoxProps {
   readonly draft: Draft;
   readonly post: PostState;
   readonly onPost: (text: string, posted: () => void) => void;
+  readonly onSchedule: (() => void) | null;
   readonly text: MessageBoxText;
   readonly focused: boolean;
 }
@@ -67,6 +69,7 @@ export function MessageBox(props: MessageBoxProps): ReactNode {
             options={shown.options}
           />
         )}
+        {props.onSchedule !== null && <ScheduleChoice onSchedule={props.onSchedule} />}
         <SendButton disabled={posting} label={sendLabelOf(posting)} />
       </Form>
       {post.status === "failed" && <Alert>{`Couldn't post the ${text.posts} (${post.code}): ${post.message}`}</Alert>}

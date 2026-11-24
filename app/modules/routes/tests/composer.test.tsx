@@ -16,7 +16,7 @@ function hashOf(parent: Message): string {
 }
 
 async function typeInReply(text: string): Promise<HTMLElement> {
-  const box = await screen.findByLabelText("Reply");
+  const box = await screen.findByRole("textbox", { name: "Reply" });
   fireEvent.change(box, { target: { value: text } });
   return box;
 }
@@ -44,6 +44,35 @@ it("typing @ and a prefix suggests the identities whose names start with it, hum
   await typeInReply("Ping @sugg");
 
   await expect(suggested()).resolves.toStrictEqual(["@suggest-ada", "@suggest-agent"]);
+
+  close();
+});
+
+async function workersWithDisplayNames(): Promise<void> {
+  const owner = await newIdentity({ kind: "human", name: "shown-owner" });
+  await newIdentity({ kind: "agent", name: "shown-worker-1", owner: "shown-owner" });
+  await newIdentity({ kind: "agent", name: "shown-worker-2", owner: "shown-owner" });
+  await owner.client.setDisplayName("shown-worker-1", "Quokka (cloud)");
+  await owner.client.setDisplayName("shown-worker-2", "Wombat (cloud)");
+}
+
+it("typing @ and the start of a display name, in any case, suggests that identity and inserts its name", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  await workersWithDisplayNames();
+  const parent = await threadIn("web-composer-display-names");
+  const close = openAt({ client: adminClient(), hash: hashOf(parent) });
+
+  const box = await typeInReply("Ping @qUOk");
+  const shown = await suggested();
+  fireEvent.click(inPane().getByRole("button", { name: /@shown-worker-1/u }));
+
+  expect([shown, box]).toStrictEqual([
+    ["@shown-worker-1Quokka (cloud)"],
+    expect.objectContaining({ value: "Ping @shown-worker-1 " }),
+  ]);
 
   close();
 });

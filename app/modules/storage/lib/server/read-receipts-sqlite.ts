@@ -3,7 +3,7 @@ import type { Message, MessageId, ReadReceipt } from "../../../messages/index.ts
 import type { IdentityName } from "../../../identities/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { ReadPosition } from "../../../inbox/index.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { isMessageId } from "../../../messages/index.ts";
@@ -40,15 +40,15 @@ const READ_RECEIPTS_MIGRATION = `CREATE TABLE read_receipts (
    ) STRICT, WITHOUT ROWID;
    ${BACKFILL_READ_RECEIPTS}`;
 
-const RECORD_IN_CHANNEL = `INSERT OR IGNORE INTO read_receipts (message_id, identity_name, seen_at)
+const RECORD_IN_CHANNEL = `INSERT INTO read_receipts (message_id, identity_name, seen_at)
   SELECT m.id, ?1, ?4 FROM messages AS m
   WHERE m.channel = ?2 AND m.reply_to IS NULL AND m.id <= ?3 AND ${receiptIdentitySql("?1")}
-  RETURNING message_id, identity_name, seen_at`;
+  ON CONFLICT DO NOTHING RETURNING message_id, identity_name, seen_at`;
 
-const RECORD_IN_THREAD = `INSERT OR IGNORE INTO read_receipts (message_id, identity_name, seen_at)
+const RECORD_IN_THREAD = `INSERT INTO read_receipts (message_id, identity_name, seen_at)
   SELECT m.id, ?1, ?4 FROM messages AS m
   WHERE m.reply_to = ?2 AND m.id <= ?3 AND ${receiptIdentitySql("?1")}
-  RETURNING message_id, identity_name, seen_at`;
+  ON CONFLICT DO NOTHING RETURNING message_id, identity_name, seen_at`;
 
 const ReceiptRow = Schema.Struct({
   identity_name: Schema.String.pipe(Schema.refine(isIdentityName)),
@@ -78,7 +78,7 @@ function receiptRows(rows: readonly unknown[]): Fails<readonly ReadReceipt[]> {
 
 interface Recording {
   readonly at: Message["createdAt"];
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly identity: IdentityName;
   readonly position: ReadPosition;
 }
@@ -92,11 +92,14 @@ function recordReceiptsIn({ at, db, identity, position }: Recording): Fails<read
 }
 
 interface Listing {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly ids: readonly MessageId[];
 }
 
 function receiptsOf({ db, ids }: Listing): Fails<readonly ReadReceipt[]> {
+  if (Arr.isReadonlyArrayEmpty(ids)) {
+    return Effect.succeed([]);
+  }
   const places = Arr.join(
     Arr.map(ids, () => "?"),
     ", ",

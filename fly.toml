@@ -17,8 +17,10 @@ primary_region = "lhr"
   source = "cookout_data"
   destination = "/data"
 
-# No auto-stop: a stopped machine would drop every open /v1/events stream, and
-# SQLite on one volume means exactly one machine, always running.
+# No auto-stop: a stopped machine would drop every open /v1/events stream. Exactly one machine,
+# always running, whatever the store: live events, Presence, one live connection per agent,
+# the per-identity limits and the nudge scheduler are all held in the process (ADRs 0033, 0056,
+# 0057, 0066), so a second machine would split them.
 [http_service]
   internal_port = 8080
   force_https = true

@@ -4,6 +4,7 @@ import { DeactivationOffers, OfflineAlerts } from "../../../inbox/server.ts";
 import type { OfflineReason, Presence } from "../../index.ts";
 import type { Storage, StoredPresence } from "../../../storage/server.ts";
 import { endIn, presenceIn } from "./book.ts";
+import { reachKey, reachablePresenceIn } from "./reach.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 
@@ -14,10 +15,11 @@ interface Turn {
   readonly was: Presence;
   readonly is: Presence;
   readonly end: End | undefined;
+  readonly wentOffline: boolean;
 }
 
-function unexpectedReason({ end, is, was }: Turn): Option.Option<OfflineReason> {
-  if (!was.online || is.online) {
+function unexpectedReason({ end, is, was, wentOffline }: Turn): Option.Option<OfflineReason> {
+  if (!was.online || is.online || !wentOffline) {
     return Option.none();
   }
   return Option.fromNullishOr(end).pipe(
@@ -65,7 +67,8 @@ function samePresence(left: Presence, right: Presence): boolean {
     left.online === right.online &&
     left.lastSeenAt === right.lastSeenAt &&
     left.offlineReason === right.offlineReason &&
-    connectionKey(left.connection) === connectionKey(right.connection)
+    connectionKey(left.connection) === connectionKey(right.connection) &&
+    reachKey(left) === reachKey(right)
   );
 }
 
@@ -84,13 +87,21 @@ function announced({
   identity,
 }: Change & { readonly announce: Announce }): Effect.Effect<void> {
   return Effect.gen(function* announceChange() {
-    const was = presenceIn({ identity, state: before });
-    const is = presenceIn({ identity, state: after });
-    if (was.online !== is.online || before.ends.get(identity) !== after.ends.get(identity)) {
-      const lastSeenAt = yield* lastSeenOf(is);
-      yield* announce.record({ identity, lastSeenAt, online: is.online, ...endIn({ identity, state: after }) });
+    const wasLive = presenceIn({ identity, state: before });
+    const isLive = presenceIn({ identity, state: after });
+    if (wasLive.online !== isLive.online || before.ends.get(identity) !== after.ends.get(identity)) {
+      const lastSeenAt = yield* lastSeenOf(isLive);
+      yield* announce.record({ identity, lastSeenAt, online: isLive.online, ...endIn({ identity, state: after }) });
     }
-    yield* alerting({ alerts: announce.alerts, end: after.ends.get(identity), is, was });
+    const was = reachablePresenceIn({ identity, state: before });
+    const is = reachablePresenceIn({ identity, state: after });
+    yield* alerting({
+      alerts: announce.alerts,
+      end: after.ends.get(identity),
+      is,
+      was,
+      wentOffline: wasLive.online && !isLive.online,
+    });
     if (!samePresence(was, is)) {
       yield* announce.publish(is);
     }

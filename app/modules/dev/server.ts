@@ -1,5 +1,5 @@
 /**
- * The dev program's commands, behind `pnpm dev` and `pnpm seed` (ADR 0020):
+ * The dev program's commands, behind `pnpm dev` and `pnpm seed` (ADR 0079):
  * `start` runs the cookout on a temporary SQLite file with a webhook fake,
  * on `127.0.0.1` and a free port unless `--port` says otherwise, and prints
  * one JSON line with the URL, the admin token it made for the run, the database path,

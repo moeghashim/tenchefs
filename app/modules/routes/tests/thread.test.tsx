@@ -1,5 +1,5 @@
 import type { CookoutClient, InboxResponse, Message } from "../../sdk/index.ts";
-import { adminClient, clientWith, newIdentity, revocableView } from "./identities.ts";
+import { adminClient, clientWith, newIdentity, refusalNoticed, revocableView } from "./identities.ts";
 import { expect, it, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { messagesIn, parentShown } from "./messages.ts";
@@ -48,7 +48,7 @@ async function followedThreadIn(channel: string, client: CookoutClient): Promise
 }
 
 function sendReply(text: string): void {
-  fireEvent.change(screen.getByLabelText("Reply"), { target: { value: text } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Reply" }), { target: { value: text } });
   fireEvent.click(inThread().getByRole("button", { name: "Send" }));
 }
 
@@ -186,7 +186,7 @@ it("a refused reply says so and keeps the thread shown, and its text in the box"
   expect([alert.textContent, await shownReplies(), screen.queryByDisplayValue("Too late")]).toStrictEqual([
     expect.stringMatching(/^Couldn't post the reply \(token_revoked\)/u),
     ["adminFirst reply", "Second reply"],
-    screen.getByLabelText("Reply"),
+    screen.getByRole("textbox", { name: "Reply" }),
   ]);
 
   close();
@@ -247,6 +247,13 @@ it("reopening a thread shows the replies posted while it was closed", { timeout:
   close();
 });
 
+async function refusedOnReopen(parent: Message, refused: Promise<unknown>): Promise<HTMLElement> {
+  globalThis.location.hash = hashOf(parent);
+  await refused;
+  const alert = await inThread().findByRole("alert");
+  return alert;
+}
+
 it("reopening a thread that can no longer be read says so and keeps its replies shown", {
   timeout: 5000,
 }, async () => {
@@ -258,11 +265,11 @@ it("reopening a thread that can no longer be read says so and keeps its replies 
     revoked: "web-thread-reopen-rotated",
     viewer: "web-thread-reopen-viewer",
   });
-  const close = await openedThenLeft(reader.client, parent);
+  const { client, refused } = refusalNoticed(reader.client);
+  const close = await openedThenLeft(client, parent);
   await reader.rotateToken();
 
-  globalThis.location.hash = hashOf(parent);
-  const alert = await inThread().findByRole("alert");
+  const alert = await refusedOnReopen(parent, refused);
 
   expect([alert.textContent, await shownReplies()]).toStrictEqual([
     expect.stringMatching(/^Couldn't mark the thread read \(token_revoked\)/u),

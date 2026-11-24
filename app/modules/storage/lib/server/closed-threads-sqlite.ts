@@ -3,16 +3,16 @@ import type { Message, MessageId, Reply, TopLevelMessage } from "../../../messag
 import type { MessagesSection, NewMessage, ThreadStateChange } from "./messages.ts";
 import { closingBy, threadIdOf } from "./messages.ts";
 import type { MessageReader } from "./inbox-sqlite.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
-import { sqliteOpenThreads } from "./open-threads-sqlite.ts";
+import { sqlOpenThreads } from "./open-threads-sqlite.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
 type ClosedThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads">;
 
 interface ClosedThreadsOptions {
-  readonly db: SqliteDatabase;
+  readonly db: SqlDatabase;
   readonly reader: MessageReader;
 }
 
@@ -51,7 +51,7 @@ function changeThread(
   }).pipe(db.transaction);
 }
 
-function changeFor(db: SqliteDatabase, reply: Reply, close: NewMessage["close"]): Fails<unknown> {
+function changeFor(db: SqlDatabase, reply: Reply, close: NewMessage["close"]): Fails<unknown> {
   if (Predicate.isUndefined(close)) {
     return db.get(REOPEN, reply.replyTo);
   }
@@ -73,14 +73,14 @@ function threadChangedBy({ close, db, message, reader }: Changing): Fails<TopLev
   );
 }
 
-function sqliteClosedThreads(options: ClosedThreadsOptions): ClosedThreadsSection {
+function sqlClosedThreads(options: ClosedThreadsOptions): ClosedThreadsSection {
   const { db } = options;
   return {
-    ...sqliteOpenThreads(options),
+    ...sqlOpenThreads(options),
     closeThread: (id, { closedAt, closedBy }) =>
       changeThread(options, id, (parent) => db.get(CLOSE, closedAt, closedBy, parent)),
     reopenThread: (id, reopenedAt) => changeThread(options, id, (parent) => db.get(REOPEN_AT, reopenedAt, parent)),
   };
 }
 
-export { sqliteClosedThreads, threadChangedBy };
+export { sqlClosedThreads, threadChangedBy };

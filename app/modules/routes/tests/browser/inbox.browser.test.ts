@@ -127,7 +127,7 @@ async function replyFromElsewhere(browser: Browser, poster: Person, thread: stri
   const context = await browser.newContext();
   const page = await context.newPage();
   await logIn({ page, token: poster.token, url: thread });
-  await inThread(page).getByLabel("Reply", { exact: true }).fill("Noon works");
+  await inThread(page).getByRole("textbox", { exact: true, name: "Reply" }).fill("Noon works");
   await inThread(page).getByRole("button", { name: "Send" }).click();
 
   await expect(inThread(page).getByRole("list", { name: "Replies" })).toContainText("Noon works");

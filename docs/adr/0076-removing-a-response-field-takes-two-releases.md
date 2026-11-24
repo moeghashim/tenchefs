@@ -2,7 +2,7 @@
 
 2026-11-24 (mattpocock/cookout#279). Decision (2026-11-24): removing a response field takes two releases.
 
-[ADR 0075](0075-the-deactivate-answer-is-only-the-identity.md) dropped `agents` from the answer to `POST /v1/identities/:name/deactivate` after one release that marked it deprecated. But deprecating a field only in the types is not enough: `@ai-hero/cookout` 0.2.0's response validator still requires `agents`, so a 0.2.0 CLI or SDK would deactivate the identity and then report a bad answer.
+ADR 0075 dropped `agents` from the answer to `POST /v1/identities/:name/deactivate` after one release that marked it deprecated. But deprecating a field only in the types is not enough: `@ai-hero/cookout` 0.2.0's response validator still requires `agents`, so a 0.2.0 CLI or SDK would deactivate the identity and then report a bad answer.
 
 ## Decision
 

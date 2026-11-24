@@ -2,6 +2,7 @@ import {
   Array as Arr,
   Effect,
   FileSystem,
+  Layer,
   Logger,
   MutableRef,
   Option,
@@ -13,11 +14,12 @@ import {
   Stream,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import type { Context, Scope } from "effect";
 import type { CookoutClient, JsonValue, Message, MessageId } from "@ai-hero/cookout/sdk";
 import { expect, it } from "@effect/vitest";
-import { handlerServer, handlerUrl } from "../../server.ts";
+import { handlerListener, handlerUrl, serveHandler } from "../../server.ts";
+import type { HttpServer } from "effect/http";
 import { NodeServices } from "@effect/platform-node";
-import type { Scope } from "effect";
 import { createCookoutClient } from "@ai-hero/cookout/sdk";
 
 interface RunningCookout {
@@ -31,8 +33,8 @@ interface Handled<Value> {
 }
 
 interface Handler {
+  readonly listener: Context.Context<HttpServer.HttpServer>;
   readonly secret: string;
-  readonly url: string;
 }
 
 type Needs = ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path | Scope.Scope;
@@ -46,6 +48,7 @@ const ACCEPTED = 202;
 const UNAVAILABLE = 503;
 const DELIVERY_FAILED = "The delivery of /echo to its handler failed after 5 retries.";
 const WRONG_SECRET = "not-the-command-secret";
+const ANY_FREE_PORT = { host: "127.0.0.1", port: 0 };
 const ADMIN_TOKEN = "handler-example-admin-token-0123456789abcdef";
 const SERVE_ENV = {
   COOKOUT_ADMIN_TOKEN: ADMIN_TOKEN,
@@ -91,37 +94,32 @@ function answer<Value>(send: () => Promise<Value>): Effect.Effect<Value> {
   return Effect.promise(send);
 }
 
-function portOf(url: string): number {
-  return Number(new URL(url).port);
-}
-
 function runHandler<Value>(
   cookout: RunningCookout,
-  handler: { readonly port: number; readonly secret: string },
-  use: (url: string) => Effect.Effect<Value>,
+  handler: Handler,
+  use: Effect.Effect<Value>,
 ): Effect.Effect<Handled<Value>> {
-  return Effect.gen(function* serveHandler() {
+  return Effect.gen(function* serveOnListener() {
     const statuses = yield* Ref.make<readonly number[]>([]);
-    const server = handlerServer({
+    const serving = serveHandler({
       cookoutUrl: cookout.url,
-      host: "127.0.0.1",
       onCall: (_call, status) => Ref.update(statuses, (before) => [...before, status]),
-      port: handler.port,
       secret: Redacted.make(handler.secret),
-    });
-    const value = yield* Effect.flatMap(handlerUrl, use).pipe(Effect.provide(server), Effect.scoped, Effect.orDie);
+    }).pipe(Layer.provide(Layer.succeedContext(handler.listener)));
+    const value = yield* Effect.provide(use, serving);
     return { statuses: yield* Ref.get(statuses), value };
   });
 }
 
-function addEcho(cookout: RunningCookout): Effect.Effect<Handler> {
+function addEcho(cookout: RunningCookout): Effect.Effect<Handler, never, Scope.Scope> {
   return Effect.gen(function* addCommand() {
-    const { value: url } = yield* runHandler(cookout, { port: 0, secret: WRONG_SECRET }, Effect.succeed);
+    const listener = yield* Effect.orDie(Layer.build(handlerListener(ANY_FREE_PORT)));
+    const url = yield* Effect.provideContext(handlerUrl, listener);
     const { secret } = yield* answer(() =>
       cookout.admin.addCommand({ name: "echo", schema: SCHEMA, url: `${url}/webhook` }),
     );
     yield* answer(() => cookout.admin.createChannel({ name: "grill" }));
-    return { secret, url };
+    return { listener, secret };
   });
 }
 
@@ -146,7 +144,9 @@ it.live("a signed call gets 2xx and the handler's result reply appears in the ca
   Effect.gen(function* signedCall() {
     const cookout = yield* startCookout;
     const handler = yield* addEcho(cookout);
-    const { statuses, value } = yield* runHandler(cookout, { port: portOf(handler.url), secret: handler.secret }, () =>
+    const { statuses, value } = yield* runHandler(
+      cookout,
+      handler,
       Effect.gen(function* call() {
         const called = yield* callEcho(cookout, { text: "hello" });
         const arrived = yield* repliesOnceThereIs(cookout, called);
@@ -174,8 +174,8 @@ it.live("a call signed with another secret gets 401 every time and the handler p
     const handler = yield* addEcho(cookout);
     const { statuses, value: replies } = yield* runHandler(
       cookout,
-      { port: portOf(handler.url), secret: WRONG_SECRET },
-      () => Effect.flatMap(callEcho(cookout, { text: "hello" }), (threadId) => repliesOnceThereIs(cookout, threadId)),
+      { ...handler, secret: WRONG_SECRET },
+      Effect.flatMap(callEcho(cookout, { text: "hello" }), (threadId) => repliesOnceThereIs(cookout, threadId)),
     );
 
     expect(replies).toMatchObject([{ author: { name: "echo" }, text: DELIVERY_FAILED }]);
@@ -189,11 +189,11 @@ it.live("in fail-first mode the first delivery of a call fails and the retry pos
     const handler = yield* addEcho(cookout);
     const { statuses, value: replies } = yield* runHandler(
       cookout,
-      { port: portOf(handler.url), secret: handler.secret },
-      () =>
-        Effect.flatMap(callEcho(cookout, { failFirst: true, text: "hello" }), (threadId) =>
-          repliesOnceThereIs(cookout, threadId),
-        ),
+      handler,
+
+      Effect.flatMap(callEcho(cookout, { failFirst: true, text: "hello" }), (threadId) =>
+        repliesOnceThereIs(cookout, threadId),
+      ),
     );
 
     expect(replies).toMatchObject([
@@ -212,7 +212,9 @@ it.live("a result reply the cookout refuses is logged with the refusal's code", 
       MutableRef.update(warnings, (before) => [...before, line]),
     );
     const elsewhere = { ...cookout, url: `${cookout.url}/elsewhere` };
-    yield* runHandler(elsewhere, { port: portOf(handler.url), secret: handler.secret }, () =>
+    yield* runHandler(
+      elsewhere,
+      handler,
       Effect.flatMap(callEcho(cookout, { text: "hello" }), () =>
         Effect.sync(() => MutableRef.get(warnings)).pipe(
           Effect.repeat({

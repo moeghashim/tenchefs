@@ -1,10 +1,10 @@
 import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import { Effect, Predicate, Schema } from "effect";
 import { IdentityRow, toIdentity } from "./identity-row.ts";
-import { memoryDescriptions, sqliteDescriptions } from "./descriptions.ts";
+import { memoryDescriptions, sqlDescriptions } from "./descriptions.ts";
 import type { DescriptionsSection } from "./descriptions.ts";
 import type { Fails } from "./errors.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { unreadable } from "./errors.ts";
 
 type SetDisplayNameResult = { readonly status: "set"; readonly identity: Identity } | { readonly status: "not_found" };
@@ -48,9 +48,9 @@ function decodeRow(row: unknown): Fails<typeof IdentityRow.Type> {
   return Schema.decodeUnknownEffect(IdentityRow)(row).pipe(Effect.mapError(unreadable));
 }
 
-function sqliteDisplayNames(db: SqliteDatabase): DisplayNamesSection {
+function sqlDisplayNames(db: SqlDatabase): DisplayNamesSection {
   return {
-    ...sqliteDescriptions(db),
+    ...sqlDescriptions(db),
     setDisplayName: (name, displayName) =>
       db.transaction(
         Effect.gen(function* setDisplayNameRow() {
@@ -66,4 +66,4 @@ function sqliteDisplayNames(db: SqliteDatabase): DisplayNamesSection {
   };
 }
 
-export { type DisplayNamesSection, memoryDisplayNames, sqliteDisplayNames };
+export { type DisplayNamesSection, memoryDisplayNames, sqlDisplayNames };

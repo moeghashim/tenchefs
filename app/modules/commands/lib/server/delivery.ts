@@ -4,7 +4,6 @@ import type { CommandName, CommandSecret } from "../../index.ts";
 import { Context, DateTime, Duration, Effect, FiberSet, Layer, Ref, Schedule, Schema } from "effect";
 import type { DeliveryOutcome, NewCommandCall, StorageUnavailable, StoredDelivery } from "../../../storage/server.ts";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import type { Reactions, ReadReceipts } from "../../../messages/server.ts";
 import { webhookRetryDelaySeconds, webhookRetryFactor, webhookTimeoutSeconds } from "../../../config/server.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
@@ -19,7 +18,7 @@ type Placed = Pick<Call, "channel" | "threadId">;
 
 type CallParts = Omit<NewCommandCall, "message">;
 
-type DeliveriesNeeds = Secrets | Storage | ReadReceipts | Reactions;
+type DeliveriesNeeds = Secrets | Storage | Layer.Services<typeof messagesLayer>;
 
 type PostCall<Failure> = (parts: CallParts) => Effect.Effect<Placed, Failure>;
 

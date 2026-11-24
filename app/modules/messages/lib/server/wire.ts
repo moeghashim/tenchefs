@@ -7,10 +7,17 @@ import type {
   ReactionsResponse,
   ReadReceipt,
   Reply,
+  ThreadMovedWarning,
   ThreadResponse,
   TopLevelMessage,
   TopLevelMessageResponse,
 } from "../../index.ts";
+import {
+  attachmentIdPattern,
+  imageContentTypes,
+  isAttachmentId,
+  opaqueContentType,
+} from "../../../attachments/index.ts";
 import { channelNamePattern, isChannelName } from "../../../channels/index.ts";
 import {
   harnessPattern,
@@ -21,8 +28,10 @@ import {
   plainNamePattern,
 } from "../../../identities/index.ts";
 import { isMessageId, messageTextLength, pageSize, reactionNames, shownRepliers } from "../../index.ts";
+import type { Attachment } from "../../../attachments/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import { Schema } from "effect";
+import { isScheduledMessageId } from "../../../scheduled-messages/index.ts";
 import { matchesWire } from "../../../http/index.ts";
 
 const NO_REPLIES = 0;
@@ -44,8 +53,31 @@ const OwnerSchema = Schema.String.check(ownerRule).pipe(Schema.refine(isOwner, {
 const positive = Schema.isGreaterThanOrEqualTo(LOWEST_ID).abort();
 const MessageIdSchema = Schema.Int.check(positive).pipe(Schema.refine(isMessageId, { identifier: "MessageId" }));
 
+const ScheduledMessageIdSchema = Schema.Int.check(positive).pipe(
+  Schema.refine(isScheduledMessageId, { identifier: "ScheduledMessageId" }),
+);
+
+const ScheduledMessageMarkerSchema = Schema.Struct({ deleted: Schema.Boolean, id: ScheduledMessageIdSchema });
+
 const textRule = Schema.isBetweenLength(messageTextLength.minimum, messageTextLength.maximum);
 const TextSchema = Schema.String.check(textRule);
+const ShownTextSchema = Schema.String.check(Schema.isMaxLength(messageTextLength.maximum));
+
+const AttachmentIdSchema = Schema.String.check(Schema.isPattern(attachmentIdPattern)).pipe(
+  Schema.refine(isAttachmentId, { identifier: "AttachmentId" }),
+);
+const AttachmentContentTypeSchema = Schema.Literals([...imageContentTypes, opaqueContentType]);
+const AttachmentSizeSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(LOWEST_ID));
+
+const AttachmentSchema = matchesWire<Attachment>()(
+  Schema.Struct({
+    contentType: AttachmentContentTypeSchema,
+    id: AttachmentIdSchema,
+    image: Schema.Boolean,
+    name: Schema.String,
+    size: AttachmentSizeSchema,
+  }),
+);
 
 const AuthorSchema = matchesWire<Author>()(
   Schema.Struct({ name: IdentityNameSchema, owner: Schema.optionalKey(OwnerSchema) }),
@@ -67,6 +99,7 @@ const ReactionCountSchema = matchesWire<ReactionCount>()(
 );
 
 const messageFields = {
+  attachments: Schema.optionalKey(Schema.Array(AttachmentSchema)),
   author: AuthorSchema,
   channel: ChannelNameSchema,
   createdAt: IsoTimeSchema,
@@ -75,7 +108,8 @@ const messageFields = {
   id: MessageIdSchema,
   mentions: Schema.Array(IdentityNameSchema),
   reactions: Schema.optionalKey(Schema.Array(ReactionCountSchema)),
-  text: TextSchema,
+  scheduledMessage: Schema.optionalKey(ScheduledMessageMarkerSchema),
+  text: ShownTextSchema,
 };
 
 const ReplyCountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(NO_REPLIES));
@@ -101,6 +135,12 @@ const ReplySchema = matchesWire<Reply>()(
 
 const MessageSchema = Schema.Union([TopLevelMessageSchema, ReplySchema]);
 
+const MovedRepliesSchema = Schema.Struct({ replies: Schema.Array(ReplySchema) });
+
+const ThreadMovedWarningSchema = matchesWire<ThreadMovedWarning>()(
+  Schema.Struct({ code: Schema.Literal("thread_moved"), details: MovedRepliesSchema, message: Schema.String }),
+);
+
 const pageLimit = Schema.isBetween({ maximum: pageSize.maximum, minimum: pageSize.minimum });
 const LimitSchema = Schema.Int.check(pageLimit);
 const decodesToLimit = Schema.decodeTo(LimitSchema);
@@ -113,7 +153,13 @@ export const PostMessageRequestSchema = Schema.Struct({
   close: Schema.optionalKey(Schema.Literal(true)),
   data: Schema.optionalKey(Schema.Json),
   replyTo: Schema.optionalKey(MessageIdSchema),
+  seen: Schema.optionalKey(MessageIdSchema),
   text: TextSchema,
+});
+
+export const PostWithAttachmentsRequestSchema = Schema.Struct({
+  ...PostMessageRequestSchema.fields,
+  text: Schema.optionalKey(ShownTextSchema),
 });
 
 export const ListMessagesQuerySchema = Schema.Struct({
@@ -122,7 +168,11 @@ export const ListMessagesQuerySchema = Schema.Struct({
 });
 
 export const MessageResponseSchema = matchesWire<MessageResponse>()(
-  Schema.Struct({ message: MessageSchema, unknownMentions: Schema.Array(Schema.String) }),
+  Schema.Struct({
+    message: MessageSchema,
+    unknownMentions: Schema.Array(Schema.String),
+    warning: Schema.optionalKey(ThreadMovedWarningSchema),
+  }),
 );
 
 export const ReadReceiptSchema = matchesWire<ReadReceipt>()(
@@ -171,4 +221,12 @@ export const TopLevelMessageResponseSchema = matchesWire<TopLevelMessageResponse
   Schema.Struct({ message: TopLevelMessageSchema }),
 );
 
-export { MessageIdSchema, MessageSchema, ReactionCountSchema, TopLevelMessageSchema };
+export {
+  AuthorSchema,
+  MessageIdSchema,
+  MessageSchema,
+  ReactionCountSchema,
+  ScheduledMessageIdSchema,
+  TextSchema,
+  TopLevelMessageSchema,
+};

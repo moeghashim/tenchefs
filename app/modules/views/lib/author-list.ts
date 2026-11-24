@@ -1,12 +1,11 @@
-import type { Identities } from "../../composer/index.ts";
-import { createCommands } from "../../board/index.ts";
-import { createComposer } from "../../composer/index.ts";
+import type { BoardStore } from "../../board/index.ts";
+import { createBoardStore } from "../../board/index.ts";
 import { createContext } from "react";
 import { createCookoutClient } from "../../sdk/index.ts";
 
-const client = createCookoutClient({ env: {}, url: globalThis.location.origin });
-const pageIdentities = createComposer({ client, commands: createCommands({ client }) });
+const url = globalThis.location.origin;
+const client = createCookoutClient({ env: {}, url });
 
-const AuthorList = createContext<Identities>(pageIdentities.identities);
+const AuthorList = createContext<BoardStore>(createBoardStore({ client, live: null, url }));
 
 export { AuthorList };

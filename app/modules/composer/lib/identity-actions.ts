@@ -1,8 +1,6 @@
-import type { CookoutClient, IdentityName, ListedAgentSession, Refusal, Token } from "../../sdk/index.ts";
+import type { IdentityName, ListedAgentSession, Refusal, Token } from "../../sdk/index.ts";
 import type { IdentityList } from "./identity-list.ts";
-import type { Live } from "../../live/index.ts";
-import type { SessionFollower } from "./session-follower.ts";
-import { createSessionFollower } from "./session-follower.ts";
+import { agentSessions } from "../../board/index.ts";
 import { listenersOf } from "./listeners.ts";
 import { refusalOf } from "../../sdk/index.ts";
 
@@ -24,18 +22,6 @@ interface IdentityActionsSnapshot {
   readonly transferTo: string;
 }
 
-type ActionsClient = Pick<
-  CookoutClient,
-  | "countMessagesBy"
-  | "deactivateIdentity"
-  | "deleteIdentity"
-  | "listAgentSessions"
-  | "reactivateIdentity"
-  | "revokeAgentSession"
-  | "rotateToken"
-  | "transferAgent"
->;
-
 interface IdentityActions {
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () => IdentityActionsSnapshot;
@@ -51,65 +37,51 @@ interface IdentityActions {
 }
 
 interface IdentityActionsOptions {
-  readonly client: ActionsClient;
   readonly list: IdentityList;
-  readonly live: Live | null;
   readonly name: IdentityName;
 }
 
-type Sent = Partial<Omit<IdentityActionsSnapshot, "action">>;
+type Held = Omit<IdentityActionsSnapshot, "sessions">;
+
+type Sent = Partial<Omit<Held, "action">>;
 
 type Sends = Readonly<Record<IdentityAction, () => Promise<Sent>>>;
 
 const IDLE = { status: "idle" } as const;
 
-const START: IdentityActionsSnapshot = {
+const START: Held = {
   action: IDLE,
   confirming: null,
   messages: "loading",
-  sessions: null,
   token: null,
   transferTo: "",
 };
 
-function sendsFor(options: IdentityActionsOptions, transferTo: () => string): Sends {
-  const { client, list, name } = options;
+function sendsFor({ list, name }: IdentityActionsOptions, transferTo: () => string): Sends {
+  const { calls } = list;
   return {
     deactivate: async () => {
-      const { identity } = await client.deactivateIdentity(name);
-      list.put(identity);
-      return { sessions: [], token: null };
+      await calls.deactivate(name);
+      return { token: null };
     },
     delete: async () => {
-      await client.deleteIdentity(name);
-      list.remove(name);
-      return { sessions: [], token: null };
+      await calls.delete(name);
+      return { token: null };
     },
-    reactivate: async () => {
-      const { identity, token } = await client.reactivateIdentity(name);
-      list.put(identity);
-      return { token };
-    },
+    reactivate: async () => ({ token: await calls.reactivate(name) }),
     revoke: async () => {
-      await client.revokeAgentSession(name);
-      return { sessions: [] };
+      await calls.revokeSession(name);
+      return {};
     },
-    rotate: async () => {
-      const { identity, token } = await client.rotateToken(name);
-      list.put(identity);
-      return { token };
-    },
+    rotate: async () => ({ token: await calls.rotateToken(name) }),
     transfer: async () => {
-      const { identity } = await client.transferAgent(name, transferTo().trim());
-      list.put(identity);
+      await calls.transfer(name, transferTo().trim());
       return { transferTo: "" };
     },
   };
 }
 
-type Sessions = IdentityActionsSnapshot["sessions"];
-
-type Publish = (next: Partial<IdentityActionsSnapshot>) => void;
+type Publish = (next: Partial<Held>) => void;
 
 type Edits = Pick<IdentityActions, "editTransfer" | "forgetToken" | "showToken">;
 
@@ -143,7 +115,7 @@ function asksOf(publish: Publish): IdentityActions["ask"] {
   };
 }
 
-function cancelOf(publish: Publish, snapshot: () => IdentityActionsSnapshot): () => void {
+function cancelOf(publish: Publish, snapshot: () => Held): () => void {
   return () => {
     if (snapshot().action.status !== "sending") {
       publish({ confirming: null });
@@ -160,32 +132,10 @@ async function copyAfter(previous: Promise<void>, token: Token | null): Promise<
 
 async function messagesOf(options: IdentityActionsOptions, publish: Publish): Promise<void> {
   try {
-    const { messages } = await options.client.countMessagesBy(options.name);
-    publish({ messages });
+    publish({ messages: await options.list.calls.countMessages(options.name) });
   } catch {
     publish({ messages: "unknown" });
   }
-}
-
-async function sessionsOf(options: IdentityActionsOptions, publish: Publish): Promise<Sessions> {
-  try {
-    const { agentSessions } = await options.client.listAgentSessions(options.name);
-    publish({ sessions: agentSessions });
-    return agentSessions;
-  } catch {
-    publish({ sessions: null });
-    return null;
-  }
-}
-
-function followerOf(options: IdentityActionsOptions, publish: Publish): SessionFollower {
-  return createSessionFollower({
-    ...options,
-    load: async () => {
-      const listed = await sessionsOf(options, publish);
-      return listed;
-    },
-  });
 }
 
 type Subscribe = (listener: () => void) => () => void;
@@ -204,19 +154,46 @@ function loadingOnFirst(load: typeof messagesOf, { add, options, publish }: Load
   };
 }
 
+interface Shown {
+  readonly held: Held;
+  readonly sessions: IdentityActionsSnapshot["sessions"];
+  readonly snapshot: IdentityActionsSnapshot;
+}
+
+function shownOf({ list, name }: IdentityActionsOptions, held: () => Held): () => IdentityActionsSnapshot {
+  const sessionsIn = agentSessions(name);
+  let shown: Shown | null = null;
+  return () => {
+    const sessions = sessionsIn(list.store.snapshot());
+    if (shown === null || shown.held !== held() || shown.sessions !== sessions) {
+      shown = { held: held(), sessions, snapshot: { ...held(), sessions } };
+    }
+    return shown.snapshot;
+  };
+}
+
+function joined(first: Subscribe, second: Subscribe): Subscribe {
+  return (listener) => {
+    const stopFirst = first(listener);
+    const stopSecond = second(listener);
+    return () => {
+      stopFirst();
+      stopSecond();
+    };
+  };
+}
+
 function createIdentityActions(options: IdentityActionsOptions): IdentityActions {
-  const listeners = listenersOf(options.list.load);
+  const listeners = listenersOf(options.list.show);
   let current = START;
   let queue = Promise.resolve();
   let copying = Promise.resolve();
   const sends = sendsFor(options, () => current.transferTo);
 
-  function publish(next: Partial<IdentityActionsSnapshot>): void {
+  function publish(next: Partial<Held>): void {
     current = { ...current, ...next };
     listeners.notify();
   }
-
-  const sessions = followerOf(options, publish);
 
   async function runAfter(previous: Promise<void>, action: IdentityAction): Promise<void> {
     await previous;
@@ -227,6 +204,9 @@ function createIdentityActions(options: IdentityActionsOptions): IdentityActions
       publish({ action: { ...refusalOf(error), action, status: "failed" } });
     }
   }
+
+  const { store } = options.list;
+  const add = joined(store.subscribe, listeners.add);
 
   return {
     ...editsOf(publish),
@@ -241,14 +221,11 @@ function createIdentityActions(options: IdentityActionsOptions): IdentityActions
     copyToken: () => {
       copying = copyAfter(copying, current.token);
     },
-    snapshot: () => current,
-    subscribe: listeners.add,
-    subscribeToMessages: loadingOnFirst(messagesOf, { add: listeners.add, options, publish }),
-    subscribeToSessions: (listener) => {
-      sessions.start();
-      return listeners.add(listener);
-    },
+    snapshot: shownOf(options, () => current),
+    subscribe: add,
+    subscribeToMessages: loadingOnFirst(messagesOf, { add, options, publish }),
+    subscribeToSessions: joined(store.subscribeShowingSessions(options.name), listeners.add),
   };
 }
 
-export { type ActionsClient, type IdentityAction, type IdentityActions, type MessageCount, createIdentityActions };
+export { type IdentityAction, type IdentityActions, type MessageCount, createIdentityActions };

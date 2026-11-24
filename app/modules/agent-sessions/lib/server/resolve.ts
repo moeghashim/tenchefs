@@ -1,4 +1,4 @@
-import type { AgentIdentity, DisplayName, HumanIdentity, Identity, IdentityName } from "../../../identities/index.ts";
+import type { AgentIdentity, DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import { DateTime, Effect, Option, Predicate } from "effect";
 import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
 import {
@@ -6,6 +6,7 @@ import {
   displayNameRequired,
   identityDeactivated,
   joinNotOwned,
+  notBroughtIn,
   notYourIdentity,
   onlyAgentsJoin,
 } from "./refusals.ts";
@@ -34,7 +35,8 @@ interface Naming {
 
 interface Asked {
   readonly on: On;
-  readonly caller: HumanIdentity;
+  readonly owner: IdentityName;
+  readonly broughtInBy?: IdentityName;
   readonly name: IdentityName;
   readonly naming: Naming;
   readonly preview: boolean;
@@ -56,8 +58,8 @@ function createRefusals(name: IdentityName): Readonly<Record<Exclude<CreateResul
   };
 }
 
-function ownedBy(caller: HumanIdentity, found: Identity): found is AgentIdentity {
-  return found.kind === "agent" && found.owner === caller.name;
+function ownedBy(owner: IdentityName, found: Identity): found is AgentIdentity {
+  return found.kind === "agent" && found.owner === owner;
 }
 
 function joinOwned(found: AgentIdentity, naming: Naming): Fails<Resolved> {
@@ -84,16 +86,23 @@ function named(identity: AgentIdentity, { displayName }: Naming): AgentIdentity 
   return { ...identity, displayName };
 }
 
+function broughtIn(identity: AgentIdentity, broughtInBy: IdentityName | undefined): AgentIdentity {
+  if (Predicate.isUndefined(broughtInBy)) {
+    return identity;
+  }
+  return { ...identity, broughtInBy };
+}
+
 function createOwned(asked: Asked): Fails<Resolved> {
-  const { caller, name, naming, on } = asked;
+  const { name, naming, on, owner } = asked;
   if (naming.requireDisplayName === true && Predicate.isUndefined(naming.displayName)) {
     return Effect.fail(displayNameRequired(name));
   }
   return Effect.gen(function* createOwnedAgent() {
     const now = yield* DateTime.now;
-    const identity = named(
-      { admin: false, createdAt: isoTimeOf(now), kind: "agent", name, owner: caller.name },
-      naming,
+    const identity = broughtIn(
+      named({ admin: false, createdAt: isoTimeOf(now), kind: "agent", name, owner }, naming),
+      asked.broughtInBy,
     );
     if (asked.preview) {
       return yield* previewed(identity);
@@ -113,7 +122,7 @@ function joinOrCreate(asked: Asked, taken: Taken): Fails<Resolved> {
     if (Predicate.isUndefined(found)) {
       return createOwned(asked);
     }
-    if (ownedBy(asked.caller, found)) {
+    if (ownedBy(asked.owner, found)) {
       return joinOwned(found, asked.naming);
     }
     return taken(found);
@@ -134,7 +143,7 @@ function orInOwnNamespace(asked: Asked, namespaced: IdentityName): Taken {
 }
 
 function resolveAgent(asked: Asked): Fails<Resolved> {
-  const namespaced = Option.liftPredicate(`${asked.caller.name}/${asked.name}`, isIdentityName);
+  const namespaced = Option.liftPredicate(`${asked.owner}/${asked.name}`, isIdentityName);
   return Option.match(namespaced, {
     onNone: () => joinOrCreate(asked, refuseTaken),
     onSome: (name) => joinOrCreate(asked, orInOwnNamespace(asked, name)),
@@ -151,7 +160,7 @@ interface Join {
 function agentToJoin(join: Join): Fails<Resolved> {
   const { as, caller, naming, on } = join;
   if (caller.kind === "human") {
-    return resolveAgent({ caller, name: as, naming, on, preview: false });
+    return resolveAgent({ name: as, naming, on, owner: caller.name, preview: false });
   }
   if (as !== caller.name) {
     return Effect.fail(notYourIdentity({ asked: as, caller: caller.name }));
@@ -164,16 +173,49 @@ function agentToJoin(join: Join): Fails<Resolved> {
 
 interface Preview {
   readonly on: On;
-  readonly caller: HumanIdentity;
+  readonly caller: Identity;
   readonly as: IdentityName;
 }
 
-function agentToPreview({ as, caller, on }: Preview): Fails<Resolved> {
-  return resolveAgent({ caller, name: as, naming: UNNAMED, on, preview: true });
+function refuseUnlessBroughtIn(approver: AgentIdentity): Taken {
+  return (found) => {
+    if (found.kind === "human") {
+      return Effect.fail(onlyAgentsJoin(found.name));
+    }
+    if (found.owner !== approver.owner) {
+      return Effect.fail(joinNotOwned(found.name));
+    }
+    if (found.broughtInBy !== approver.name) {
+      return Effect.fail(notBroughtIn(found.name));
+    }
+    return joinOwned(found, UNNAMED);
+  };
 }
 
-function agentToApprove({ as, caller, on }: Preview): Fails<Resolved> {
-  return resolveAgent({ caller, name: as, naming: UNNAMED, on, preview: false });
+function resolveForAgent(approver: AgentIdentity, { as, on }: Preview, preview: boolean): Fails<Resolved> {
+  const asked = { broughtInBy: approver.name, name: as, naming: UNNAMED, on, owner: approver.owner, preview };
+  return Effect.flatMap(on.storage.findIdentityByName(as), (found) => {
+    if (Predicate.isUndefined(found)) {
+      return createOwned(asked);
+    }
+    return refuseUnlessBroughtIn(approver)(found);
+  });
+}
+
+function resolveFor(request: Preview, preview: boolean): Fails<Resolved> {
+  const { as, caller, on } = request;
+  if (caller.kind === "agent") {
+    return resolveForAgent(caller, request, preview);
+  }
+  return resolveAgent({ name: as, naming: UNNAMED, on, owner: caller.name, preview });
+}
+
+function agentToPreview(request: Preview): Fails<Resolved> {
+  return resolveFor(request, true);
+}
+
+function agentToApprove(request: Preview): Fails<Resolved> {
+  return resolveFor(request, false);
 }
 
 export { agentToApprove, agentToJoin, agentToPreview };

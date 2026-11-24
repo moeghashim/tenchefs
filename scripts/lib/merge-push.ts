@@ -2,7 +2,7 @@ import { DONE, git, stop, tail } from "./merge-steps.ts";
 import type { Step, Stopped } from "./merge-steps.ts";
 
 interface PushOptions {
-  readonly ci: (branch: string, sha: string) => Step;
+  readonly ci: (branch: string, sha: string, rerunRed: boolean) => Step;
   readonly cwd: string;
   readonly log: (line: string) => void;
   readonly ticket: number;
@@ -31,10 +31,15 @@ function onOrigin(options: PushOptions, sha: string): boolean {
   return listed.ok && listed.output.startsWith(`${sha}\t`);
 }
 
-function pushBranch(options: PushOptions, sha: string): Step {
+function pushBranch(
+  options: PushOptions,
+  { sha, unchanged }: { readonly sha: string; readonly unchanged: boolean },
+): Step {
   const branch = branchOf(options);
-  if (onOrigin(options, sha)) {
-    options.log(`${branch} is already at ${sha} on origin: waiting for its existing Check run, not pushing again`);
+  if (unchanged) {
+    options.log(
+      `${branch} is already at ${sha} on origin: waiting for its existing Check run, not pushing again. If that run is red, its failed jobs are rerun once, in case they were flaky.`,
+    );
     return DONE;
   }
   deleteRemoteBranch(options);
@@ -48,14 +53,15 @@ function pushBranch(options: PushOptions, sha: string): Step {
 
 function greenOnCi(options: PushOptions, sha: string): Step {
   const branch = branchOf(options);
-  const pushed = pushBranch(options, sha);
+  const unchanged = onOrigin(options, sha);
+  const pushed = pushBranch(options, { sha, unchanged });
   if (pushed.kind === "stopped") {
     return pushed;
   }
-  const watched = options.ci(branch, sha);
+  const watched = options.ci(branch, sha, unchanged);
   if (watched.kind === "stopped") {
     return stop(
-      `${watched.reason}\nNothing was pushed to v1. The merge is on ${branch}: fix it there and commit, then run pnpm merge-ticket ${options.ticket} --continue.`,
+      `${watched.reason}\nNothing was pushed to v1. The merge is on ${branch}: fix it there and commit, then run pnpm merge-ticket ${options.ticket} --continue. If the failure looks flaky, run --continue without a new commit: it reruns the failed jobs once.`,
       ...watched.files,
     );
   }

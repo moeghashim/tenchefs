@@ -1,5 +1,5 @@
 import { hoverThread, useMessageChoices } from "./message-choices.ts";
-import { MessageContextMenu } from "./message-context-menu.tsx";
+import { ActionContextMenu } from "./action-context-menu.tsx";
 import type { MessageItemParts } from "./parts.ts";
 import { MessageLayout } from "./message-layout.tsx";
 import type { ReactNode } from "react";
@@ -7,6 +7,8 @@ import { messageClass } from "./message-class.ts";
 import { useScrollWhenLinked } from "./use-scroll-when-linked.ts";
 
 const FOCUSABLE = 0;
+
+const TEXT = { menu: "Message actions" } as const;
 
 interface ItemArticleParts {
   readonly message: MessageItemParts;
@@ -23,7 +25,7 @@ export function ItemArticle(parts: ItemArticleParts): ReactNode {
   });
   const article = useScrollWhenLinked({ linked: message.mark === "linked", menu: message.menu });
   return (
-    <MessageContextMenu choices={choices}>
+    <ActionContextMenu choices={choices} label={TEXT.menu}>
       <article
         aria-current={message.mark === "open" || message.mark === "linked"}
         className={messageClass(message)}
@@ -44,12 +46,13 @@ export function ItemArticle(parts: ItemArticleParts): ReactNode {
           onAction={handleAction}
           presence={message.presence}
           reactions={message.menu.reactions}
+          replyOnHover={message.replyOnHover}
           thread={hoverThread(message)}
           time={message.time}
         >
           {message.children}
         </MessageLayout>
       </article>
-    </MessageContextMenu>
+    </ActionContextMenu>
   );
 }

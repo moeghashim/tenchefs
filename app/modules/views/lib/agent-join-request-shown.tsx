@@ -1,4 +1,4 @@
-import type { AgentJoinApproval, AgentJoinApprovalState } from "../../session/index.ts";
+import type { AgentJoinApproval, AgentJoinApprovalState } from "../../board/index.ts";
 import { Alert, Button, CardBody, CheckField, InputField, Muted } from "../../design-system/index.tsx";
 import type { ReactNode } from "react";
 

@@ -17,9 +17,10 @@ interface Repos {
 
 interface Overrides {
   readonly check?: readonly string[];
-  readonly ci?: (branch: string, sha: string) => Step;
+  readonly ci?: (branch: string, sha: string, rerunRed: boolean) => Step;
   readonly install?: readonly string[];
   readonly migrationsBase?: string;
+  readonly rules?: MergeRules;
 }
 
 const TICKET = 7;
@@ -115,17 +116,18 @@ function optionsFor(work: string, overrides: Overrides): MergeOptions {
   const logged: string[] = [];
   return {
     attempts: ATTEMPTS,
-    check: overrides.check ?? ["true"],
-    ci: overrides.ci ?? ((): Step => DONE),
+    check: ["true"],
+    ci: (): Step => DONE,
     cwd: work,
-    install: overrides.install ?? ["true"],
+    install: ["true"],
     log: (line): void => {
       logged.push(line);
     },
-    migrationsBase: overrides.migrationsBase ?? "origin/v1",
+    migrationsBase: "origin/v1",
     rules,
     ticket: TICKET,
     title: "Add the c table",
+    ...overrides,
   };
 }
 

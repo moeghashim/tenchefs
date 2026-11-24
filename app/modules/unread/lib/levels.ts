@@ -94,6 +94,25 @@ function newsByThread({ items, me }: ReadingAll): ReadonlyMap<MessageId, ThreadN
   return news;
 }
 
+interface ChannelNews {
+  readonly items: readonly InboxItem[];
+  readonly channel: ChannelName;
+}
+
+function isNewsForYou(item: InboxItem): boolean {
+  return item.reasons.some((reason) => reason !== "subscribed-channel");
+}
+
+function threadsWithNews({ channel, items }: ChannelNews): readonly MessageId[] {
+  const threads = new Set<MessageId>();
+  for (const item of items) {
+    if (item.channel.name === channel && isNewsForYou(item)) {
+      threads.add(item.parent.id);
+    }
+  }
+  return [...threads].toSorted((one, other) => one - other);
+}
+
 export {
   NO_COUNTS,
   type ThreadNews,
@@ -103,5 +122,6 @@ export {
   countsOf,
   isForYou,
   newsByThread,
+  threadsWithNews,
   whyOf,
 };

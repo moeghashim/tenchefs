@@ -9,7 +9,11 @@ interface ThreadSelection {
   readonly thread: MessageId;
 }
 
-type InboxSelection = ThreadSelection | { readonly channel: ChannelName; readonly thread: null };
+interface InboxThreadSelection extends ThreadSelection {
+  readonly message?: MessageId;
+}
+
+type InboxSelection = InboxThreadSelection | { readonly channel: ChannelName; readonly thread: null };
 
 interface ThreadText {
   readonly channel: string;
@@ -39,7 +43,11 @@ function inboxHref(selected: InboxSelection | null): string {
   if (selected.thread === null) {
     return `#/inbox/${selected.channel}`;
   }
-  return `#/inbox/${selected.channel}/${String(selected.thread)}`;
+  const thread = `#/inbox/${selected.channel}/${String(selected.thread)}`;
+  if (typeof selected.message !== "number") {
+    return thread;
+  }
+  return `${thread}/messages/${String(selected.message)}`;
 }
 
-export { type InboxSelection, type ThreadSelection, inboxHref, messageIdOf, selectionOf };
+export { type InboxSelection, type InboxThreadSelection, type ThreadSelection, inboxHref, messageIdOf, selectionOf };

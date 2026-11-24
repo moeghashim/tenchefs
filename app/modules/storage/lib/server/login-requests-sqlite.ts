@@ -5,14 +5,14 @@ import type {
   LoginRequestsSection,
   NewLoginRequest,
 } from "./login-requests.ts";
-import { Effect, Option, Predicate, Schema } from "effect";
+import { Effect, Function as Fn, Option, Predicate, Schema } from "effect";
 import { GONE, PENDING, collected } from "./login-requests.ts";
 import type { Identity, TokenHash } from "../../../identities/index.ts";
 import { IdentityRow, toIdentity } from "./identity-row.ts";
 import type { Fails } from "./errors.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
 
@@ -63,7 +63,7 @@ interface Queries {
   readonly liveByCode: (userCode: string, now: IsoTime) => Fails<Option.Option<RequestRowType>>;
 }
 
-function sqliteQueries(db: SqliteDatabase): Queries {
+function sqlQueries(db: SqlDatabase): Queries {
   return {
     credential: (hash: TokenHash): Fails<Option.Option<Identity>> =>
       Effect.map(Effect.flatMap(db.get(FIND_CREDENTIAL, hash), identityRow), Option.map(toIdentity)),
@@ -72,8 +72,8 @@ function sqliteQueries(db: SqliteDatabase): Queries {
   };
 }
 
-function addIn(db: SqliteDatabase): LoginRequestsSection["addLoginRequest"] {
-  const { liveByCode } = sqliteQueries(db);
+function addIn(db: SqlDatabase): LoginRequestsSection["addLoginRequest"] {
+  const { liveByCode } = sqlQueries(db);
   return (request: NewLoginRequest, now: IsoTime) =>
     db.transaction(
       Effect.gen(function* addRequest() {
@@ -89,8 +89,8 @@ function addIn(db: SqliteDatabase): LoginRequestsSection["addLoginRequest"] {
     );
 }
 
-function approveIn(db: SqliteDatabase): LoginRequestsSection["approveLoginRequest"] {
-  const { liveByCode } = sqliteQueries(db);
+function approveIn(db: SqlDatabase): LoginRequestsSection["approveLoginRequest"] {
+  const { liveByCode } = sqlQueries(db);
   return (userCode, approver, now) =>
     db.transaction(
       Effect.gen(function* approveRequest() {
@@ -105,18 +105,18 @@ function approveIn(db: SqliteDatabase): LoginRequestsSection["approveLoginReques
     );
 }
 
-function issueIn(db: SqliteDatabase, { credentialHash, now, requestHash }: CollectLoginRequest) {
-  const { credential } = sqliteQueries(db);
+function issueIn(db: SqlDatabase, { credentialHash, now, requestHash }: CollectLoginRequest) {
+  const { credential } = sqlQueries(db);
   return ({ approved_by: approver, host }: RequestRowType): Fails<LoginCollection> =>
     Effect.gen(function* issueCredential() {
       yield* db.run("DELETE FROM login_requests WHERE request_hash = ?", requestHash);
       yield* db.run(ISSUE_CREDENTIAL, credentialHash, host, now, approver);
       const issued = yield* credential(credentialHash);
-      return Option.match(issued, { onNone: () => GONE, onSome: collected });
+      return Option.match(issued, { onNone: Fn.constant(GONE), onSome: collected });
     });
 }
 
-function collectIn(db: SqliteDatabase): LoginRequestsSection["collectLoginRequest"] {
+function collectIn(db: SqlDatabase): LoginRequestsSection["collectLoginRequest"] {
   return (collect) =>
     db.transaction(
       Effect.gen(function* collectRequest() {
@@ -132,7 +132,7 @@ function collectIn(db: SqliteDatabase): LoginRequestsSection["collectLoginReques
     );
 }
 
-function revokeIn(db: SqliteDatabase): LoginRequestsSection["revokeLoginCredential"] {
+function revokeIn(db: SqlDatabase): LoginRequestsSection["revokeLoginCredential"] {
   return (hash) =>
     db.transaction(
       Effect.gen(function* revokeCredential() {
@@ -143,8 +143,8 @@ function revokeIn(db: SqliteDatabase): LoginRequestsSection["revokeLoginCredenti
     );
 }
 
-function sqliteLoginRequests(db: SqliteDatabase): LoginRequestsSection {
-  const { credential, liveByCode } = sqliteQueries(db);
+function sqlLoginRequests(db: SqlDatabase): LoginRequestsSection {
+  const { credential, liveByCode } = sqlQueries(db);
   return {
     addLoginRequest: addIn(db),
     approveLoginRequest: approveIn(db),
@@ -156,4 +156,4 @@ function sqliteLoginRequests(db: SqliteDatabase): LoginRequestsSection {
   };
 }
 
-export { sqliteLoginRequests };
+export { sqlLoginRequests };

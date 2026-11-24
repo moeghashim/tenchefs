@@ -15,6 +15,7 @@ interface FeedStreamProps {
   readonly state: Loaded;
   readonly messages: ChannelMessages;
   readonly me: string;
+  readonly held: ReadonlySet<MessageId>;
   readonly readPosition: number | null;
   readonly channel: ChannelName;
   readonly open: MessageId | null;
@@ -27,6 +28,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
   const { state } = props;
   const rows = feedRows({
     expanded: state.expanded,
+    held: props.held,
     me: props.me,
     messages: state.messages,
     readPosition: props.readPosition,
@@ -49,6 +51,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
           return (
             <MessageEntry
               closing={props.closing}
+              closed={"closedAt" in row.row.message}
               channel={props.channel}
               key={row.row.message.id}
               me={props.me}

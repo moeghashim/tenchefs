@@ -20,7 +20,7 @@ async function replyInThread(page: Page, channel: string, text: string): Promise
     .getByRole("link", { name: `#${channel}` })
     .click();
   await page.getByRole("article").filter({ hasText: "Who's on call?" }).getByRole("link", { name: "1 reply" }).click();
-  await page.getByLabel("Reply", { exact: true }).fill(text);
+  await page.getByRole("textbox", { exact: true, name: "Reply" }).fill(text);
   await inThread(page).getByRole("button", { name: "Send" }).click();
 }
 

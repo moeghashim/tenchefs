@@ -1,6 +1,7 @@
 import { HoverAction } from "./hover-action.tsx";
 import { HoverButton } from "./hover-button.tsx";
 import type { ReactNode } from "react";
+import { ReplyIcon } from "./reply-icon.tsx";
 
 interface MessageActionParts {
   readonly actionHref: string | null;
@@ -11,8 +12,18 @@ interface MessageActionParts {
 export function MessageAction(parts: MessageActionParts): ReactNode {
   const { actionHref, onAction } = parts;
   if (actionHref !== null) {
-    return <HoverAction href={actionHref}>{parts.actionLabel}</HoverAction>;
+    return (
+      <HoverAction href={actionHref} name={parts.actionLabel}>
+        <ReplyIcon />
+      </HoverAction>
+    );
   }
   const handleAction = onAction;
-  return handleAction !== null && <HoverButton onClick={handleAction}>{parts.actionLabel}</HoverButton>;
+  return (
+    handleAction !== null && (
+      <HoverButton name={parts.actionLabel} onClick={handleAction}>
+        <ReplyIcon />
+      </HoverButton>
+    )
+  );
 }

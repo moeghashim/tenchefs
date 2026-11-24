@@ -1,6 +1,6 @@
 # Agent session tokens replace the lease
 
-2026-11-23 (mattpocock/cookout#114). Supersedes [ADR 0004](0004-a-lease-is-needed-only-for-leave-ack-and-watch.md), and the lease parts of [ADR 0025](0025-one-rule-decides-which-other-writes-need-the-lease.md) and [ADR 0028](0028-only-agent-identities-take-the-lease.md). Replacing the lease with an agent session token, its 7-day idle expiry, the 90-day ceiling and one live token per agent are Matt's decisions of 2026-11-23, recorded on #114; the route, the refusal codes and the 30 s check of an open stream are chief-of-staff choices, pending Matt's review.
+2026-11-23 (mattpocock/cookout#114). Supersedes ADR 0004, and the lease parts of ADR 0025 and ADR 0028. Replacing the lease with an agent session token, its 7-day idle expiry, the 90-day ceiling and one live token per agent are Matt's decisions of 2026-11-23, recorded on #114; the route, the refusal codes and the 30 s check of an open stream are chief-of-staff choices, pending Matt's review.
 
 The lease was a 60-second hold on an identity, renewed by every request that carried its ID in `cookout-lease`, and only leave, ack and watch needed it. It never authenticated anything: a session still sent the agent's Identity token, so the lease was a second, weaker credential beside the first. Now `join` issues an **agent session token**, a token of its own that authenticates as the agent for one session, and the lease is gone.
 

@@ -1,8 +1,8 @@
-import { Array as Arr } from "effect";
+import { Array as Arr, Effect } from "effect";
+import { isMessageId, reactionNames } from "../../index.ts";
 import type { MessageId } from "../../index.ts";
 import type { Refusal } from "../../../http/index.ts";
 import { echoed } from "../../../http/index.ts";
-import { reactionNames } from "../../index.ts";
 
 interface MisplacedReply {
   readonly channel: string;
@@ -15,6 +15,14 @@ const NOT_FOUND = 404;
 
 function messageNotFound(asked: string): Refusal {
   return { code: "message_not_found", message: `There is no message ${echoed(asked)}.`, status: NOT_FOUND };
+}
+
+function threadIdOf(asked: string): Effect.Effect<MessageId, Refusal> {
+  const id = Number(asked);
+  if (isMessageId(id)) {
+    return Effect.succeed(id);
+  }
+  return Effect.fail(messageNotFound(asked));
 }
 
 function replyInOtherChannel({ channel, replyTo }: MisplacedReply): Refusal {
@@ -45,12 +53,19 @@ const closeWithoutReplyTo: Refusal = {
   status: BAD_REQUEST,
 };
 
+const seenWithoutReplyTo: Refusal = {
+  code: "invalid_request",
+  message: "seen says how far you have read a thread: send it with replyTo.",
+  status: BAD_REQUEST,
+};
+
 const closeWithCommandToken: Refusal = {
   code: "outside_command_thread",
   message: "A command token can only reply in its call's thread, not close it.",
   status: FORBIDDEN,
 };
 
+export type { Refusal } from "../../../http/index.ts";
 export {
   closeWithCommandToken,
   closeWithoutReplyTo,
@@ -58,4 +73,6 @@ export {
   reactionNotFound,
   replyInOtherChannel,
   replyOutsideCommandThread,
+  seenWithoutReplyTo,
+  threadIdOf,
 };

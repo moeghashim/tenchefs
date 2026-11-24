@@ -55,6 +55,7 @@ it.effect("the seed makes humans, and agents with owners, each with a working to
     expect(Arr.map(identities, (found) => [found.name, ownerOf(found)])).toStrictEqual([
       ["ada", NO_OWNER],
       ["admin", NO_OWNER],
+      ["build-worker", "ada"],
       ["grace", NO_OWNER],
       ["release-bot", "ada"],
       ["rollback", "ada"],
@@ -63,6 +64,7 @@ it.effect("the seed makes humans, and agents with owners, each with a working to
     expect(Arr.map(identities, ({ kind }) => kind)).toStrictEqual([
       "human",
       "human",
+      "agent",
       "human",
       "agent",
       "agent",
@@ -141,6 +143,7 @@ it.effect("the seed leaves a mention, a followed thread, a subscribed channel an
           [thanks, ["followed-thread"]],
           [deployed, ["subscribed-channel"]],
           ["/rollback", ["subscribed-channel"]],
+          ["Picked up the 1.4.1 build.", ["subscribed-channel"]],
           [retired, ["subscribed-channel"]],
           [mention, ["mention"]],
         ],
@@ -152,6 +155,7 @@ it.effect("the seed leaves a mention, a followed thread, a subscribed channel an
           [question, ["followed-thread"]],
           [thanks, ["followed-thread"]],
           ["/rollback", ["subscribed-channel"]],
+          ["Picked up the 1.4.1 build.", ["subscribed-channel"]],
           [retired, ["subscribed-channel"]],
         ],
       ],
@@ -183,6 +187,16 @@ it.effect("the seed leaves a deactivated agent whose post is still in deploys", 
         ({ text }) => text,
       ),
     ]).toStrictEqual([["old-deploy-bot"], [retired]]);
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
+it.effect("the seed leaves an agent release-bot brought in, posting in deploys", () =>
+  Effect.gen(function* seededBroughtIn() {
+    const cookout = yield* TestCookout;
+    yield* seeded(cookout);
+    const { identity } = yield* answer(() => cookout.client.getIdentity("build-worker"));
+
+    expect(identity).toMatchObject({ broughtInBy: "release-bot", kind: "agent", owner: "ada" });
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
@@ -223,6 +237,7 @@ it.effect("the seed prints the ID of every message it posts, by name", () =>
 
     expect(Record.map(board.messages, (id) => textOf(posted, messageId(id)))).toStrictEqual({
       adaReply: thanks,
+      broughtInPost: "Picked up the 1.4.1 build.",
       deployed,
       graceReply: question,
       lunch: "Lunch at 12:30.",

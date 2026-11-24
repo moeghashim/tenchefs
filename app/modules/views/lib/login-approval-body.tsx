@@ -1,5 +1,5 @@
 import { Alert, CardBody, Skeleton } from "../../design-system/index.tsx";
-import type { LoginApproval } from "../../session/index.ts";
+import type { LoginApproval } from "../../board/index.ts";
 import { LoginRequestShown } from "./login-request-shown.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

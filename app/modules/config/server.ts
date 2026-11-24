@@ -1,7 +1,6 @@
 /**
- * Every environment variable the cookout reads, with its default. Nothing else
- * reads the environment, and every variable here has a line in `.env.example`
- * and a line in the README's Settings section (`pnpm hygiene` checks both).
+ * Every environment variable the cookout reads, with its default. Nothing else reads the environment, and every
+ * variable here has a line in `.env.example` and a line in the README's Settings section (`pnpm hygiene` checks both).
  */
 import { Array as Arr, Config, Record as Rec, Redacted, Schema, String as Str } from "effect";
 import { firstAdminName, isIdentityName } from "../identities/index.ts";
@@ -22,6 +21,13 @@ const DEFAULT_COMMAND_CALLS_PER_MINUTE = 60;
 const DEFAULT_STREAMS_PER_IDENTITY = 20;
 const DEFAULT_PRESENCE_GRACE_SECONDS = 60;
 const SHORTEST_PRESENCE_GRACE_SECONDS = 0;
+
+const isDatabaseUrl = Schema.makeFilter(
+  (url: string) =>
+    url === "" ||
+    (URL.canParse(url) && Arr.contains(["postgres:", "postgresql:"], new URL(url).protocol)) ||
+    "DATABASE_URL must be empty or a Postgres URL such as postgres://user:password@host/database.",
+);
 
 const isPublicUrl = Schema.makeFilter(
   (url: string) =>
@@ -95,8 +101,63 @@ export const routineToken = Config.String("COOKOUT_ROUTINE_TOKEN").pipe(
   Config.map((value) => Redacted.make(value)),
 );
 
-/** `COOKOUT_DB`: the SQLite file `cookout serve` keeps its data in. */
+/** `DATABASE_URL`: the Postgres database `cookout serve` uses over `COOKOUT_DB` (#330); empty is unset. Never shown. */
+export const databaseUrl = Config.schema(Schema.Redacted(Schema.String.check(isDatabaseUrl)), "DATABASE_URL").pipe(
+  Config.withDefault(Redacted.make("")),
+);
+
+/**
+ * `COOKOUT_ALLOW_LOCAL_TRIGGERS`: when `true`, an agent's trigger URL may also be `http://localhost`, `127.0.0.1` or
+ * `[::1]`, for the dev program and tests (mattpocock/cookout#378). Otherwise only `https` URLs are accepted.
+ */
+export const allowLocalTriggers = Config.Boolean("COOKOUT_ALLOW_LOCAL_TRIGGERS").pipe(Config.withDefault(false));
+
+/** `COOKOUT_DB`: the SQLite file `cookout serve` keeps its data in when `DATABASE_URL` is unset. */
 export const databasePath = Config.String("COOKOUT_DB").pipe(Config.withDefault("cookout.db"));
+
+/**
+ * `COOKOUT_ASSETS_DIR`: the folder `cookout serve` keeps attachments' bytes in, one file per attachment, named by its
+ * ID. Empty counts as unset, which is an `assets` folder beside `COOKOUT_DB`, so on Fly they stay on the `/data`
+ * volume with the database.
+ */
+export const assetsDirectory = Config.String("COOKOUT_ASSETS_DIR").pipe(Config.withDefault(""));
+
+/**
+ * `COOKOUT_ASSET_STORE`: where `cookout serve` keeps attachments' bytes, `disk` (in `COOKOUT_ASSETS_DIR`) or `s3` (in
+ * the S3-compatible bucket the `COOKOUT_S3_*` settings name). Empty counts as unset, which is `disk`, so the live
+ * board on Fly keeps them on its volume (Matt, 2026-11-24, mattpocock/cookout#375). Anything else, serve refuses to
+ * start.
+ */
+export const assetStoreKind = Config.schema(Schema.Literals(["", "disk", "s3"]), "COOKOUT_ASSET_STORE").pipe(
+  Config.withDefault(""),
+);
+
+/** Why `cookout serve` refused `COOKOUT_ASSET_STORE`. */
+export const assetStoreRule = "COOKOUT_ASSET_STORE must be disk or s3, or empty for disk.";
+
+/**
+ * The settings an `s3` asset store needs, each required once `COOKOUT_ASSET_STORE` is `s3` and empty counting as
+ * unset: `COOKOUT_S3_BUCKET` (the bucket, never made public), `COOKOUT_S3_ENDPOINT` (its S3 API URL, such as
+ * `https://<account>.r2.cloudflarestorage.com`), `COOKOUT_S3_REGION` (`auto` on R2 and Tigris),
+ * `COOKOUT_S3_ACCESS_KEY_ID` and `COOKOUT_S3_SECRET_ACCESS_KEY`. Every value is redacted, so none is ever shown.
+ */
+export const s3SettingNames = {
+  accessKeyId: "COOKOUT_S3_ACCESS_KEY_ID",
+  bucket: "COOKOUT_S3_BUCKET",
+  endpoint: "COOKOUT_S3_ENDPOINT",
+  region: "COOKOUT_S3_REGION",
+  secretAccessKey: "COOKOUT_S3_SECRET_ACCESS_KEY",
+} as const;
+
+/** The `COOKOUT_S3_*` settings, each redacted and empty when unset. */
+export const s3Settings = Config.all(
+  Rec.map(s3SettingNames, (name) =>
+    Config.String(name).pipe(
+      Config.withDefault(""),
+      Config.map((value) => Redacted.make(value)),
+    ),
+  ),
+);
 
 /**
  * `COOKOUT_MAX_IDLE_EXPIRY`: the longest idle expiry `join --idle-expiry` may ask for, such as `90d` (Matt,
@@ -196,6 +257,13 @@ export const cookoutUrl = Config.String("COOKOUT_URL").pipe(Config.withDefault("
 
 /** `COOKOUT_TOKEN`: the bearer token every CLI verb but `serve` sends. Empty counts as unset. */
 export const cookoutToken = Config.String("COOKOUT_TOKEN").pipe(Config.withDefault(""));
+
+/**
+ * `COOKOUT_AUTH`: `proxy` says a proxy adds the credential, as a cloud session's network proxy adds
+ * `Authorization: Bearer`, so every CLI verb but `serve`, `join`, `login` and `logout` sends no token
+ * (mattpocock/cookout#340). Any other value is refused. Empty counts as unset.
+ */
+export const cookoutAuth = Config.String("COOKOUT_AUTH").pipe(Config.withDefault(""));
 
 /**
  * `COOKOUT_SESSION`: an agent session token, such as one `cookout join --print-env` printed, that every CLI verb but

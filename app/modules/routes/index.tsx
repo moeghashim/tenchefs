@@ -7,8 +7,9 @@
  * right after logging in; `#/login` who is logged in; `#/people` the
  * directory of every identity, and `#/people/<name>` the same with that
  * identity's profile open beside it; `#/channels/<name>` the channel; and `#/channels/<name>/threads/<id>` the channel with the thread's
- * panel open beside it. Any other hash, a channel name that isn't a channel
- * name, or a thread ID that isn't a message ID, says there is nothing here.
+ * panel open beside it. Any other hash opens the inbox, the homepage, as the
+ * sidebar's "cookout" name does; a channel name that isn't a channel name, or
+ * a thread ID that isn't a message ID, says there is nothing here.
  * With `live`, while the live stream's link to the server is down, a
  * "Reconnecting…" bar shows at the top of the workspace.
  * `#/approve/<user code>` is the approval page for a login request, a page of
@@ -19,12 +20,15 @@
  * its close link closes it. Clicking a name, a message's author or an
  * `@name`, goes there. The
  * `paths` module reads the hash and builds every link's.
+ * The app makes the board's old per-channel and per-thread stores, which the views still read, from `boardStore`, as
+ * thin adapters over its selectors and methods, for the last migration ticket to delete.
  */
 import type { ReactNode } from "react";
 import { RouteView } from "./lib/route-view.tsx";
 import type { Stores } from "./lib/stores.ts";
 import { locationOf } from "../paths/index.ts";
 import { useSyncExternalStore } from "react";
+import { withBoard } from "./lib/board-adapter.ts";
 
 function subscribeToHash(listener: () => void): () => void {
   globalThis.addEventListener("hashchange", listener);
@@ -38,7 +42,7 @@ function currentHash(): string {
 }
 
 /** What the web UI reads: the stores, each made with the SDK client it talks through. */
-export type CookoutAppProps = Stores;
+export type CookoutAppProps = Omit<Stores, "board">;
 
 /**
  * The whole web UI: the view for the page's location hash, redrawn when it changes.
@@ -47,5 +51,5 @@ export type CookoutAppProps = Stores;
  */
 export function CookoutApp(props: CookoutAppProps): ReactNode {
   const hash = useSyncExternalStore(subscribeToHash, currentHash);
-  return <RouteView place={locationOf(hash)} stores={props} />;
+  return <RouteView place={locationOf(hash)} stores={withBoard(props)} />;
 }

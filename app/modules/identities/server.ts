@@ -194,7 +194,7 @@ export { requireAdmin } from "./lib/server/auth.ts";
  * Refuses with 403 `not_owner` unless `Caller` is an admin or the human who owns the named agent (Matt, 2026-11-23,
  * mattpocock/cookout#118). A non-admin naming a missing identity gets 403 too, so a name's existence doesn't leak.
  */
-export { requireOwnerOrAdmin } from "./lib/server/auth.ts";
+export { requireOwnerBringerOrAdmin, requireOwnerOrAdmin } from "./lib/server/auth.ts";
 
 /** Reads the `:name` path parameter, refusing a name no identity could have with 404 `identity_not_found`. */
 export { identityNotFound, nameParam } from "./lib/server/routes.ts";

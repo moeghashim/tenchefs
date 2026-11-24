@@ -16,7 +16,7 @@ export function PromptButtons(parts: PromptButtonsParts): ReactNode {
       </button>
       <button
         className="rounded-lg border bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-        disabled={parts.busy}
+        disabled={parts.busy || parts.disabled === true}
         type="submit"
       >
         {parts.busy && parts.busyButton}

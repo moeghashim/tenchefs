@@ -5,6 +5,7 @@ import type { Composer } from "../../composer/index.ts";
 import { InboxConversation } from "./inbox-conversation.tsx";
 import { InboxList } from "./inbox-list.tsx";
 import type { InboxSelection } from "../../paths/index.ts";
+import type { PanelEdgeParts } from "../../design-system/index.tsx";
 import type { ReactNode } from "react";
 import { useInboxKeys } from "./use-inbox-keys.ts";
 import { useInboxRows } from "./use-inbox-rows.ts";
@@ -14,6 +15,7 @@ const CONVERSATION = "Conversation";
 interface InboxProps {
   readonly board: Board;
   readonly composer: Composer;
+  readonly edge: PanelEdgeParts;
   readonly unread: Unread;
   readonly me: string;
   readonly reading: Reading;
@@ -46,6 +48,7 @@ export function InboxView(props: InboxProps): ReactNode {
         <InboxConversation
           board={board}
           composer={composer}
+          edge={props.edge}
           me={me}
           reading={props.reading}
           selected={selected}

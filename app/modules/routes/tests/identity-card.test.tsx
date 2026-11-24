@@ -1,5 +1,5 @@
 import type { CookoutClient, EventStream } from "../../sdk/index.ts";
-import { adminClient, newIdentity } from "./identities.ts";
+import { adminClient, anonymousClient, clientWith, newIdentity } from "./identities.ts";
 import { agentNamed, openedBy } from "./presence.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -9,8 +9,11 @@ import { openAt } from "./render.tsx";
 const PREFIX = "web-card";
 
 interface Card {
-  readonly avatar: { readonly agent: string | null; readonly presence: string | null } | null;
+  readonly avatar: { readonly agent: string | null; readonly initials: string | null } | null;
+  readonly chip: string | null;
+  readonly dot: string | null;
   readonly lines: readonly string[];
+  readonly message: "disabled" | "enabled";
   readonly profile: string | null;
 }
 
@@ -25,8 +28,12 @@ async function authorName(name: string): Promise<HTMLElement> {
   return link;
 }
 
+function shownCard(): HTMLElement {
+  return screen.getByRole("dialog");
+}
+
 function cardDot(): string | null {
-  const dot = screen.getByRole("tooltip").querySelector<HTMLElement>("[data-presence]");
+  const dot = shownCard().querySelector<HTMLElement>("[data-presence]");
   if (dot === null) {
     return null;
   }
@@ -34,17 +41,32 @@ function cardDot(): string | null {
 }
 
 function cardAvatar(): Card["avatar"] {
-  const avatar = screen.getByRole("tooltip").querySelector<HTMLElement>('[data-testid="avatar"]');
+  const avatar = shownCard().querySelector<HTMLElement>('[data-testid="avatar"]');
   if (avatar === null) {
     return null;
   }
-  return { agent: avatar.dataset["agent"] ?? null, presence: cardDot() };
+  return { agent: avatar.dataset["agent"] ?? null, initials: avatar.dataset["initials"] ?? null };
+}
+
+function chipOf(): string | null {
+  const chip = within(shownCard()).queryByText("Agent");
+  if (chip === null) {
+    return null;
+  }
+  return chip.textContent;
+}
+
+function messageOf(): Card["message"] {
+  if (within(shownCard()).getByRole("button", { name: "Message" }).hasAttribute("disabled")) {
+    return "disabled";
+  }
+  return "enabled";
 }
 
 async function cardOf(trigger: () => HTMLElement): Promise<Card> {
-  const card = await screen.findByRole("tooltip");
+  const card = await screen.findByRole("dialog");
   await waitFor(() => {
-    expect(trigger().getAttribute("aria-describedby")).toBe(card.id);
+    expect(trigger().getAttribute("aria-describedby")).toBe(screen.getByRole("tooltip").id);
   });
   const lines: string[] = [];
   for (const line of card.querySelectorAll("p")) {
@@ -52,7 +74,10 @@ async function cardOf(trigger: () => HTMLElement): Promise<Card> {
   }
   return {
     avatar: cardAvatar(),
+    chip: chipOf(),
+    dot: cardDot(),
     lines,
+    message: messageOf(),
     profile: within(card).getByRole("link", { name: "View profile" }).getAttribute("href"),
   };
 }
@@ -106,7 +131,7 @@ async function onlineAgent(channel: string): Promise<EventStream> {
   return events;
 }
 
-it("hovering an agent author's name opens a card led by its avatar, with its presence, name, owner, description and a link to its profile in People", {
+it("hovering an agent author's name opens a card led by its avatar tile with an Agent chip, then its name, handle, presence, owner, description, Message and a link to its profile in People", {
   timeout: 10_000,
 }, async () => {
   expect.hasAssertions();
@@ -116,26 +141,26 @@ it("hovering an agent author's name opens a card led by its avatar, with its pre
   const events = await onlineAgent(channel);
 
   await expect(hovered("Mail Bot")).resolves.toStrictEqual({
-    avatar: { agent: "true", presence: "online" },
-    lines: ["Mail Botagent", `@${bot}`, "Online", `Agent · owned by ${channel}-owner`, "Reads the mail"],
+    avatar: { agent: "true", initials: "WC" },
+    chip: "Agent",
+    dot: "online",
+    lines: ["Mail Bot", `@${bot}`, "Online", `Agent · owned by ${channel}-owner`, "Reads the mail"],
+    message: "enabled",
     profile: `#/people/${bot}`,
   });
 
   await events.close();
 
   await waitFor(() => {
-    expect([cardDot(), screen.getByRole("tooltip").textContent]).toStrictEqual([
-      "offline",
-      expect.stringMatching(/Offline/u),
-    ]);
+    expect([cardDot(), shownCard().textContent]).toStrictEqual(["offline", expect.stringMatching(/Offline/u)]);
   });
 
-  fireEvent.click(within(screen.getByRole("tooltip")).getByRole("link", { name: "View profile" }));
+  fireEvent.click(within(shownCard()).getByRole("link", { name: "View profile" }));
 
   await expect(profileHeading()).resolves.toMatch(`Mail Bot@${bot}`);
 });
 
-it("hovering a person's name opens a card led by their round avatar, with their presence, name and profile link, and no owner", {
+it("hovering a person's name opens a card led by their avatar tile with no Agent chip, with their presence, name and profile link, and no owner", {
   timeout: 10_000,
 }, async () => {
   expect.hasAssertions();
@@ -145,8 +170,11 @@ it("hovering a person's name opens a card led by their round avatar, with their 
   const close = await postedBy(channel, ann.client);
 
   await expect(hovered(`${channel}-ann`)).resolves.toStrictEqual({
-    avatar: { agent: "false", presence: "offline" },
+    avatar: { agent: "false", initials: "WC" },
+    chip: null,
+    dot: "offline",
     lines: [`${channel}-ann`, "Offline", "Human"],
+    message: "enabled",
     profile: `#/people/${channel}-ann`,
   });
 
@@ -162,21 +190,26 @@ it("focusing an @mention opens its card, and Escape closes it", { timeout: 10_00
   mention.focus();
 
   await expect(cardOf(() => mention)).resolves.toStrictEqual({
-    avatar: { agent: "false", presence: "offline" },
+    avatar: { agent: "false", initials: "WC" },
+    chip: null,
+    dot: "offline",
     lines: [`${channel}-reader`, "Offline", "Human"],
+    message: "enabled",
     profile: `#/people/${channel}-reader`,
   });
 
   fireEvent.keyDown(mention, { key: "Escape" });
 
   await waitFor(() => {
-    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   close();
 });
 
-it("a deactivated identity's card says Deactivated and still shows its avatar", { timeout: 10_000 }, async () => {
+it("a deactivated identity's card says Deactivated in place of its presence, still shows its avatar tile, and can't be messaged", {
+  timeout: 10_000,
+}, async () => {
   expect.hasAssertions();
 
   const channel = `${PREFIX}-gone`;
@@ -184,10 +217,48 @@ it("a deactivated identity's card says Deactivated and still shows its avatar", 
   const close = await deactivatedAuthor(channel, cy.client);
 
   await expect(hovered(`${channel}-cy`)).resolves.toStrictEqual({
-    avatar: { agent: "false", presence: "offline" },
-    lines: [`${channel}-cy`, "Offline", "Human", "Deactivated"],
+    avatar: { agent: "false", initials: "WC" },
+    chip: null,
+    dot: null,
+    lines: [`${channel}-cy`, "Deactivated", "Human"],
+    message: "disabled",
     profile: `#/people/${channel}-cy`,
   });
+
+  close();
+});
+
+async function broughtInAuthor(channel: string): Promise<() => void> {
+  const owner = await newIdentity({ kind: "human", name: `${channel}-owner` });
+  const chief = await newIdentity({ kind: "agent", name: `${channel}-chief`, owner: `${channel}-owner` });
+  const started = await anonymousClient().startAgentJoin({ as: `${channel}-worker`, host: "box" });
+  await chief.client.approveAgentJoin(started.userCode);
+  const collected = await anonymousClient().collectAgentJoin(started.requestId);
+  if (collected.status !== "approved") {
+    throw new Error("The agent join request was not approved.");
+  }
+  await adminClient().createChannel({ name: channel });
+  await clientWith(collected.agentSession.agentSessionToken).createMessage({ channel, text: "Reporting in" });
+  return openAt({ client: owner.client, hash: `#/channels/${channel}` });
+}
+
+it("an agent another agent brought in has a card saying Brought in by, linking to that agent's card", {
+  timeout: 10_000,
+}, async () => {
+  expect.hasAssertions();
+
+  const channel = `${PREFIX}-brought`;
+  const close = await broughtInAuthor(channel);
+  const card = await hovered(`${channel}-worker`);
+  const bringer = within(shownCard()).getByRole("link", { name: `@${channel}-chief` });
+
+  expect(card.lines).toStrictEqual([
+    `${channel}-worker`,
+    "Offline",
+    `Agent · owned by ${channel}-owner`,
+    `Brought in by @${channel}-chief`,
+  ]);
+  expect(bringer.getAttribute("href")).toBe(`#/people/${channel}-chief`);
 
   close();
 });

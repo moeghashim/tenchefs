@@ -11,6 +11,14 @@ function rebuilt(hash: string): string {
   return hrefOf(route);
 }
 
+function inboxRebuilt(hash: string): string {
+  const { route } = locationOf(hash);
+  if (route.name !== "inbox") {
+    throw new TypeError(`${hash} is no inbox route`);
+  }
+  return hrefOf(route);
+}
+
 it("a link to one reply names its channel, thread and message, and builds back to the same hash", {
   timeout: 1000,
 }, () => {
@@ -49,6 +57,26 @@ it("a reply link whose message isn't a message ID names no page", { timeout: 100
       (hash) => locationOf(hash).route,
     ),
   ).toStrictEqual([{ name: "missing" }, { name: "missing" }]);
+});
+
+it("an Inbox link to one message names its thread and message, and builds back to the same hash", {
+  timeout: 1000,
+}, () => {
+  expect.hasAssertions();
+
+  const opened = "#/inbox/general/7/messages/9";
+
+  expect(locationOf(opened).route).toStrictEqual({
+    name: "inbox",
+    selected: { channel: "general", message: 9, thread: 7 },
+  });
+  expect(inboxRebuilt(opened)).toBe(opened);
+});
+
+it("an Inbox link whose message isn't a message ID names no page", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  expect(locationOf("#/inbox/general/7/messages/x").route).toStrictEqual({ name: "missing" });
 });
 
 it("a profile opened over a reply link opens beside the channel", { timeout: 1000 }, () => {

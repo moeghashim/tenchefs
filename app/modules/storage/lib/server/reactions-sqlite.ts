@@ -4,8 +4,9 @@ import type { NewReaction, ReactionKey, ReactionsSection } from "./reactions.ts"
 import { isMessageId, isReactionName } from "../../../messages/index.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
+import { isFalse } from "./adapters/sql-database.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { sortedReactions } from "./reactions.ts";
 import { unreadable } from "./errors.ts";
@@ -61,12 +62,12 @@ function placesFor(ids: readonly MessageId[]): string {
   );
 }
 
-function messageExists(db: SqliteDatabase, id: MessageId): Fails<boolean> {
+function messageExists(db: SqlDatabase, id: MessageId): Fails<boolean> {
   return Effect.map(db.get("SELECT 1 AS found FROM messages WHERE id = ?", id), Predicate.isObject);
 }
 
 function ifMessage(
-  db: SqliteDatabase,
+  db: SqlDatabase,
   id: MessageId,
   change: () => Fails<readonly unknown[]>,
 ): Fails<boolean | undefined> {
@@ -87,13 +88,13 @@ function seenFlag(notifiesAuthor: boolean): number {
   return SEEN;
 }
 
-function add(db: SqliteDatabase, adding: NewReaction): Fails<boolean | undefined> {
+function add(db: SqlDatabase, adding: NewReaction): Fails<boolean | undefined> {
   const { identity, messageId, notifiesAuthor, reactedAt, reaction } = adding;
   const seen = seenFlag(notifiesAuthor);
   return ifMessage(db, messageId, () =>
     db.all(
-      `INSERT OR IGNORE INTO reactions (message_id, identity_name, reaction, reacted_at, seen)
-       VALUES (?, ?, ?, ?, ?) RETURNING message_id`,
+      `INSERT INTO reactions (message_id, identity_name, reaction, reacted_at, seen)
+       VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING message_id`,
       messageId,
       identity,
       reaction,
@@ -103,7 +104,7 @@ function add(db: SqliteDatabase, adding: NewReaction): Fails<boolean | undefined
   );
 }
 
-function remove(db: SqliteDatabase, { identity, messageId, reaction }: ReactionKey): Fails<boolean | undefined> {
+function remove(db: SqlDatabase, { identity, messageId, reaction }: ReactionKey): Fails<boolean | undefined> {
   return ifMessage(db, messageId, () =>
     db.all(
       "DELETE FROM reactions WHERE message_id = ? AND identity_name = ? AND reaction = ? RETURNING message_id",
@@ -114,34 +115,40 @@ function remove(db: SqliteDatabase, { identity, messageId, reaction }: ReactionK
   );
 }
 
-function list(db: SqliteDatabase, ids: readonly MessageId[]): Fails<readonly Reaction[]> {
+function list(db: SqlDatabase, ids: readonly MessageId[]): Fails<readonly Reaction[]> {
+  if (Arr.isReadonlyArrayEmpty(ids)) {
+    return Effect.succeed([]);
+  }
   return Effect.flatMap(
     db.all(`SELECT ${COLUMNS} FROM reactions AS r WHERE r.message_id IN (${placesFor(ids)})`, ...ids),
     reactionRows,
   );
 }
 
-function unseen(db: SqliteDatabase, author: IdentityName): Fails<readonly Reaction[]> {
+function unseen(db: SqlDatabase, author: IdentityName): Fails<readonly Reaction[]> {
   return Effect.flatMap(
     db.all(
       `SELECT ${COLUMNS} FROM reactions AS r JOIN messages AS m ON m.id = r.message_id
-       WHERE r.seen = 0 AND m.author_name = ?`,
+       WHERE ${isFalse[db.dialect]("r.seen")} AND m.author_name = ?`,
       author,
     ),
     reactionRows,
   );
 }
 
-function markSeen(db: SqliteDatabase, author: IdentityName, ids: readonly MessageId[]): Fails<void> {
+function markSeen(db: SqlDatabase, author: IdentityName, ids: readonly MessageId[]): Fails<void> {
+  if (Arr.isReadonlyArrayEmpty(ids)) {
+    return Effect.void;
+  }
   return db.run(
-    `UPDATE reactions SET seen = 1 WHERE seen = 0 AND message_id IN (${placesFor(ids)})
+    `UPDATE reactions SET seen = TRUE WHERE ${isFalse[db.dialect]("seen")} AND message_id IN (${placesFor(ids)})
      AND message_id IN (SELECT id FROM messages WHERE author_name = ?)`,
     ...ids,
     author,
   );
 }
 
-function sqliteReactions(db: SqliteDatabase): ReactionsSection {
+function sqlReactions(db: SqlDatabase): ReactionsSection {
   return {
     addReaction: (adding) => add(db, adding),
     listReactions: (ids) => list(db, ids),
@@ -151,4 +158,4 @@ function sqliteReactions(db: SqliteDatabase): ReactionsSection {
   };
 }
 
-export { REACTIONS_MIGRATION, sqliteReactions };
+export { REACTIONS_MIGRATION, sqlReactions };

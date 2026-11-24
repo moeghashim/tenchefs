@@ -15,7 +15,9 @@ export function ConversationMissing(): ReactNode {
       backHref={hrefOf({ name: "inbox", selected: null })}
       backLabel={TEXT.back}
       detail=""
+      edge={null}
       label={TEXT.conversation}
+      message={null}
       openHref={null}
       openLabel={TEXT.open}
     >

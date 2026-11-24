@@ -125,3 +125,16 @@ it.effect.each(storageLayers)(
       ]);
     }),
 );
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): listing the read receipts of no messages finds none",
+  ({ layer }) =>
+    Effect.gen(function* noIds() {
+      const storage = yield* storeWithPeople(layer);
+      const plain = yield* appendTo(storage)(newMessage("grill", "plain", ANN));
+      yield* storage.ackMessage(nameOf("bob"), plain.id, fixtureTime);
+      const kept = yield* storage.listReadReceipts([]);
+
+      expect(kept).toStrictEqual([]);
+    }),
+);

@@ -1,4 +1,4 @@
-import { DateTime, Effect, String as Str } from "effect";
+import { Array as Arr, DateTime, Effect, String as Str } from "effect";
 import type { Storage, StorageUnavailable } from "../../server.ts";
 import { expect, it } from "@effect/vitest";
 import {
@@ -120,5 +120,47 @@ it.effect.each(storageLayers)(
       const afterwards = yield* storage.useAgentSession({ hash: FIRST, now: T30 });
 
       expect([whileDeactivated, afterwards]).toStrictEqual([{ status: "deactivated" }, { status: "revoked" }]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): an agent session token used twice at once is used once at a time, to one expiry",
+  ({ layer }) =>
+    Effect.gen(function* usedOnce() {
+      const storage = yield* withAgent(layer);
+      yield* storage.issueAgentSession({ force: false, session: session(FIRST) });
+      const uses = yield* Effect.all(
+        [storage.useAgentSession({ hash: FIRST, now: T30 }), storage.useAgentSession({ hash: FIRST, now: T30 })],
+        { concurrency: "unbounded" },
+      );
+      const listed = yield* storage.findLiveAgentSession({ identity: AGENT, now: T30 });
+
+      expect(uses).toMatchObject([
+        { expiresAt: T90, status: "active" },
+        { expiresAt: T90, status: "active" },
+      ]);
+      expect(listed).toMatchObject({ value: { expiresAt: T90, lastUsedAt: T30 } });
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): two agent session tokens issued at once without force, exactly one is issued",
+  ({ layer }) =>
+    Effect.gen(function* issuedOnce() {
+      const storage = yield* withAgent(layer);
+      const issues = yield* Effect.all(
+        [
+          storage.issueAgentSession({ force: false, session: session(FIRST) }),
+          storage.issueAgentSession({ force: false, session: session(SECOND) }),
+        ],
+        { concurrency: "unbounded" },
+      );
+      const uses = yield* Effect.all(
+        [storage.useAgentSession({ hash: FIRST, now: T30 }), storage.useAgentSession({ hash: SECOND, now: T30 })],
+        ONE_AT_A_TIME,
+      );
+
+      expect(issues).toStrictEqual([{ status: "issued" }, { expiresAt: T60, status: "live" }]);
+      expect(Arr.map(uses, ({ status }) => status)).toStrictEqual(["active", "unknown"]);
     }),
 );

@@ -1,7 +1,8 @@
 import type { FileTiming, ReportFile } from "./slowest-files.ts";
 import { TIMINGS_DIR, readTimings, saveFullList, slowestNames, slowestSummary } from "./slowest-files.ts";
+import { holdMachineLock, waitingLine } from "./machine-lock.ts";
+import type { Holder } from "./machine-lock.ts";
 import { firstError } from "./first-error.ts";
-import { holdMachineLock } from "./machine-lock.ts";
 import { once } from "node:events";
 import { rmSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -165,17 +166,20 @@ async function runSelected(selected: readonly Check[]): Promise<readonly Outcome
   return [...first, ...after];
 }
 
-function waiting(holder: number): void {
-  console.error(
-    `check: waiting for the pnpm check already running on this machine (pid ${String(holder)}). Two at once overload the CPU until spawned test processes time out (#94).`,
-  );
+function waiting(holder: Holder): void {
+  console.error(waitingLine({ holder, script: "check" }));
 }
 
 async function runLocked(selected: readonly Check[], { inCi, lockFile }: Checks): Promise<readonly Outcome[]> {
   if (inCi) {
     return runSelected(selected);
   }
-  const release = await holdMachineLock({ file: lockFile, onWait: waiting, pollMs: LOCK_POLL_MS });
+  const release = await holdMachineLock({
+    file: lockFile,
+    onWait: waiting,
+    pollMs: LOCK_POLL_MS,
+    worktree: process.cwd(),
+  });
   try {
     return await runSelected(selected);
   } finally {

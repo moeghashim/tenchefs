@@ -43,3 +43,16 @@ const webhookFake: Layer.Layer<WebhookFake> = Layer.effect(
 );
 
 export { type WebhookCall, WebhookFake, type WebhookFakeService, webhookFake };
+
+/**
+ * A scripted stand-in for the trigger URL seam: `ScriptedTriggers` records every call to a trigger URL and answers
+ * each with the next scripted answer (an HTTP status, an error, or `"no answer"`, which never ends), else 200.
+ */
+export {
+  type ScriptedAnswer,
+  ScriptedTriggers,
+  type ScriptedTriggersService,
+  scriptedTriggers,
+  triggerToken,
+  unusedScriptedTriggers,
+} from "./lib/server/scripted-triggers.ts";

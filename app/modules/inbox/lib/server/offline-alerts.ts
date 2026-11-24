@@ -7,6 +7,7 @@ import type { Refusal } from "../../../http/index.ts";
 import type { Scope } from "effect";
 import { Storage } from "../../../storage/server.ts";
 import type { StorageUnavailable } from "../../../storage/server.ts";
+import type { TriggerFailure } from "../../../triggers/index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
@@ -19,6 +20,8 @@ interface OwnedAlert {
 interface OfflineAlertsService {
   readonly raise: (agent: IdentityName, offlineReason: OfflineReason) => Effect.Effect<void>;
   readonly backOnline: (agent: IdentityName) => Effect.Effect<void>;
+  readonly raiseTriggerFailure: (agent: IdentityName, trigger: TriggerFailure) => Effect.Effect<void>;
+  readonly triggerCleared: (agent: IdentityName) => Effect.Effect<void>;
   readonly list: (caller: Identity) => Effect.Effect<readonly OfflineAlert[], StorageUnavailable>;
   readonly markRead: (caller: Identity, asked: string) => Fails<OfflineAlert>;
   readonly markAllRead: (
@@ -41,6 +44,7 @@ interface On {
 }
 
 const NOT_FOUND = 404;
+const FIRST_PARAMETER = 0;
 const ONE_AT_A_TIME = { concurrency: 1, discard: true } as const;
 
 const now: Effect.Effect<IsoTime> = Effect.map(DateTime.now, isoTimeOf);
@@ -62,23 +66,29 @@ function ownerOfAgent(storage: Storage["Service"], agent: IdentityName): Effect.
   return storage.findIdentityByName(agent).pipe(Effect.map(ownerOf), Effect.orElseSucceed(Option.none));
 }
 
-function raised({ publish, storage }: On, agent: IdentityName, offlineReason: OfflineReason): Effect.Effect<void> {
+type Raising = Pick<NewOfflineAlert, "agent" | "offlineReason" | "trigger">;
+
+type NewOfflineAlert = Parameters<Storage["Service"]["recordOfflineAlert"]>[typeof FIRST_PARAMETER];
+
+function raised({ publish, storage }: On, raising: Raising): Effect.Effect<void> {
   return Effect.gen(function* raiseAlert() {
-    const owner = yield* ownerOfAgent(storage, agent);
+    const owner = yield* ownerOfAgent(storage, raising.agent);
     if (Option.isNone(owner)) {
       return;
     }
     const raisedAt = yield* now;
-    const alert = yield* storage.recordOfflineAlert({ agent, offlineReason, owner: owner.value, raisedAt });
+    const alert = yield* storage.recordOfflineAlert({ ...raising, owner: owner.value, raisedAt });
     yield* publish(owner.value)([alert]);
   }).pipe(Effect.ignore);
 }
 
-function wasBack({ publish, storage }: On, agent: IdentityName): Effect.Effect<void> {
+type MarkBack = Storage["Service"]["markBackOnline"];
+
+function wasBack({ publish, storage }: On, agent: IdentityName, markBack: MarkBack): Effect.Effect<void> {
   return Effect.gen(function* markBackOnline() {
     const owner = yield* ownerOfAgent(storage, agent);
     const at = yield* now;
-    const back = yield* storage.markBackOnline(agent, at);
+    const back = yield* markBack(agent, at);
     yield* Effect.forEach(Option.toArray(owner), (named) => publish(named)(back), ONE_AT_A_TIME);
   }).pipe(Effect.ignore);
 }
@@ -127,13 +137,15 @@ const offlineAlertsLayer: Layer.Layer<OfflineAlerts, never, Storage> = Layer.eff
     const hub = yield* PubSub.unbounded<OwnedAlert>();
     const on = { publish: publisher((owned) => PubSub.publish(hub, owned)), storage };
     return {
-      backOnline: (agent) => wasBack(on, agent),
+      backOnline: (agent) => wasBack(on, agent, storage.markBackOnline),
       changed: PubSub.subscribe(hub),
       list: (caller) => storage.listOfflineAlerts(caller.name),
       markAllRead: (caller, upTo) =>
         Effect.tap(storage.markOfflineAlertsRead(caller.name, upTo), on.publish(caller.name)),
       markRead: (caller, asked) => markedRead(on, caller, asked),
-      raise: (agent, offlineReason) => raised(on, agent, offlineReason),
+      raise: (agent, offlineReason) => raised(on, { agent, offlineReason }),
+      raiseTriggerFailure: (agent, trigger) => raised(on, { agent, offlineReason: "trigger failed", trigger }),
+      triggerCleared: (agent) => wasBack(on, agent, storage.markTriggerAlertsCleared),
       warningsFor: (viewer) => warnings(storage, viewer),
     } satisfies OfflineAlertsService;
   }),

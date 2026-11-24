@@ -7,14 +7,14 @@ import type {
 } from "./agent-join-requests.ts";
 import { Effect, Option, Predicate, Schema } from "effect";
 import { GONE, PENDING, collectionOf, sessionToIssue } from "./agent-join-requests.ts";
-import { agentSessionIssuer, sqliteAgentSessions } from "./agent-sessions-sqlite.ts";
+import { agentSessionIssuer, sqlAgentSessions } from "./agent-sessions-sqlite.ts";
 import type { AgentSessionsSection } from "./agent-sessions.ts";
 import type { Fails } from "./errors.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { isIdentityName } from "../../../identities/index.ts";
-import { sqliteJoinCodes } from "./join-codes-sqlite.ts";
+import { sqlJoinCodes } from "./join-codes-sqlite.ts";
 import { unreadable } from "./errors.ts";
 
 const NameColumn = Schema.String.pipe(Schema.refine(isIdentityName));
@@ -70,11 +70,11 @@ function shown(row: RequestRowType): AgentJoinRequest {
   return { ...view, idleExpiry: row.idle_expiry };
 }
 
-function liveByCode(db: SqliteDatabase, userCode: string, now: IsoTime): Fails<Option.Option<RequestRowType>> {
+function liveByCode(db: SqlDatabase, userCode: string, now: IsoTime): Fails<Option.Option<RequestRowType>> {
   return Effect.flatMap(db.get(FIND_LIVE_BY_CODE, userCode, now), requestRow);
 }
 
-function addIn(db: SqliteDatabase): AgentJoinRequestsSection["addAgentJoinRequest"] {
+function addIn(db: SqlDatabase): AgentJoinRequestsSection["addAgentJoinRequest"] {
   return (request: NewAgentJoinRequest, now: IsoTime) =>
     db.transaction(
       Effect.gen(function* addRequest() {
@@ -90,7 +90,7 @@ function addIn(db: SqliteDatabase): AgentJoinRequestsSection["addAgentJoinReques
     );
 }
 
-function approveIn(db: SqliteDatabase): AgentJoinRequestsSection["approveAgentJoinRequest"] {
+function approveIn(db: SqlDatabase): AgentJoinRequestsSection["approveAgentJoinRequest"] {
   return (userCode, { created, force, idleSeconds, identity }, now) =>
     db.transaction(
       Effect.gen(function* approveRequest() {
@@ -104,7 +104,7 @@ function approveIn(db: SqliteDatabase): AgentJoinRequestsSection["approveAgentJo
     );
 }
 
-function issueIn(db: SqliteDatabase, collect: CollectAgentJoinRequest) {
+function issueIn(db: SqlDatabase, collect: CollectAgentJoinRequest) {
   return (row: RequestRowType, identity: NonNullable<RequestRowType["joins"]>): Fails<AgentJoinCollection> =>
     Effect.gen(function* issueAgentSession() {
       yield* db.run("DELETE FROM agent_join_requests WHERE request_hash = ?", collect.requestHash);
@@ -116,7 +116,7 @@ function issueIn(db: SqliteDatabase, collect: CollectAgentJoinRequest) {
     });
 }
 
-function collectIn(db: SqliteDatabase): AgentJoinRequestsSection["collectAgentJoinRequest"] {
+function collectIn(db: SqlDatabase): AgentJoinRequestsSection["collectAgentJoinRequest"] {
   return (collect) =>
     db.transaction(
       Effect.gen(function* collectRequest() {
@@ -132,7 +132,7 @@ function collectIn(db: SqliteDatabase): AgentJoinRequestsSection["collectAgentJo
     );
 }
 
-function sqliteAgentJoinRequests(db: SqliteDatabase): AgentJoinRequestsSection {
+function sqliteAgentJoinRequests(db: SqlDatabase): AgentJoinRequestsSection {
   return {
     addAgentJoinRequest: addIn(db),
     approveAgentJoinRequest: approveIn(db),
@@ -142,10 +142,10 @@ function sqliteAgentJoinRequests(db: SqliteDatabase): AgentJoinRequestsSection {
   };
 }
 
-function sqliteAgentSessionSections(
-  db: SqliteDatabase,
-): AgentSessionsSection & AgentJoinRequestsSection & ReturnType<typeof sqliteJoinCodes> {
-  return { ...sqliteAgentSessions(db), ...sqliteAgentJoinRequests(db), ...sqliteJoinCodes(db) };
+function sqlAgentSessionSections(
+  db: SqlDatabase,
+): AgentSessionsSection & AgentJoinRequestsSection & ReturnType<typeof sqlJoinCodes> {
+  return { ...sqlAgentSessions(db), ...sqliteAgentJoinRequests(db), ...sqlJoinCodes(db) };
 }
 
-export { sqliteAgentSessionSections };
+export { sqlAgentSessionSections };

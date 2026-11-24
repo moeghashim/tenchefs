@@ -208,10 +208,10 @@ it("a thread's parent and replies take reactions too, and a key pressed on a mes
 
   await openThread("web-react-thread");
   const parent = await screen.findByRole("article", { name: "Parent message" });
-  reactWith(() => parent, "👎");
+  fireEvent.keyDown(parent, { key: "-" });
   await within(parent).findByRole("button", { name: "👎 1", pressed: true });
   const reply = within(await screen.findByRole("list", { name: "Replies" })).getByRole("article");
-  fireEvent.keyDown(within(reply).getByRole("button", { name: "React with 👎" }), { key: "-" });
+  fireEvent.keyDown(within(reply).getByRole("button", { name: "React with 👍" }), { key: "-" });
   fireEvent.keyDown(reply, { key: "+" });
   await within(reply).findByRole("button", { name: "👍 1", pressed: true });
 

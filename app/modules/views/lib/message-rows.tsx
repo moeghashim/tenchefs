@@ -15,6 +15,7 @@ interface MessageRowsProps {
   readonly messages: ChannelMessages;
   readonly state: ChannelMessagesState;
   readonly me: string;
+  readonly held: ReadonlySet<MessageId>;
   readonly open: MessageId | null;
   readonly readPosition: number | null;
   readonly unread: Unread;
@@ -45,6 +46,7 @@ export function MessageRows(props: MessageRowsProps): ReactNode {
       <FeedStream
         closing={props.closing}
         channel={channel}
+        held={props.held}
         label={TEXT.messages}
         me={props.me}
         menu={props.unread.menu}

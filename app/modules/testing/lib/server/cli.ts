@@ -12,7 +12,7 @@ import {
   pipe,
 } from "effect";
 import { exitCodeAfterFailure, runCookout as runCommandLine } from "../../../cli/server.ts";
-import { memoryStorage, sqliteStorage } from "../../../storage/server.ts";
+import { memoryStorage, storageLayer } from "../../../storage/server.ts";
 import type { NodeServices } from "@effect/platform-node/NodeServices";
 import type { Scope } from "effect";
 import type { Secrets } from "../../../secrets/server.ts";
@@ -41,7 +41,7 @@ interface ServeProcess {
 interface ServeOptions {
   readonly adminToken?: string;
   readonly env?: Readonly<Record<string, string>>;
-  readonly database: string;
+  readonly database?: string;
   readonly port?: number;
   readonly storage?: ServeLayers["storage"];
   readonly webFolder?: string;
@@ -169,8 +169,10 @@ function startUntil<Line>(
 
 function serveCommandLine(options: ServeOptions): Omit<CommandLine, "console"> & Pick<ServeProcess, "adminToken"> {
   const { adminToken = serveAdminToken, database, env = {}, port = ANY_FREE_PORT, ...web } = options;
-  const args = ["serve", "--port", String(port), "--host", "127.0.0.1", "--db", database];
-  const program = exitCodeAfter(runCommandLine(args, { storage: sqliteStorage, ...web }));
+  const listen = ["serve", "--port", String(port), "--host", "127.0.0.1"];
+  const db = Option.match(Option.fromNullishOr(database), { onNone: () => [], onSome: (path) => ["--db", path] });
+  const args = [...listen, ...db];
+  const program = exitCodeAfter(runCommandLine(args, { storage: storageLayer, ...web }));
   return { adminToken, env: { COOKOUT_ADMIN_TOKEN: adminToken, ...env }, program };
 }
 

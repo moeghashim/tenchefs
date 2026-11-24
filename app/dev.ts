@@ -1,7 +1,7 @@
 /**
  * The dev program behind `pnpm dev` and `pnpm seed`: the cookout on a
  * temporary SQLite file with a webhook fake, for verifying a change locally
- * (ADRs 0017 and 0020). It is never built or published.
+ * (ADR 0079). It is never built or published.
  */
 import { Cause, Effect, Exit, Runtime } from "effect";
 import { devCommandLine } from "./modules/dev/server.ts";

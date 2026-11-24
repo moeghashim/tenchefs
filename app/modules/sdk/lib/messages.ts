@@ -1,30 +1,33 @@
-import type { ClosedThreadCalls, OpenThreadCalls } from "../../messages/client.ts";
+import type { AttachmentCalls, ClosedThreadCalls, OpenThreadCalls, SearchCalls } from "../../messages/client.ts";
 import type {
   ListMessagesQuery,
   ListMessagesResponse,
   MessageId,
   MessageResponse,
-  PostMessageRequest,
   ReactionName,
   ReactionsResponse,
   ThreadResponse,
   TopLevelMessageResponse,
 } from "../../messages/index.ts";
+import { attachmentCalls, postBody } from "./attachments.ts";
 import { channelMessagesPath, closedPath, messagesPath, reactionPath, threadPath } from "../../messages/index.ts";
 import {
   isListMessagesResponse,
   isListOpenThreadsResponse,
   isMessageResponse,
   isReactionsResponse,
+  isSearchResponse,
   isThreadResponse,
   isTopLevelMessageResponse,
 } from "./generated/validators.js";
+import { openThreadsPath, searchQueryParam } from "../../messages/client.ts";
 import type { ClientConnection } from "./request.ts";
-import { openThreadsPath } from "../../messages/client.ts";
+import type { CreateMessageRequest } from "./attachments.ts";
+import { searchPath } from "../../search/index.ts";
 import { send } from "./request.ts";
 
-interface MessageCalls extends ClosedThreadCalls, OpenThreadCalls {
-  readonly createMessage: (request: PostMessageRequest) => Promise<MessageResponse>;
+interface MessageCalls extends AttachmentCalls, ClosedThreadCalls, OpenThreadCalls, SearchCalls {
+  readonly createMessage: (request: CreateMessageRequest) => Promise<MessageResponse>;
   readonly listMessages: (channel: string, query?: ListMessagesQuery) => Promise<ListMessagesResponse>;
   readonly getThread: (messageId: MessageId) => Promise<ThreadResponse>;
   readonly react: (messageId: MessageId, reaction: ReactionName) => Promise<ReactionsResponse>;
@@ -58,8 +61,10 @@ function allQuery(all: boolean | undefined): { readonly all?: "true" } {
 
 function messageCalls(server: ClientConnection): MessageCalls {
   return {
+    ...attachmentCalls(server),
     closeThread: closedCall(server, "PUT"),
-    createMessage: async (body) => {
+    createMessage: async (request) => {
+      const body = postBody(request);
       const posted = await send(server, { body, isExpected: isMessageResponse, method: "POST", path: messagesPath });
       return posted;
     },
@@ -89,6 +94,15 @@ function messageCalls(server: ClientConnection): MessageCalls {
     },
     react: reactionCall(server, "PUT"),
     reopenThread: closedCall(server, "DELETE"),
+    search: async ({ cursor, limit, query }) => {
+      const page = await send(server, {
+        isExpected: isSearchResponse,
+        method: "GET",
+        path: searchPath,
+        query: { cursor, limit, [searchQueryParam]: query },
+      });
+      return page;
+    },
     unreact: reactionCall(server, "DELETE"),
   };
 }
@@ -98,9 +112,9 @@ export type {
   ListMessagesResponse,
   MessageId,
   MessageResponse,
-  PostMessageRequest,
   ReactionName,
   ReactionsResponse,
   ThreadResponse,
 } from "../../messages/index.ts";
+export type { CreateMessageRequest } from "./attachments.ts";
 export { messageCalls };

@@ -1,62 +1,34 @@
 /**
  * Messages on the backend: the `Messages` service over `Storage`, and the
- * routes that post a message, get a thread from any message in it and page
- * back through a channel. `Messages` also publishes each message the moment
+ * routes that post a message, get a thread from any message in it, page
+ * back through a channel and search every channel by words. `Messages` also publishes each message the moment
  * it is stored to an in-process hub, which `posted` subscribes to, for live
  * updates. The author's name and owner are copied onto each
  * message, so they survive the identity being deleted. Routes sit behind the
  * server's token gate.
  */
-import { Caller, CommandThread, sentHarness } from "../identities/server.ts";
-import { Effect, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
   ListMessagesQuerySchema,
   ListMessagesResponseSchema,
   MessageResponseSchema,
-  PostMessageRequestSchema,
   ReactionsResponseSchema,
   ThreadResponseSchema,
   TopLevelMessageResponseSchema,
 } from "./lib/server/wire.ts";
-import { ListOpenThreadsResponseSchema, openThreadRoutes } from "./lib/server/open-threads.ts";
-import { channelMessagesPath, closedPath, isMessageId, messagesPath, reactionPath, threadPath } from "./index.ts";
-import type { MessageId } from "./index.ts";
+import { channelMessagesPath, closedPath, reactionPath, threadPath } from "./index.ts";
+import { listingResponseSchemas, listingRoutes } from "./lib/server/listings.ts";
+import { Caller } from "../identities/server.ts";
+import { Effect } from "effect";
+import type { ListingNeeds } from "./lib/server/listings.ts";
 import { Messages } from "./lib/server/service.ts";
-import type { Refusal } from "../http/index.ts";
 import type { Route } from "../http/server.ts";
-import { messageNotFound } from "./lib/server/refusals.ts";
+import { postRoutes } from "./lib/server/routes.ts";
+import { threadIdOf } from "./lib/server/refusals.ts";
 
-const CREATED = 201;
 const ALL_ERRORS = { errors: "all" } as const;
 const PATH_BASE = "http://cookout.invalid";
 const DIGITS = /^\d+$/u;
-
-function threadIdOf(asked: string): Effect.Effect<MessageId, Refusal> {
-  const id = Number(asked);
-  if (isMessageId(id)) {
-    return Effect.succeed(id);
-  }
-  return Effect.fail(messageNotFound(asked));
-}
-
-const postRoute: Route<Caller | Messages> = {
-  handle: () =>
-    Effect.gen(function* postMessageRoute() {
-      const body = yield* HttpServerRequest.schemaBodyJson(PostMessageRequestSchema, ALL_ERRORS);
-      const caller = yield* Caller;
-      const messages = yield* Messages;
-      const thread = yield* CommandThread;
-      const posting = { ...body, ...(yield* sentHarness) };
-      const posted = yield* Option.match(thread, {
-        onNone: () => messages.post(caller, posting),
-        onSome: (threadId) => messages.postInThread(caller, posting, threadId),
-      });
-      return yield* HttpServerResponse.schemaJson(MessageResponseSchema)(posted, { status: CREATED });
-    }),
-  method: "POST",
-  path: messagesPath,
-};
 
 const threadRoute: Route<Messages> = {
   handle: (params) =>
@@ -140,8 +112,11 @@ export { messageNotFound } from "./lib/server/refusals.ts";
 
 /** The Schemas of a message and its ID, for other modules' answers that hold messages. */
 export {
+  AuthorSchema,
   MessageIdSchema,
   MessageSchema,
+  ScheduledMessageIdSchema,
+  TextSchema,
   ReactionCountSchema,
   ReactionSchema,
   ReadReceiptSchema,
@@ -152,26 +127,32 @@ export {
 export { ListMessagesQuerySchema as PageQuerySchema } from "./lib/server/wire.ts";
 
 /**
- * The message routes, for the server's route list. They need `Caller`, which the token gate provides, and `Messages`,
- * which `messagesLayer` provides.
+ * The message routes, for the server's route list. They need `Caller`, which the token gate provides, `Messages`,
+ * which `messagesLayer` provides, and `Storage`.
  */
-export const messageRoutes: readonly Route<Caller | Messages>[] = [
-  postRoute,
+export const messageRoutes: readonly Route<ListingNeeds>[] = [
+  ...postRoutes,
   threadRoute,
   pageRoute,
   reactionRoute("PUT", (messages) => messages.react),
   reactionRoute("DELETE", (messages) => messages.unreact),
   closeRoute,
   reopenRoute,
-  ...openThreadRoutes,
+  ...listingRoutes,
 ];
+
+/**
+ * The response Schemas of the search route, for the SDK's generated validators. They are their own group, since the
+ * answer's types live in the search module.
+ */
+export { searchResponseSchemas } from "./lib/server/listings.ts";
 
 /** The response Schemas of the message routes, for the SDK's generated validators. */
 export const messageResponseSchemas = {
   ListMessagesResponse: ListMessagesResponseSchema,
-  ListOpenThreadsResponse: ListOpenThreadsResponseSchema,
   MessageResponse: MessageResponseSchema,
   ReactionsResponse: ReactionsResponseSchema,
   ThreadResponse: ThreadResponseSchema,
   TopLevelMessageResponse: TopLevelMessageResponseSchema,
+  ...listingResponseSchemas,
 };

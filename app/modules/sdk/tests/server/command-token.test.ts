@@ -75,6 +75,7 @@ it.effect(
           refusal(() => handler.createMessage({ channel: "smoke", replyTo: threadId, text: "thread, wrong channel" })),
           refusal(() => handler.createMessage({ channel: "grill", text: "top-level" })),
           refusal(() => handler.listChannels()),
+          refusal(() => handler.search({ query: "deploy" })),
           refusal(() => handler.closeThread(threadId)),
           refusal(() => handler.createMessage({ channel: "grill", close: true, replyTo: threadId, text: "done" })),
         ],

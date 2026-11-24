@@ -22,8 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A runner has 2 cores, and lint, canaries and fixers ran about 1.7 times slower when two of
-        # them shared one, so each gets its own job (ADR 0024).
+        # A runner has 2 cores, and most of a type-aware Oxlint run is starting Node and loading its
+        # plugins, so lint, canaries and fixers ran about 1.7 times slower when two of them shared one.
+        # Each gets its own job, as does any new type-aware check.
         job: [lint, canaries, types, fixers, seams, knip, format, drift, browser]
     steps:
       - uses: actions/checkout@v4

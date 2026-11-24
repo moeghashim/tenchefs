@@ -1,16 +1,17 @@
-import { Array as Arr, Context, Effect, Layer, Schedule } from "effect";
+import { Array as Arr, Context, Effect, Layer, Logger, MutableList, Schedule, Stream } from "effect";
+import { AssetStore, Storage } from "../../../storage/server.ts";
+import type { AttachmentId } from "../../../attachments/index.ts";
 import type { HttpServer } from "effect/http";
 import type { Identities } from "../../../identities/server.ts";
 import { PresenceRegistry } from "../../../presence/server.ts";
 import type { Scope } from "effect";
-import { Storage } from "../../../storage/server.ts";
 import type { StoredPresence } from "../../../storage/server.ts";
 import { TestClock } from "effect/testing";
 import type { WebhookFake } from "../../../webhook-fake/server.ts";
 import { identityName } from "./identities.ts";
 import { serverUrl } from "../../../http/server.ts";
 
-type BootedContext = Context.Context<Storage | Identities | WebhookFake | PresenceRegistry>;
+type BootedContext = Context.Context<Storage | AssetStore | Identities | WebhookFake | PresenceRegistry>;
 
 interface Booted {
   readonly url: string;
@@ -21,13 +22,46 @@ const NO_CONNECTIONS = 0;
 const NOTICED_EVERY = "2 millis";
 
 function booted<Failure>(
-  layer: Layer.Layer<Storage | Identities | WebhookFake | PresenceRegistry | HttpServer.HttpServer, Failure>,
+  layer: Layer.Layer<
+    Storage | AssetStore | Identities | WebhookFake | PresenceRegistry | HttpServer.HttpServer,
+    Failure
+  >,
 ): Effect.Effect<Booted, Failure, Scope.Scope> {
   return Effect.gen(function* buildServer() {
     const server = yield* Layer.build(layer);
     const url = yield* serverUrl.pipe(Effect.provideContext(server));
     return { server, url };
   });
+}
+
+interface LoggedLine {
+  readonly level: string;
+  readonly message: string;
+}
+
+interface CapturedLogs {
+  readonly layer: Layer.Layer<never>;
+  readonly lines: Effect.Effect<readonly LoggedLine[]>;
+}
+
+function lineOf({ level, message }: { readonly level: string; readonly message: unknown }): LoggedLine {
+  return { level, message: Arr.join(Arr.map(Arr.ensure(message), String), " ") };
+}
+
+const capturedLogs: Effect.Effect<CapturedLogs> = Effect.sync(() => {
+  const kept = MutableList.make<LoggedLine>();
+  const capture = Logger.map(Logger.map(Logger.formatStructured, lineOf), (line) => {
+    MutableList.append(kept, line);
+  });
+  return {
+    layer: Logger.layer([capture], { mergeWithExisting: true }),
+    lines: Effect.sync(() => MutableList.toArray(kept)),
+  };
+});
+
+function heldAssetsOn(server: BootedContext): (ids: readonly AttachmentId[]) => Effect.Effect<readonly AttachmentId[]> {
+  const assets = Context.get(server, AssetStore);
+  return (ids) => Effect.filter(ids, (id) => Effect.isSuccess(Stream.runDrain(assets.read(id))));
 }
 
 function liveConnectionsClosedOn({
@@ -68,4 +102,13 @@ function lastEndOn({
   );
 }
 
-export { type Booted, type LastEnd, booted, lastEndOn, liveConnectionsClosedOn };
+export {
+  type Booted,
+  type LastEnd,
+  type LoggedLine,
+  booted,
+  capturedLogs,
+  heldAssetsOn,
+  lastEndOn,
+  liveConnectionsClosedOn,
+};

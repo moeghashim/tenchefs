@@ -1,3 +1,0 @@
-# The SDK keeps its env default through config
-
-At `876d300`, `createCookoutClient` defaulted its URL and token to `COOKOUT_URL` and `COOKOUT_TOKEN` (story 7 of mattpocock/cookout#1), and the rewrite makes `config` the only reader of `process.env`, so dropping the default was proposed, which would have changed behaviour. On 2026-11-22 the rewrite spec (mattpocock/cookout#17, decision 6) kept it instead, through a plain-TS reader of those two variables in `config`'s `index.ts` that returns nothing in a browser and that the SDK uses when no `url` or `token` is passed. `config` stays the one owner of the environment, and SDK users see no change.

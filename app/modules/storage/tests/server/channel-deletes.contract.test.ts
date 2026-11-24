@@ -101,7 +101,7 @@ it.effect.each(storageLayers)(
         ONE_AT_A_TIME,
       );
 
-      expect(deleted).toStrictEqual(channel("grill", { description: "Grill it" }));
+      expect(deleted).toStrictEqual({ attachments: [], channel: channel("grill", { description: "Grill it" }) });
       expect(after).toStrictEqual({
         channels: [channel("lounge")],
         grantGone: true,

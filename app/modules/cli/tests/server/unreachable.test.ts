@@ -123,7 +123,7 @@ it.effect("login --token goes through HTTP_PROXY, both to check the board and to
   Effect.gen(function* loginThroughProxy() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    const proxy = yield* forwardingProxy(cookout.url);
+    const proxy = yield* forwardingProxy({ target: cookout.url });
     const folder = yield* configFolder;
     const env = { COOKOUT_URL: UNKNOWN_HOST, HTTP_PROXY: proxy.url, XDG_CONFIG_HOME: folder };
 

@@ -2,7 +2,7 @@ import { Effect, Option, Predicate, Schema } from "effect";
 import { GONE, redemptionOf, sessionFor } from "./join-codes.ts";
 import type { JoinCodeRedemption, JoinCodesSection, RedeemJoinCode } from "./join-codes.ts";
 import type { Fails } from "./errors.ts";
-import type { SqliteDatabase } from "./adapters/sqlite.ts";
+import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { agentSessionIssuer } from "./agent-sessions-sqlite.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
@@ -30,7 +30,7 @@ function codeRow(row: unknown): Fails<Option.Option<CodeRowType>> {
   return Effect.mapBoth(decodeRow(row), { onFailure: unreadable, onSuccess: Option.some });
 }
 
-function redeemFound(db: SqliteDatabase, redeem: RedeemJoinCode) {
+function redeemFound(db: SqlDatabase, redeem: RedeemJoinCode) {
   return (row: CodeRowType): Fails<JoinCodeRedemption> =>
     Effect.gen(function* issueForCode() {
       if (row.deactivated === DEACTIVATED) {
@@ -45,7 +45,7 @@ function redeemFound(db: SqliteDatabase, redeem: RedeemJoinCode) {
     });
 }
 
-function sqliteJoinCodes(db: SqliteDatabase): JoinCodesSection {
+function sqlJoinCodes(db: SqlDatabase): JoinCodesSection {
   return {
     addJoinCode: ({ agent, codeHash, createdAt, expiresAt }) =>
       db.run(
@@ -69,4 +69,4 @@ function sqliteJoinCodes(db: SqliteDatabase): JoinCodesSection {
   };
 }
 
-export { sqliteJoinCodes };
+export { sqlJoinCodes };

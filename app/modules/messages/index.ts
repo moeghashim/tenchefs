@@ -1,12 +1,12 @@
 /**
- * Messages and threads on the wire, shared by the server, the SDK and the web:
- * the `MessageId` brand and its check, `Message` as a union tagged by `kind`,
- * the requests and answers of posting, threads and channel pages, their
- * paths, and the error codes they refuse with.
+ * Messages and threads on the wire, shared by the server, the SDK and the web: the `MessageId` brand and its check,
+ * `Message` as a union tagged by `kind`, the requests and answers of posting, threads and channel pages, their paths,
+ * and the error codes they refuse with.
  */
 import type { Harness, IdentityName, Owner } from "../identities/index.ts";
 import type { ChannelName } from "../channels/index.ts";
 import type { IsoTime } from "../time/index.ts";
+import type { WithAttachments } from "../attachments/index.ts";
 
 declare const brand: unique symbol;
 
@@ -14,10 +14,7 @@ const LOWEST_ID = 1;
 const FIRST = 0;
 const ONE_MORE = 1;
 
-/**
- * A message's ID: a positive whole number. Message IDs are one increasing
- * sequence across the whole server, so they order messages.
- */
+/** A message's ID: a positive whole number, from one increasing sequence across the server, so IDs order messages. */
 export type MessageId = number & { readonly [brand]: "MessageId" };
 
 /**
@@ -35,6 +32,12 @@ export const messageTextLength = { maximum: 40_000, minimum: 1 } as const;
 /** Any JSON value. */
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
+/** The Scheduled message that posted a message, and whether it has since been deleted (read now, not when posted). */
+export interface ScheduledMessageMarker {
+  readonly id: number & { readonly [brand]: "ScheduledMessageId" };
+  readonly deleted: boolean;
+}
+
 /** Who posted a message, as they were when they posted it, so it survives the identity being deleted. */
 export interface Author {
   readonly name: IdentityName;
@@ -42,11 +45,11 @@ export interface Author {
 }
 
 /** The fields every message has, top-level or reply. */
-export interface MessageFields {
+export interface MessageFields extends WithAttachments {
   readonly id: MessageId;
   readonly channel: ChannelName;
   readonly author: Author;
-  /** Plain text, 1–40,000 characters. */
+  /** Plain text, up to 40,000 characters. Empty only on a message posted with attachments and no text. */
   readonly text: string;
   /** Any JSON value, for commands and agents to read. Absent when none was sent. */
   readonly data?: JsonValue;
@@ -54,6 +57,7 @@ export interface MessageFields {
   readonly mentions: readonly IdentityName[];
   /** The harness the message was posted from, such as `claude-code`. Absent when none was named. */
   readonly harness?: Harness;
+  readonly scheduledMessage?: ScheduledMessageMarker;
   readonly createdAt: IsoTime;
   /**
    * The reactions on the message, one count for each reaction anyone has left, in `reactionNames` order, on the
@@ -131,14 +135,11 @@ export interface Reply extends MessageFields {
 /** A message, tagged by `kind`. */
 export type Message = TopLevelMessage | Reply;
 
-/** The body of `POST /v1/messages`. The server checks every field. */
-export interface PostMessageRequest {
-  readonly channel: string;
-  readonly text: string;
-  readonly data?: JsonValue;
-  /** Reply to this message. A reply to a reply goes to the top-level message's thread, which `close` also closes. */
-  readonly replyTo?: number;
-  readonly close?: true;
+/** An agent's reply posted to a thread with newer replies by others, oldest first; a later release refuses it instead. */
+export interface ThreadMovedWarning {
+  readonly code: "thread_moved";
+  readonly message: string;
+  readonly details: { readonly replies: readonly Reply[] };
 }
 
 /** The answer to posting a message. */
@@ -146,6 +147,8 @@ export interface MessageResponse {
   readonly message: Message;
   /** Each `@name` in the text that names no identity, once each in the order written. They stay plain text. */
   readonly unknownMentions: readonly string[];
+  /** Only on an agent's reply to a thread that moved on since what it had seen (`seen`, or else `replyTo`). */
+  readonly warning?: ThreadMovedWarning;
 }
 
 /**
@@ -275,10 +278,7 @@ export const threadPath = "/v1/messages/:id/thread";
  */
 export const reactionPath = "/v1/messages/:id/reactions/:reaction";
 
-/**
- * The codes the message routes refuse with: a missing message (404), a reply in another channel (400) and a reaction
- * not in `reactionNames` (404).
- */
+/** The codes the message routes refuse with: a missing message or reaction (404), a reply in another channel (400). */
 export const messageErrorCodes = ["message_not_found", "reply_in_other_channel", "reaction_not_found"] as const;
 
 /** The answer to closing or reopening a thread: its top-level message as it now stands. */

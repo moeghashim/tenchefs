@@ -5,10 +5,9 @@ import { MenuChoice } from "./menu-choice.tsx";
 import type { ReactNode } from "react";
 import { useAfterClose } from "./use-after-close.ts";
 
-const TEXT = { label: "Message actions" } as const;
-
 interface ContextMenuContentParts {
   readonly choices: readonly Choice[];
+  readonly label: string;
 }
 
 export function ContextMenuContent(parts: ContextMenuContentParts): ReactNode {
@@ -17,7 +16,7 @@ export function ContextMenuContent(parts: ContextMenuContentParts): ReactNode {
   const handleCloseAutoFocus = after.onCloseAutoFocus;
   return (
     <Content asChild onCloseAutoFocus={handleCloseAutoFocus}>
-      <div aria-label={TEXT.label} className={MENU}>
+      <div aria-label={parts.label} className={MENU}>
         {parts.choices.map((choice) => (
           <MenuChoice choice={choice} item={Item} key={choice.label} onChoose={handleChoose} />
         ))}

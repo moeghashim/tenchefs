@@ -2,7 +2,7 @@ import { adminClient, anonymousClient, sessionOf } from "./identities.ts";
 import { expect, it } from "vitest";
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { Unread } from "../../unread/index.ts";
-import { createBoard } from "../../board/index.ts";
+import { boardStoreFor } from "./defaults.ts";
 import { createUnread } from "../../unread/index.ts";
 import { inConversation } from "./regions.ts";
 import { openBoard } from "./render.tsx";
@@ -33,7 +33,7 @@ async function loadedNews(channel: string): Promise<NewsChannel> {
 
 function opened(news: NewsChannel, board: CookoutClient): () => void {
   return openBoard({
-    board: createBoard({ client: board }),
+    boardStore: boardStoreFor({ client: board }),
     hash: `#/inbox/${news.channel}`,
     session: sessionOf(news.reader),
     unread: news.unread,

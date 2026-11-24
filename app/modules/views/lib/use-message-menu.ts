@@ -28,7 +28,12 @@ interface ReplyOf {
   readonly me: string;
 }
 
-function threadChoice(closing: ThreadClosing | null, message: Message): ThreadChoice | null {
+interface ThreadChoiceOf {
+  readonly closing: ThreadClosing | null;
+  readonly message: Message;
+}
+
+function threadChoice({ closing, message }: ThreadChoiceOf): ThreadChoice | null {
   if (closing === null || message.kind !== "top-level") {
     return null;
   }
@@ -62,7 +67,7 @@ function useMessageMenu({ closing, me, menu, message }: MenuOf): MenuParts {
         menu.markUnread(messageId);
       },
       reactions,
-      thread: threadChoice(closing, message),
+      thread: threadChoice({ closing, message }),
     }),
     [closing, menu, message, messageId, reactions],
   );
@@ -88,4 +93,4 @@ function useReplyAction({ me, message, reply }: ReplyOf): (() => void) | null {
 
 type MenuClosing = ThreadClosing | null;
 
-export { type MenuClosing, type Reply, useMessageMenu, useReplyAction };
+export { type MenuClosing, type Reply, threadChoice, useMessageMenu, useReplyAction };

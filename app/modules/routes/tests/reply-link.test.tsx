@@ -137,7 +137,7 @@ it("a link to a reply in a closed thread opens it and highlights the reply", { t
   const close = openAt({ client: posted.reader, hash: linkTo(posted, reply) });
   const article = await articleSaying("Noon works.");
 
-  await expect(inThread().findByRole("button", { name: "Reopen" })).resolves.toBeDefined();
+  await expect(inThread().findByRole("button", { name: "Reopen thread" })).resolves.toBeDefined();
 
   await vi.waitFor(() => {
     expect(highlighted()).toStrictEqual([article]);

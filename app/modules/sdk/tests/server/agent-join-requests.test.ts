@@ -214,20 +214,6 @@ it.effect("an unapproved agent join request expires after 10 minutes", () =>
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("an agent can't see or approve an agent join request", () =>
-  Effect.gen(function* agentRefused() {
-    const on = yield* startedFor(asked);
-    const bot = yield* on.cookout.createIdentity("bot");
-    const shown = yield* refusal(() => bot.client.getAgentJoinRequest(on.started.userCode));
-    const approved = yield* refusal(() => bot.client.approveAgentJoin(on.started.userCode));
-
-    expect([shown, approved]).toMatchObject([
-      { code: "human_only", status: FORBIDDEN },
-      { code: "human_only", status: FORBIDDEN },
-    ]);
-  }).pipe(Effect.provide(testCookout())),
-);
-
 it.effect("an approved request collected after another session joined the agent is refused, not forced", () =>
   Effect.gen(function* joinedMeanwhile() {
     const on = yield* startedFor(asked);

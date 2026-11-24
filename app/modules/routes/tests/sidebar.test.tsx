@@ -149,3 +149,35 @@ it.each(["#/threads", "#/threads/all"])(
     close();
   },
 );
+
+it("the cookout name at the top of the sidebar is a link that opens the inbox", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  await adminClient().createChannel({ name: "web-sidebar-home" });
+  const close = openAt({ client: adminClient(), hash: "#/channels/web-sidebar-home" });
+  fireEvent.click(
+    await within(await screen.findByRole("navigation", { name: "Sidebar" })).findByRole("link", { name: "cookout" }),
+  );
+
+  const heading = await screen.findByRole("heading", { level: 1, name: "Inbox" });
+
+  expect([globalThis.location.hash, heading.textContent, inboxLink().getAttribute("aria-current")]).toStrictEqual([
+    "#/inbox",
+    "Inbox",
+    "page",
+  ]);
+
+  close();
+});
+
+it("a hash no page has opens the inbox", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const close = openAt({ client: adminClient(), hash: "#/nowhere" });
+
+  const heading = await screen.findByRole("heading", { level: 1, name: "Inbox" });
+
+  expect([heading.textContent, inboxLink().getAttribute("aria-current")]).toStrictEqual(["Inbox", "page"]);
+
+  close();
+});

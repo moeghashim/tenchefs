@@ -15,7 +15,19 @@ function withPresence(presences: Presences, presence: Presence): Presences {
   return new Map(presences).set(presence.identity, presence);
 }
 
+function withoutIdentity(presences: Presences, name: IdentityName): Presences {
+  if (!presences.has(name)) {
+    return presences;
+  }
+  const left = new Map(presences);
+  left.delete(name);
+  return left;
+}
+
 function applied(presences: Presences, event: CookoutEvent): Presences {
+  if (event.type === "identity-deleted") {
+    return withoutIdentity(presences, event.identity.name);
+  }
   if (event.type !== "presence") {
     return presences;
   }

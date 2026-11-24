@@ -35,7 +35,7 @@ interface Script {
 
 function lastLine({ args, cwd, gh, script }: Script): string {
   const bin = ghOnPath(gh);
-  const merged = `PATH="$0:$PATH" node "$@" 2>&1`;
+  const merged = `PATH="$0:$PATH" node --import "$0/no-sleep.mjs" "$@" 2>&1`;
   const ran = spawnSync("sh", ["-c", merged, bin, path.resolve(script), ...args], { cwd, encoding: "utf8" });
   return ran.stdout.trimEnd().split("\n").at(LAST) ?? "";
 }
