@@ -6,10 +6,10 @@ choose to.
 
 ## Remotes
 
-| Remote     | URL                                        | Use                         |
-| ---------- | ------------------------------------------ | --------------------------- |
-| `origin`   | `https://github.com/moeghashim/tenchefs`   | our repo: push here         |
-| `upstream` | `https://github.com/mattpocock/cookout`    | fetch only (push disabled)  |
+| Remote     | URL                                      | Use                        |
+| ---------- | ---------------------------------------- | -------------------------- |
+| `origin`   | `https://github.com/moeghashim/tenchefs` | our repo: push here        |
+| `upstream` | `https://github.com/mattpocock/cookout`  | fetch only (push disabled) |
 
 A fresh clone only has `origin`. To add upstream:
 
