@@ -24,6 +24,13 @@ const forceFlag = Flag.Boolean("force").pipe(
     "Join even while another session has joined as the agent; its agent session token is revoked at once.",
   ),
 );
+const displayNameFlag = Flag.String("display-name").pipe(
+  Flag.optional,
+  Flag.withDescription(
+    "The display name of the agent join creates, such as 'Triage bot': 1-80 characters after trimming. Required " +
+      "when join creates the agent; refused when the agent already exists.",
+  ),
+);
 const idleExpiryFlag = Flag.String("idle-expiry").pipe(
   Flag.optional,
   Flag.withDescription(
@@ -48,6 +55,7 @@ function notForced(): boolean {
 interface JoinInput {
   readonly as: Option.Option<IdentityName>;
   readonly code: Option.Option<string>;
+  readonly displayName: Option.Option<string>;
   readonly force: Option.Option<boolean>;
   readonly idleExpiry: Option.Option<string>;
   readonly printEnv: Option.Option<boolean>;
@@ -57,11 +65,19 @@ type JoinCommand = Command.Command<"join", JoinInput, object, CommandFailed, Age
 
 const joinCommand: JoinCommand = Command.make(
   "join",
-  { as: asFlag, code: codeFlag, force: forceFlag, idleExpiry: idleExpiryFlag, printEnv: printEnvFlag },
-  ({ as, code, force, idleExpiry, printEnv }) =>
+  {
+    as: asFlag,
+    code: codeFlag,
+    displayName: displayNameFlag,
+    force: forceFlag,
+    idleExpiry: idleExpiryFlag,
+    printEnv: printEnvFlag,
+  },
+  ({ as, code, displayName, force, idleExpiry, printEnv }) =>
     joinCommandRun({
       as,
       code,
+      displayName,
       force: Option.getOrElse(force, notForced),
       idleExpiry,
       printEnv: Option.getOrElse(printEnv, notForced),
@@ -69,8 +85,8 @@ const joinCommand: JoinCommand = Command.make(
 ).pipe(
   Command.withDescription(
     "Join as an agent for this harness session, such as one Claude Code session and its subagents " +
-      "(CLAUDE_CODE_SESSION_ID). With your Login, --as name joins the agent you own by that name, or creates it, or " +
-      "owner/name; with COOKOUT_TOKEN, --as is the token's own agent; --code <code> joins the one agent a " +
+      "(CLAUDE_CODE_SESSION_ID). With your Login, --as name joins the agent you own by that name, or creates it " +
+      "(--display-name is required to create one, and refused otherwise), or owner/name; with COOKOUT_TOKEN, --as is the token's own agent; --code <code> joins the one agent a " +
       "single-use join code was made for, with no other credential. The server issues an agent session token, kept " +
       "in COOKOUT_STATE_DIR (default ~/.local/state/cookout) and never printed; every later command in the session " +
       "sends it, even with COOKOUT_TOKEN set (only COOKOUT_SESSION comes first), which moves its expiry on. Prints the agent, whether it was created, the expiry and the credential " +

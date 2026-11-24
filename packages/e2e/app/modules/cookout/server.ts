@@ -5,6 +5,9 @@
  * `cookoutUnderTest` Layer is one run: it draws a fresh prefix for the names
  * it makes and, when it closes, passing or failing, deletes the run's channels (and their messages) and then its
  * identities, agents before their owners; one the server still refuses to delete is deactivated.
+ * The admin it runs as is a real person on the deployed cookout, so nothing the run does reaches their Inbox: the
+ * admin unsubscribes from each channel it creates, and every agent belongs to the run's own human, `owner`
+ * (`<prefix>-owner`, made on first use), so offline alerts go there.
  * `runPrefix` is that prefix: `e2e-` (`e2eNameStart`) then the run's own eight characters. Deploy's
  * leftover checks count only names that start with `e2e-`, so a real identity made mid-run isn't one.
  * `deactivateIdentity` deactivates one of the run's identities and dies on any other name

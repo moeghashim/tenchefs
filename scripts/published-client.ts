@@ -157,7 +157,10 @@ function setUp(cookout: DevCookout): Board {
   const admin = { ...boardEnv(cookout.url), COOKOUT_ALLOW_HUMAN: "1", COOKOUT_TOKEN: cookout.adminToken };
   const board = { admin, agent: {}, url: cookout.url };
   asAdmin(["channel", "create", CHANNEL], board);
-  const created = asAdmin(["identity", "create", AGENT, "--kind", "agent", "--owner", "admin"], board);
+  const created = asAdmin(
+    ["identity", "create", AGENT, "--kind", "agent", "--owner", "admin", "--display-name", "Canary"],
+    board,
+  );
   return { ...board, agent: { ...boardEnv(cookout.url), COOKOUT_TOKEN: text(field(created, "token")) ?? "" } };
 }
 
@@ -215,7 +218,10 @@ function callCommand(board: Board): void {
 }
 
 function canary(board: Board): void {
-  asAdmin(["identity", "create", CANARY_AGENT, "--kind", "agent", "--owner", "admin"], board);
+  asAdmin(
+    ["identity", "create", CANARY_AGENT, "--kind", "agent", "--owner", "admin", "--display-name", "Canary"],
+    board,
+  );
   const node = ["--import", DROP_DEACTIVATE_IDENTITY];
   const answer = cli({ args: ["identity", "deactivate", CANARY_AGENT], env: board.admin, node });
   if (answer.status === EXIT_SUCCESS || !answer.output.includes("bad_response")) {

@@ -39,4 +39,23 @@ const replyOutsideCommandThread: Refusal = {
   status: FORBIDDEN,
 };
 
-export { messageNotFound, reactionNotFound, replyInOtherChannel, replyOutsideCommandThread };
+const closeWithoutReplyTo: Refusal = {
+  code: "invalid_request",
+  message: "Only a reply can close its thread: send close with replyTo.",
+  status: BAD_REQUEST,
+};
+
+const closeWithCommandToken: Refusal = {
+  code: "outside_command_thread",
+  message: "A command token can only reply in its call's thread, not close it.",
+  status: FORBIDDEN,
+};
+
+export {
+  closeWithCommandToken,
+  closeWithoutReplyTo,
+  messageNotFound,
+  reactionNotFound,
+  replyInOtherChannel,
+  replyOutsideCommandThread,
+};

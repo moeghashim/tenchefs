@@ -33,6 +33,7 @@ export function FeedRow(parts: RowParts): ReactNode {
         author={parts.author}
         authorHref={parts.authorHref}
         channel={parts.channel}
+        closed={parts.closed}
         context={parts.context}
         count={parts.count}
         current={parts.current}

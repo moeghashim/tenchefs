@@ -36,7 +36,9 @@
  * beside it: a bar with Close or, while the thread is closed, "Closed by @name
  * 5m ago" and Reopen, then the thread's parent message, its reply count, and its replies,
  * oldest first, with a reply box that takes focus when the panel opens and a
- * link that closes it, and opening it marks the thread read. A refused close or
+ * link that closes it, and opening it marks the thread read. Opened by a link to
+ * one of its messages (`linked`), it scrolls that message into view and
+ * highlights it for about 2 s, or says the message wasn't found. A refused close or
  * reopen says why. In both,
  * consecutive messages from one author within 5 minutes sit under one name
  * (a new day, the "New" line or a message with replies starts a new group),

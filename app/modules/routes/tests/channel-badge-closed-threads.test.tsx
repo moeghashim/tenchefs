@@ -51,7 +51,7 @@ async function badgesBecome(channel: string, badges: readonly string[]): Promise
   });
 }
 
-it("closing the only thread with unread replies in a channel takes its badge away, and reopening brings it back, live", {
+it("closing the only thread with unread replies in a channel keeps its badge, live", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
@@ -61,7 +61,8 @@ it("closing the only thread with unread replies in a channel takes its badge awa
   await badgesBecome(channel, BADGES);
 
   await poster.closeThread(parent);
-  await badgesBecome(channel, []);
+  await screen.findByText("Closed");
+  await badgesBecome(channel, BADGES);
 
   await poster.reopenThread(parent);
   await badgesBecome(channel, BADGES);

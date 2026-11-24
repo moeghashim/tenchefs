@@ -13,6 +13,7 @@ interface CookoutUnderTestService {
   readonly url: string;
   readonly prefix: string;
   readonly admin: CookoutClient;
+  readonly owner: Effect.Effect<CookoutClient>;
   readonly createAgent: (name: string) => Effect.Effect<IdentityWithTokenResponse>;
   readonly createHuman: (name: string) => Effect.Effect<IdentityWithTokenResponse>;
   readonly createChannel: (name: string) => Effect.Effect<ChannelResponse>;
@@ -67,6 +68,21 @@ function deleteChannelsStartingWith(admin: CookoutClient, start: string): Effect
   });
 }
 
+function createUnsubscribedChannel(admin: CookoutClient, name: string): Effect.Effect<ChannelResponse> {
+  return Effect.gen(function* createChannel() {
+    const created = yield* Effect.promise(() => admin.createChannel({ name }));
+    yield* Effect.promise(() => admin.unsubscribe(name));
+    return created;
+  });
+}
+
+function humanCreator(
+  admin: CookoutClient,
+  prefix: string,
+): (name: string) => Effect.Effect<IdentityWithTokenResponse> {
+  return (name) => Effect.promise(() => admin.createIdentity({ kind: "human", name: `${prefix}-${name}` }));
+}
+
 interface AdminConnection {
   readonly admin: CookoutClient;
   readonly url: string;
@@ -91,18 +107,22 @@ const cookoutUnderTest: Layer.Layer<CookoutUnderTest> = Layer.effect(
     yield* Effect.addFinalizer(() =>
       Effect.andThen(deleteChannelsStartingWith(admin, `${prefix}-`), removeRunIdentities(admin, prefix)),
     );
+    const createHuman = humanCreator(admin, prefix);
+    const owner = yield* Effect.cached(createHuman("owner"));
     function createAgent(name: string): Effect.Effect<IdentityWithTokenResponse> {
-      return Effect.promise(() => admin.createIdentity({ kind: "agent", name: `${prefix}-${name}` }));
+      return Effect.flatMap(owner, ({ identity }) =>
+        Effect.promise(() => admin.createIdentity({ kind: "agent", name: `${prefix}-${name}`, owner: identity.name })),
+      );
     }
     const runCookout = runBin(url);
     return {
       admin,
       createAgent,
-      createChannel: (name: string) => Effect.promise(() => admin.createChannel({ name: `${prefix}-${name}` })),
-      createHuman: (name: string) =>
-        Effect.promise(() => admin.createIdentity({ kind: "human", name: `${prefix}-${name}` })),
+      createChannel: (name: string) => createUnsubscribedChannel(admin, `${prefix}-${name}`),
+      createHuman,
       deactivateIdentity: deactivateRunIdentity(admin, prefix),
       joinAgent: joinAgentWith({ createAgent, runCookout, url }),
+      owner: Effect.map(owner, ({ token }) => createCookoutClient({ token, url })),
       prefix,
       runCookout,
       url,

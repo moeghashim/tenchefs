@@ -1,11 +1,11 @@
 import { Effect, Option, Predicate } from "effect";
-import type { Message, MessageId, TopLevelMessage } from "../../../messages/index.ts";
-import type { MessagesSection, ThreadStateChange } from "./messages.ts";
+import type { Message, MessageId, Reply, TopLevelMessage } from "../../../messages/index.ts";
+import type { MessagesSection, NewMessage, ThreadStateChange } from "./messages.ts";
+import { closingBy, threadIdOf } from "./messages.ts";
 import type { MessageReader } from "./inbox-sqlite.ts";
 import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { sqliteOpenThreads } from "./open-threads-sqlite.ts";
-import { threadIdOf } from "./messages.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
@@ -16,8 +16,9 @@ interface ClosedThreadsOptions {
   readonly reader: MessageReader;
 }
 
-interface Reopening extends ClosedThreadsOptions {
+interface Changing extends ClosedThreadsOptions {
   readonly message: Message;
+  readonly close: NewMessage["close"];
 }
 
 const CLOSE = "UPDATE messages SET closed_at = ?, closed_by = ? WHERE id = ? AND closed_at IS NULL RETURNING id";
@@ -50,11 +51,19 @@ function changeThread(
   }).pipe(db.transaction);
 }
 
-function reopenedBy({ db, message, reader }: Reopening): Fails<TopLevelMessage | undefined> {
+function changeFor(db: SqliteDatabase, reply: Reply, close: NewMessage["close"]): Fails<unknown> {
+  if (Predicate.isUndefined(close)) {
+    return db.get(REOPEN, reply.replyTo);
+  }
+  const { closedAt, closedBy } = closingBy(reply);
+  return db.get(CLOSE, closedAt, closedBy, reply.replyTo);
+}
+
+function threadChangedBy({ close, db, message, reader }: Changing): Fails<TopLevelMessage | undefined> {
   if (message.kind === "top-level") {
     return Effect.undefined;
   }
-  return db.get(REOPEN, message.replyTo).pipe(
+  return changeFor(db, message, close).pipe(
     Effect.flatMap((row) => {
       if (Predicate.isObject(row)) {
         return Effect.map(parentOf(reader, message.replyTo), Option.getOrUndefined);
@@ -74,4 +83,4 @@ function sqliteClosedThreads(options: ClosedThreadsOptions): ClosedThreadsSectio
   };
 }
 
-export { reopenedBy, sqliteClosedThreads };
+export { sqliteClosedThreads, threadChangedBy };

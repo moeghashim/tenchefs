@@ -40,6 +40,7 @@ export function ChannelPanes(props: ChannelPanesProps): ReactNode {
           channel={route.channel}
           composer={composer}
           key={String(route.thread)}
+          linked={route.message ?? null}
           me={me}
           thread={route.thread}
           unread={unread}

@@ -100,7 +100,8 @@ export interface MessageEvent {
 }
 
 /**
- * A thread just closed or reopened, by Close, Reopen or a reply in a closed thread: its top-level message as it now
+ * A thread just closed or reopened, by Close, Reopen, a reply in a closed thread or a reply sent with `close`: its
+ * top-level message as it now
  * stands, with `closedAt` and `closedBy` while closed. Sent only on the all-channels feed. It has no SSE `id`.
  */
 export interface ThreadEvent {

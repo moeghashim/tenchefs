@@ -23,7 +23,7 @@ export const messagesLayer: Layer.Layer<Messages, never, Storage | ReadReceipts 
       }
       return Effect.andThen(
         Effect.andThen(PubSub.publish(pubSub, result.message), readReceipts.publish(result.receipts)),
-        threads.publishReopened(result.reopened),
+        threads.publishThreadChange(result.threadChanged),
       );
     }
     const hub: Hub = {

@@ -1,4 +1,12 @@
-import type { CookoutClient, CookoutEvent, InboxHistoryNudge, MessageId, Nudge, NudgeId } from "../../sdk/index.ts";
+import type {
+  ChannelName,
+  CookoutClient,
+  CookoutEvent,
+  InboxHistoryNudge,
+  MessageId,
+  Nudge,
+  NudgeId,
+} from "../../sdk/index.ts";
 import type { Notifier } from "./notifier.ts";
 import { createNotifier } from "./notifier.ts";
 
@@ -21,6 +29,7 @@ interface LiveNudges extends Nudges {
   readonly receive: (event: CookoutEvent) => boolean;
   readonly unread: () => readonly Nudge[];
   readonly newestUnread: () => NudgeId | null;
+  readonly forgetChannel: (channel: ChannelName) => void;
 }
 
 interface NudgesOptions {
@@ -31,6 +40,7 @@ interface NudgesOptions {
 interface Known {
   readonly addAll: (nudges: readonly InboxHistoryNudge[]) => void;
   readonly readWhere: (read: (nudge: InboxHistoryNudge) => boolean) => boolean;
+  readonly dropWhere: (drop: (nudge: InboxHistoryNudge) => boolean) => void;
   readonly unread: () => readonly Nudge[];
   readonly historyRead: () => void;
 }
@@ -65,6 +75,13 @@ function knownNudges(shown: Notifier<NudgesState>, onChange: NudgesOptions["onCh
   }
   return {
     addAll,
+    dropWhere: (drop) => {
+      const dropped = [...known.values()].filter((nudge) => drop(nudge));
+      for (const { id } of dropped) {
+        known.delete(id);
+      }
+      addAll([]);
+    },
     historyRead: () => {
       loaded = true;
     },
@@ -168,6 +185,9 @@ function createNudges({ client, onChange }: NudgesOptions): LiveNudges {
     addAll: known.addAll,
     addUnread: (nudges) => {
       known.addAll(nudges.map((nudge) => ({ ...nudge, read: false })));
+    },
+    forgetChannel: (name) => {
+      known.dropWhere(({ channel }) => channel.name === name);
     },
     newestUnread: () => newestIdOf(known.unread()),
     readUpTo: (id) => {

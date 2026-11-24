@@ -76,6 +76,7 @@ it.effect(
           refusal(() => handler.createMessage({ channel: "grill", text: "top-level" })),
           refusal(() => handler.listChannels()),
           refusal(() => handler.closeThread(threadId)),
+          refusal(() => handler.createMessage({ channel: "grill", close: true, replyTo: threadId, text: "done" })),
         ],
         { concurrency: 1 },
       );

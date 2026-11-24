@@ -111,12 +111,12 @@ function viewportOf(shot: Shot): typeof WIDE {
 }
 
 async function interact(page: Page, shot: Shot): Promise<void> {
+  if (typeof shot.screen.focus === "string") {
+    await page.locator(shot.screen.focus).first().focus({ timeout: RENDER_MS });
+  }
   if (typeof shot.screen.click === "string") {
     const scope = page.locator(shot.screen.clickIn ?? "body");
     await scope.getByRole("button", { exact: true, name: shot.screen.click }).click({ timeout: RENDER_MS });
-  }
-  if (typeof shot.screen.focus === "string") {
-    await page.locator(shot.screen.focus).first().focus({ timeout: RENDER_MS });
   }
 }
 

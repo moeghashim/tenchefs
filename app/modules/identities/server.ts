@@ -233,4 +233,4 @@ export type { EndedTokens, TokensEnded } from "./lib/server/changes.ts";
 export { IdentityNameSchema, IdentitySchema } from "./lib/server/wire.ts";
 
 /** The Schemas of an agent identity and of a description as sent, for a route that creates an agent. */
-export { AgentIdentitySchema, SentDescriptionSchema } from "./lib/server/wire.ts";
+export { AgentIdentitySchema, SentDescriptionSchema, SentDisplayNameSchema } from "./lib/server/wire.ts";

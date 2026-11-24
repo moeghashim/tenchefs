@@ -40,6 +40,16 @@ export interface JoinRequest {
   readonly idleExpiry?: string;
   /** The host the agent joins from, such as the machine's hostname, shown to its owner. 1–253 characters. */
   readonly host?: string;
+  /**
+   * The display name for the agent this join creates: 1-80 characters after trimming. Sent for an agent that
+   * already exists, it is 400 `display_name_on_existing_agent` and nothing is joined.
+   */
+  readonly displayName?: string;
+  /**
+   * Refuses to create an agent without `displayName`: 400 `display_name_required`, and nothing is created. The CLI
+   * sends it (mattpocock/cookout#313); the server refuses every such create one release later.
+   */
+  readonly requireDisplayName?: boolean;
 }
 
 /** The answer to `join`. */
@@ -104,7 +114,9 @@ export const agentSessionExpired = "agent_session_expired";
  * `identity_kind` (join as a human: only agents join) and `not_owner` (a human joins `<other>/<name>`; listed with
  * the identity codes), the 409s
  * `agent_session_live` (join while the agent has a live agent session token) and `identity_deactivated` (join a
- * Deactivated agent), the 400s `idle_expiry_too_long` and `agent_session_required` (leave sent without an agent session token),
+ * Deactivated agent), the 400s `idle_expiry_too_long`, `agent_session_required` (leave sent without an agent session token),
+ * `display_name_required` (a join that would create an agent with no display name, when the request asks for one) and
+ * `display_name_on_existing_agent` (a display name sent to join an agent that already exists),
  * the 404 `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
  * 401s any request sent with an ended agent session token gets, and the 404 `join_code_not_found` (a join code that
  * was used, expired or never issued).
@@ -116,6 +128,8 @@ export const agentSessionErrorCodes = [
   "identity_deactivated",
   "idle_expiry_too_long",
   "agent_session_required",
+  "display_name_required",
+  "display_name_on_existing_agent",
   "agent_join_request_not_found",
   "join_code_not_found",
   agentSessionRevoked,

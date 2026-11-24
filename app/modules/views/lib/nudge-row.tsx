@@ -33,6 +33,7 @@ export function NudgeRow(props: NudgeRowProps): ReactNode {
       author={parent.author.name}
       authorHref={profileHref}
       channel={nudge.channel.name}
+      closed={false}
       context={null}
       current={false}
       count={null}

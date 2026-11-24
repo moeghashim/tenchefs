@@ -1,21 +1,22 @@
-import type { PresenceStore, PresenceStoreOptions } from "../../presence-store/index.ts";
 import type { Reading, Unread } from "../../unread/index.ts";
 import { createReading, createUnread } from "../../unread/index.ts";
+import type { BoardStore } from "../../board/index.ts";
+import type { CookoutClient } from "../../sdk/index.ts";
 import type { Live } from "../../live/index.ts";
 import { adminClient } from "./identities.ts";
+import { createBoardStore } from "../../board/index.ts";
 import { createPageFocus } from "../../page-focus/index.ts";
-import { createPresenceStore } from "../../presence-store/index.ts";
 import { handClock } from "./hand-clock.ts";
 import { handFocus } from "../../testing/web.ts";
 
-interface PresenceOpening {
-  readonly client: PresenceStoreOptions["client"];
+interface BoardStoreOpening {
+  readonly client: Pick<CookoutClient, "presence">;
   readonly live?: Live | undefined;
-  readonly presence?: PresenceStore | undefined;
+  readonly boardStore?: BoardStore | undefined;
 }
 
-export function presenceFor(opening: PresenceOpening): PresenceStore {
-  return opening.presence ?? createPresenceStore({ client: opening.client, live: opening.live ?? null });
+export function boardStoreFor(opening: BoardStoreOpening): BoardStore {
+  return opening.boardStore ?? createBoardStore({ client: opening.client, live: opening.live ?? null });
 }
 
 export function readingFor(reading: Reading | undefined): Reading {
@@ -27,6 +28,6 @@ export function unreadFor(unread: Unread | undefined): Unread {
 }
 
 export { createUnread } from "../../unread/index.ts";
-export type { PresenceStore } from "../../presence-store/index.ts";
+export type { BoardStore } from "../../board/index.ts";
 export type { Unread } from "../../unread/index.ts";
 export type { Reading } from "../../unread/index.ts";

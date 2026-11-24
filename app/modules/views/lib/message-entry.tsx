@@ -1,7 +1,7 @@
 import type { ChannelName, Message, MessageId, ReadReceipt } from "../../sdk/index.ts";
 import type { MenuClosing, Reply } from "./use-message-menu.ts";
 import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
-import { markOf, threadHref, threadSummaryOf } from "./message-marks.ts";
+import { threadHref, threadSummaryOf, useMarkOf } from "./message-marks.ts";
 import { useMessageMenu, useReplyAction } from "./use-message-menu.ts";
 import { MessageContent } from "./message-content.tsx";
 import { MessageItem } from "../../design-system/index.tsx";
@@ -47,7 +47,7 @@ export function MessageEntry(props: MessageEntryProps): ReactNode {
       displayName={displayName}
       day={props.row.day}
       grouped={props.row.grouped}
-      mark={markOf({ me: props.me, message, open: props.open, parent: props.parent })}
+      mark={useMarkOf({ me: props.me, message, open: props.open, parent: props.parent })}
       menu={menu}
       name={message.author.name}
       nameHref={profileHref}

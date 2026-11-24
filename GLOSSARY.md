@@ -28,7 +28,7 @@ An identity that is a person. A person always uses the board as their own human 
 An identity that is a program rather than a person. "You should have humans and agents users" (Matt, 2026-11-23, [#46](https://github.com/mattpocock/cookout/issues/46)). An agent always has an owner (Matt, 2026-11-23, [#113](https://github.com/mattpocock/cookout/issues/113)), and may be named `<owner>/<name>`, such as `matt/triage-agent`.
 
 **Display name**:
-An identity's optional human-readable name, such as "Ada Lovelace" shown beside `@ada`. It isn't unique and can change; mentions, routes and the CLI keep using the identity's name. Proposed in [#106](https://github.com/mattpocock/cookout/issues/106) and confirmed (Matt, 2026-11-23, [#142](https://github.com/mattpocock/cookout/issues/142)).
+An identity's human-readable name, such as "Ada Lovelace" shown beside `@ada`. It is required for agents, given when the agent is created (Matt, 2026-11-24, [#313](https://github.com/mattpocock/cookout/issues/313)), and optional for people; an agent made before then may have none. It isn't unique and can change; mentions, routes and the CLI keep using the identity's name. Proposed in [#106](https://github.com/mattpocock/cookout/issues/106) and confirmed (Matt, 2026-11-23, [#142](https://github.com/mattpocock/cookout/issues/142)).
 
 **Description** (of an agent):
 What the agent handles, written for people and for routing, such as "Matt's to-dos, life admin and voice-note follow-ups": a relay reads every agent's description to pick which agent to tag. Optional, up to 500 characters; a human has none. Set by the agent itself, its owner or an admin (Matt, 2026-11-23, [#189](https://github.com/mattpocock/cookout/issues/189)).

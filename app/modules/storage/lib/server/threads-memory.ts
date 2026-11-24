@@ -1,8 +1,8 @@
 import { Array as Arr, Option, Predicate, pipe } from "effect";
 import type { Closing, Message, MessageId, OpenThread, Reply, TopLevelMessage } from "../../../messages/index.ts";
-import type { MessagesSection, ThreadStateChange } from "./messages.ts";
+import type { MessagesSection, NewMessage, ThreadStateChange } from "./messages.ts";
 import type { OpenThreadsPageRequest, StoredOpenThreadsPage } from "./open-threads.ts";
-import { counted, threadIdOf } from "./messages.ts";
+import { closingBy, counted, threadIdOf } from "./messages.ts";
 import { involves, lastActivityOf, pageOfOpenThreads } from "./open-threads.ts";
 import type { Effect } from "effect";
 import type { IdentityName } from "../../../identities/index.ts";
@@ -44,9 +44,10 @@ interface Current {
   readonly parent: TopLevelMessage;
 }
 
-interface ReopenedBy {
+interface ChangedBy {
   readonly data: MemoryThreads;
   readonly stored: Message;
+  readonly close: NewMessage["close"];
 }
 
 type ThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads">;
@@ -126,11 +127,18 @@ function changeThread(
   });
 }
 
-function reopenedBy({ data, stored }: ReopenedBy): Changed<Option.Option<TopLevelMessage>> {
+function changeFor(reply: Reply, close: NewMessage["close"]): ParentChange {
+  if (Predicate.isUndefined(close)) {
+    return reopening;
+  }
+  return closing(closingBy(reply));
+}
+
+function threadChangedBy({ close, data, stored }: ChangedBy): Changed<Option.Option<TopLevelMessage>> {
   if (stored.kind === "top-level") {
     return [Option.none(), data];
   }
-  const [result, next] = changeThread(data, stored.id, reopening);
+  const [result, next] = changeThread(data, stored.id, changeFor(stored, close));
   const parent = Option.flatMap(result, (change) => Option.liftPredicate(change.parent, () => change.changed));
   return [parent, next];
 }
@@ -192,4 +200,4 @@ function memoryThreads({ change, read }: ThreadsOn): ThreadsSection {
   };
 }
 
-export { type MemoryThreads, current, findMessage, memoryThreads, reopenedBy, repliesTo };
+export { type MemoryThreads, current, findMessage, memoryThreads, repliesTo, threadChangedBy };

@@ -1,4 +1,4 @@
-import { Mention } from "../../design-system/index.tsx";
+import { IdentityCard, Mention } from "../../design-system/index.tsx";
 import type { ReactNode } from "react";
 import { isIdentityName } from "../../identities/index.ts";
 import { useProfileHref } from "./profile-base.ts";
@@ -17,8 +17,10 @@ export function MarkdownMention(props: MarkdownMentionProps): ReactNode {
     return mention;
   }
   return (
-    <a className="hover:underline" href={profileOf(name)}>
-      {mention}
-    </a>
+    <IdentityCard name={name}>
+      <a className="hover:underline" href={profileOf(name)}>
+        {mention}
+      </a>
+    </IdentityCard>
   );
 }

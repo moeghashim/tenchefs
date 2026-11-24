@@ -115,8 +115,54 @@ it.effect.each(storageLayers)(
 
       expect(thread.parent).toMatchObject({ id: parent.id, replyCount: 1 });
       expect(thread.parent).not.toHaveProperty("closedAt");
-      expect([reply, second]).toMatchObject([{ reopened: thread.parent, status: "appended" }, { status: "appended" }]);
-      expect(second).not.toHaveProperty("reopened.id");
+      expect([reply, second]).toMatchObject([
+        { status: "appended", threadChanged: thread.parent },
+        { status: "appended" },
+      ]);
+      expect(second).not.toHaveProperty("threadChanged.id");
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): a reply with close stores the reply and leaves the thread closed by its author",
+  ({ layer }) =>
+    Effect.gen(function* replyCloses() {
+      const { storage } = yield* openStore(layer);
+      yield* storage.createChannel(channel("grill"));
+      const parent = yield* appendTo(storage)(newMessage("grill", "parent"));
+      const closing = yield* storage.appendMessage({
+        ...newMessage("grill", "done", { replyTo: parent.id }),
+        close: true,
+      });
+      const thread = yield* present(storage.getThread(parent.id));
+      const [stored] = thread.replies;
+
+      expect(closing).toStrictEqual({
+        message: stored,
+        receipts: [],
+        status: "appended",
+        threadChanged: thread.parent,
+      });
+      expect(Arr.map(thread.replies, (reply) => reply.createdAt)).toStrictEqual([thread.parent.closedAt]);
+      expect(thread.parent).toMatchObject({ closedBy: "agent", replyCount: 1 });
+      expect(stored).not.toHaveProperty("close");
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): a reply with close in a closed thread keeps it closed by its first closer",
+  ({ layer }) =>
+    Effect.gen(function* replyClosesClosed() {
+      const { parent, storage } = yield* closedThreadWithReply(layer);
+      const closing = yield* storage.appendMessage({
+        ...newMessage("grill", "done", { replyTo: parent }),
+        close: true,
+      });
+      const thread = yield* present(storage.getThread(parent));
+
+      expect(closing).toMatchObject({ status: "appended" });
+      expect(closing).not.toHaveProperty("threadChanged.id");
+      expect(thread.parent).toMatchObject({ ...firstClosing, replyCount: 2 });
     }),
 );
 

@@ -182,7 +182,17 @@ function printsNoToken(server: Server): boolean {
 }
 
 function seed(url: string): void {
-  const created = cli(url, adminToken, ["identity", "create", AGENT, "--kind", "agent", "--owner", "admin"]);
+  const created = cli(url, adminToken, [
+    "identity",
+    "create",
+    AGENT,
+    "--kind",
+    "agent",
+    "--owner",
+    "admin",
+    "--display-name",
+    "Smoke agent",
+  ]);
   const agentToken = text(field(created, "token")) ?? "";
   check(agentToken !== "", `cookout identity create ${AGENT} answers with a token`);
   cli(url, adminToken, ["channel", "create", CHANNEL]);

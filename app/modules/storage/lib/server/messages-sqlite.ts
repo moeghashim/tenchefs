@@ -12,7 +12,7 @@ import { MESSAGE_COLUMNS, MentionsText, dataText, toMessage } from "./message-ro
 import { isPlaced, placeIn, placed, threadIdOf, withKnownMentions } from "./messages.ts";
 import { latestOf, stampedIn, takeId } from "./message-sequence-sqlite.ts";
 import { recordAppended, sqliteInbox } from "./inbox-sqlite.ts";
-import { reopenedBy, sqliteClosedThreads } from "./closed-threads-sqlite.ts";
+import { sqliteClosedThreads, threadChangedBy } from "./closed-threads-sqlite.ts";
 import type { CommandCallsSection } from "./command-calls.ts";
 import type { MessageReader } from "./inbox-sqlite.ts";
 import type { SqliteDatabase } from "./adapters/sqlite.ts";
@@ -92,9 +92,10 @@ function sqliteMessageReader(db: SqliteDatabase): MessageReader {
 function afterInsert(
   db: SqliteDatabase,
   message: Message,
+  close: NewMessage["close"],
 ): Fails<readonly [readonly ReadReceipt[], TopLevelMessage | undefined]> {
   const reader = sqliteMessageReader(db);
-  return Effect.all([recordAppended({ db, message }), reopenedBy({ db, message, reader })], ONE_AT_A_TIME);
+  return Effect.all([recordAppended({ db, message }), threadChangedBy({ close, db, message, reader })], ONE_AT_A_TIME);
 }
 
 function appendInChannel(db: SqliteDatabase, message: NewMessage): Fails<AppendMessageResult> {
@@ -108,8 +109,11 @@ function appendInChannel(db: SqliteDatabase, message: NewMessage): Fails<AppendM
     const mentioning = yield* stampedIn({ db, message: withKnownMentions({ known, message }) });
     const id = yield* takeId({ db, message: mentioning });
     const stored = placed({ id, message: mentioning, placement });
-    const [receipts, reopened] = yield* Effect.andThen(insert(db, stored, data), afterInsert(db, stored));
-    return { message: stored, receipts, reopened, status: "appended" } as const;
+    const [receipts, threadChanged] = yield* Effect.andThen(
+      insert(db, stored, data),
+      afterInsert(db, stored, message.close),
+    );
+    return { message: stored, receipts, status: "appended", threadChanged } as const;
   });
 }
 

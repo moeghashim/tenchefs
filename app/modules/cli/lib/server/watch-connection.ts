@@ -116,7 +116,7 @@ function connect(
     const options = { ...resumeFrom(lastSeen), onConnected, onHeartbeat };
     const watching = callClient((client) => client.watch(options))(opened);
     const dropped = yield* Ref.make(false);
-    const events = yield* Effect.acquireRelease(watching, closedOnExit(Ref.get(dropped)));
+    const events = yield* Effect.acquireRelease(Effect.interruptible(watching), closedOnExit(Ref.get(dropped)));
     return heardOn(events, Stream.fromQueue(signals)).pipe(droppedWhenFailed(Ref.set(dropped, true)));
   });
 }

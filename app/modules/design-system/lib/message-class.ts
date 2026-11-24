@@ -2,6 +2,7 @@ import type { MessageItemParts } from "./parts.ts";
 
 const MARKS: Readonly<Record<MessageItemParts["mark"], string>> = {
   "for-you": "bg-mention-bg shadow-[inset_2px_0_0_var(--color-mention-bar)]",
+  linked: "bg-accent motion-safe:animate-linked-fade",
   none: "hover:bg-hover focus-within:bg-hover",
   open: "bg-accent",
 };

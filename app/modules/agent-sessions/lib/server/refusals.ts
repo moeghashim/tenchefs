@@ -66,6 +66,24 @@ function idleExpiryTooLong(maxIdleExpiry: string): Refusal {
   };
 }
 
+function displayNameRequired(name: IdentityName): Refusal {
+  return {
+    code: "display_name_required",
+    message: `${name} would be a new agent, and a new agent needs a display name: join with --display-name.`,
+    status: BAD_REQUEST,
+  };
+}
+
+function displayNameOnExistingAgent(name: IdentityName): Refusal {
+  return {
+    code: "display_name_on_existing_agent",
+    message:
+      `${name} already exists, so join takes no --display-name. Set it with ` +
+      `\`cookout identity display-name ${name} <display name>\`.`,
+    status: BAD_REQUEST,
+  };
+}
+
 const agentSessionRequired: Refusal = {
   code: "agent_session_required",
   message: "Leave revokes the agent session token it is sent with; this request was sent with another kind of token.",
@@ -75,6 +93,8 @@ const agentSessionRequired: Refusal = {
 export {
   agentSessionLive,
   agentSessionRequired,
+  displayNameOnExistingAgent,
+  displayNameRequired,
   identityDeactivated,
   idleExpiryTooLong,
   joinNotOwned,

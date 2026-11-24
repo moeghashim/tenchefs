@@ -25,7 +25,7 @@ const THIRD_TEXT = "@bob and one more";
 const THREE_LINES = 3;
 const RECONNECT_NOTE = 1;
 const verbs: readonly (readonly string[])[] = [
-  ["identity", "create", "bot", "--kind", "agent"],
+  ["identity", "create", "bot", "--kind", "agent", "--display-name", "Bot"],
   ["identity", "rotate", "bot"],
   ["channel", "create", "grill", "--description", "Grill it"],
   ["channel", "get", "grill"],
@@ -96,7 +96,7 @@ it.effect("cookout identity create needs --kind human or agent, and identity lis
     const noKind = yield* runCookout({ args: ["identity", "create", "bot"], env });
     const badKind = yield* runCookout({ args: ["identity", "create", "bot", "--kind", "robot"], env });
     yield* runCookout({ args: ["identity", "create", "ada", "--kind", "human"], env });
-    yield* runCookout({ args: ["identity", "create", "bot", "--kind", "agent", "--owner", "ada"], env });
+    yield* runCookout({ args: ["identity", "create", "bot", "--kind=agent", "--owner=ada", "--display-name=B"], env });
     const listed = yield* runCookout({ args: ["identity", "list"], env });
     const usage = { exitCode: EXIT_FAILURE, stderrJson: { error: { code: "usage" } } };
 

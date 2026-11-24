@@ -8,5 +8,10 @@
     "file": "scripts/drop-deactivate-identity.ts",
     "directive": "oxlint-disable-next-line typescript/prefer-readonly-parameter-types",
     "reason": "The published-client canary replaces globalThis.fetch with a wrapper of the same signature, and fetch's RequestInit can't be marked readonly (#282)."
+  },
+  {
+    "file": "app/modules/routes/tests/menu-choice-types.test.ts",
+    "directive": "@ts-expect-error A thread choice must name its icon.",
+    "reason": "The type test that a thread choice, which becomes a menu item, without an icon fails to compile (#301)."
   }
 ]

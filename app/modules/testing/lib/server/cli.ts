@@ -1,6 +1,5 @@
 import {
   Array as Arr,
-  Cause,
   ConfigProvider,
   Console,
   Deferred,
@@ -12,7 +11,7 @@ import {
   Schema,
   pipe,
 } from "effect";
-import { exitCodeFor, runCookout as runCommandLine } from "../../../cli/server.ts";
+import { exitCodeAfterFailure, runCookout as runCommandLine } from "../../../cli/server.ts";
 import { memoryStorage, sqliteStorage } from "../../../storage/server.ts";
 import type { NodeServices } from "@effect/platform-node/NodeServices";
 import type { Scope } from "effect";
@@ -82,6 +81,7 @@ interface Started<Line> {
 
 const serveAdminToken = "test-admin-token-0123456789abcdef0123456789";
 const EXIT_SUCCESS = 0;
+const NO_ARGS: readonly string[] = [];
 const ANY_FREE_PORT = 0;
 const verbLayers: ServeLayers = { storage: Function.constant(memoryStorage) };
 const isListening = Schema.is(Schema.Struct({ listening: Schema.String }));
@@ -103,7 +103,7 @@ function cliResult({ exitCode, stderr, stdout }: Pick<CliResult, "exitCode" | "s
 
 function exitCodeAfter<Failure>(command: Effect.Effect<void, Failure, Needs>): Effect.Effect<number, never, Needs> {
   return Effect.matchCause(command, {
-    onFailure: (cause) => exitCodeFor(Cause.squash(cause)),
+    onFailure: (cause) => exitCodeAfterFailure({ args: NO_ARGS, cause }),
     onSuccess: Function.constant(EXIT_SUCCESS),
   });
 }

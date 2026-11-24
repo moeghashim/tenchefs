@@ -5,8 +5,7 @@
  * cookout", "@ada · cookout"), led by how many unread messages are *For you*
  * when there are any ("(3) Inbox · cookout"): those that mention whoever is
  * logged in or reply to their own message, as the sidebar's strong badges
- * count them, a closed
- * thread's left out as the Inbox leaves them out. Logged out, every route is titled for the login view, and
+ * count them, a closed thread's included as the Inbox includes them. Logged out, every route is titled for the login view, and
  * nothing is counted.
  */
 import type { Unread, UnreadState } from "../unread/index.ts";
@@ -70,7 +69,7 @@ function forYouCount(me: string | null, state: UnreadState): number {
   if (me === null || state.status !== "loaded") {
     return NONE;
   }
-  return countsOf({ items: state.inbox, me }).forYou;
+  return countsOf({ items: state.items, me }).forYou;
 }
 
 function titleOf(name: string, forYou: number): string {

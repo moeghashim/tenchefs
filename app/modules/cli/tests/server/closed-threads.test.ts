@@ -47,3 +47,29 @@ it.effect("cookout thread close and thread reopen print the thread's top-level m
     expect(results).not.toHaveProperty("1.stdoutJson.message.closedAt");
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
+
+it.effect(
+  "cookout message post --reply-to --close posts the reply and closes its thread; --close alone is refused",
+  () =>
+    Effect.gen(function* postAndClose() {
+      const cookout = yield* TestCookout;
+      const ann = yield* cookout.createIdentity("ann");
+      const folder = yield* freshStateFolder;
+      const { message } = yield* Effect.andThen(
+        answer(() => ann.client.createChannel({ name: "grill" })),
+        answer(() => ann.client.createMessage({ channel: "grill", text: "deploy main?" })),
+      );
+      const env = { COOKOUT_STATE_DIR: folder, COOKOUT_TOKEN: ann.token, COOKOUT_URL: cookout.url };
+      const results = yield* runAll(env, [
+        ["message", "post", "grill", "deployed", "--reply-to", String(message.id), "--close"],
+        ["message", "post", "grill", "all done", "--close"],
+      ]);
+      const thread = yield* answer(() => ann.client.getThread(message.id));
+
+      expect(results).toMatchObject([
+        { exitCode: 0, stdoutJson: { message: { replyTo: message.id, text: "deployed" } } },
+        { exitCode: 1, stderrJson: { error: { code: "usage" } }, stdout: "" },
+      ]);
+      expect(thread).toMatchObject({ parent: { closedBy: "ann", replyCount: 1 }, replies: [{ text: "deployed" }] });
+    }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);

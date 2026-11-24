@@ -1,6 +1,8 @@
 import type { Author, ChannelName, Message, MessageId } from "../../sdk/index.ts";
+import { LinkedMessage } from "./linked-message.ts";
 import type { ThreadNews } from "../../unread/index.ts";
 import { hrefOf } from "../../paths/index.ts";
+import { useContext } from "react";
 
 const NONE = 0;
 
@@ -67,6 +69,13 @@ function markOf(marking: Marking): "for-you" | "open" | "none" {
   return "none";
 }
 
+function useMarkOf(marking: Marking): "for-you" | "open" | "linked" | "none" {
+  if (useContext(LinkedMessage) === marking.message.id) {
+    return "linked";
+  }
+  return markOf(marking);
+}
+
 function threadHref({ channel, message }: Linking): string | null {
   if (channel === null || message.kind !== "top-level") {
     return null;
@@ -87,4 +96,4 @@ function threadSummaryOf(message: Message): ThreadSummaryOf | null {
   return { latestReplyAt: message.latestReplyAt, repliers: message.repliers, replyCount: message.replyCount };
 }
 
-export { type NewsText, type ThreadSummaryOf, markOf, newsText, replies, threadHref, threadSummaryOf };
+export { type NewsText, type ThreadSummaryOf, newsText, replies, threadHref, threadSummaryOf, useMarkOf };

@@ -218,3 +218,18 @@ it.effect("two quiet threads give two nudge rows, newest first, and a refused Cl
     ]);
   }).pipe(Effect.scoped, Effect.provide(testCookout())),
 );
+
+it.effect("deleting the nudged thread's channel takes the nudge row and its count out of the open Inbox, live", () =>
+  Effect.gen(function* deleteClears() {
+    yield* nudgedLive;
+    const cookout = yield* TestCookout;
+    yield* answer(() => cookout.client.deleteChannel("grill"));
+    yield* answer(() => screen.findByText("You're all caught up."));
+
+    expect([forYouRows(), inboxCounts(), screen.queryByRole("list", { name: "Earlier nudges" })]).toStrictEqual([
+      [],
+      [],
+      null,
+    ]);
+  }).pipe(Effect.scoped, Effect.provide(testCookout())),
+);

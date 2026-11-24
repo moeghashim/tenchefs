@@ -32,11 +32,9 @@
  * inbox and follows them by `read-position`. `newLine` is where a channel's or
  * thread's "New" line goes: its read position when the view opened, so the
  * line sits above the first message after it, kept while the view is open.
- * A closed thread's items, by their `parent`'s `closedAt`, are
- * left out of `inbox`, what the Inbox lists and counts and the sidebar counts
- * by channel, and come back when it
- * reopens, following `thread` events live; they stay in `items` and stay
- * unread on the server, where an agent's inbox still lists them.
+ * A closed thread's items stay in `items`, listed and counted like any other;
+ * `thread` events keep each item's `parent` current, so its `closedAt` follows
+ * a close or reopen live.
  * `markAllRead` acks the whole inbox up to the newest item the store holds
  * (`POST /v1/inbox/ack-all`) and drops the items the read positions it moved
  * cover, so a message that arrives meanwhile stays unread. `markUnread` marks
@@ -214,8 +212,8 @@ export function createUnread(options: UnreadOptions): Unread {
 }
 
 /**
- * The unread inbox items, oldest first, once they have loaded; `inbox`, what the Inbox and the sidebar show and count,
- * is `items` but those of a closed thread. Beside them are the unread offline alerts and the unread Nudges, newest first.
+ * The unread inbox items, oldest first, once they have loaded: what the Inbox and the sidebar show and count,
+ * closed threads' items included. Beside them are the unread offline alerts and the unread Nudges, newest first.
  */
 export type { UnreadState } from "./lib/parts.ts";
 export type { Earlier, EarlierState } from "./lib/earlier.ts";

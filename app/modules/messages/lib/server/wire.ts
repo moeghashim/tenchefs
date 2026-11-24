@@ -110,6 +110,7 @@ const MessageIdFromString = Schema.FiniteFromString.pipe(decodesToMessageId);
 
 export const PostMessageRequestSchema = Schema.Struct({
   channel: ChannelNameSchema,
+  close: Schema.optionalKey(Schema.Literal(true)),
   data: Schema.optionalKey(Schema.Json),
   replyTo: Schema.optionalKey(MessageIdSchema),
   text: TextSchema,

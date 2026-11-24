@@ -8,6 +8,11 @@ import { identityKinds } from "../../../identities/index.ts";
 
 const NOTHING = {};
 
+const agentDisplayNameMissing: CallFailure = {
+  code: "usage",
+  message: "A new agent needs a display name: add --display-name, such as --display-name 'Triage bot'.",
+};
+
 const identityName = Argument.String("name").pipe(Argument.withDescription("The identity's name."));
 
 const identityCreateCommand = Command.make(
@@ -15,7 +20,9 @@ const identityCreateCommand = Command.make(
   {
     displayName: Flag.String("display-name").pipe(
       Flag.optional,
-      Flag.withDescription("The name shown beside @name, such as 'Ada Lovelace': 1-80 characters after trimming."),
+      Flag.withDescription(
+        "The name shown beside @name, such as 'Ada Lovelace': 1-80 characters after trimming. Required for an agent.",
+      ),
     ),
     kind: Flag.Literals("kind", identityKinds).pipe(
       Flag.withDescription("human for a person, agent for a program. It never changes."),
@@ -29,6 +36,9 @@ const identityCreateCommand = Command.make(
     ),
   },
   ({ displayName, kind, name, owner }) => {
+    if (kind === "agent" && Option.isNone(displayName)) {
+      return answered(Effect.fail(agentDisplayNameMissing));
+    }
     const withOwner = Option.match(owner, { onNone: () => NOTHING, onSome: (value) => ({ owner: value }) });
     const named = Option.match(displayName, { onNone: () => NOTHING, onSome: (value) => ({ displayName: value }) });
     return answer((client) => client.createIdentity({ kind, name, ...withOwner, ...named }));

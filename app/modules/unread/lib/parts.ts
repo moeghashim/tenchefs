@@ -1,5 +1,6 @@
 import type {
   CookoutClient,
+  CookoutEvent,
   DeactivatedQuietAgent,
   DeactivationOffer,
   InboxItem,
@@ -26,7 +27,6 @@ type UnreadState =
   | {
       readonly status: "loaded";
       readonly items: readonly InboxItem[];
-      readonly inbox: readonly InboxItem[];
       readonly alerts: readonly OfflineAlert[];
       readonly nudges: readonly Nudge[];
       readonly deactivationOffers: readonly DeactivationOffer[];
@@ -87,7 +87,6 @@ function loadedOf({ alerts, deactivatedQuietAgents, deactivationOffers, items, m
     deactivatedQuietAgents: deactivatedQuietAgents.unread(),
     deactivationOffers: deactivationOffers.open(),
     heldDeactivatedQuietAgents: deactivatedQuietAgents.forYou().held,
-    inbox: items.inbox(),
     items: items.list(),
     markAll,
     nudges: nudges.unread(),
@@ -142,6 +141,21 @@ function partsOf(options: PartsOptions): Parts {
   };
 }
 
+type Forgetting = Pick<Following, "earlier" | "items" | "nudges" | "republish">;
+
+function forgettingDeleted({ earlier, items, nudges, republish }: Forgetting): (event: CookoutEvent) => void {
+  return (event) => {
+    if (event.type !== "channel-deleted") {
+      return;
+    }
+    const { name } = event.channel;
+    items.forgetChannel(name);
+    nudges.forgetChannel(name);
+    earlier.drop((message) => message.channel === name);
+    republish();
+  };
+}
+
 function follow(following: Following): void {
   const { alerts, client, deactivatedQuietAgents, deactivationOffers, earlier, items, live, markUnread, nudges } =
     following;
@@ -160,6 +174,7 @@ function follow(following: Following): void {
       republish();
     }
   });
+  live.subscribe(forgettingDeleted({ earlier, items, nudges, republish }));
   live.onBack(
     catchingUp({
       client,

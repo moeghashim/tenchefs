@@ -8,7 +8,8 @@
  * output captured, and runs the `cookout` binary as a process only where a
  * test is about the process itself, since each spawn costs a cold start;
  * `watchCookout` and `watchCookoutBinary` read a long-running command's
- * stdout line by line.
+ * stdout line by line, and `signalWatchBinary` sends a started `cookout watch` process SIGTERM and times, on the
+ * live clock, how long it takes to exit.
  * Tests run effects with `@effect/vitest`, which provides `TestClock`: a
  * test cookout starts at `testStartTime`, and an agent session token's expiry moves with it.
  * `twoSessions` gives an identity two separate SDK sessions, and
@@ -22,7 +23,8 @@
  * `cuttableLink` puts a link in front of a server that a test can cut, to
  * drop a client's connection, take down, so every later request gets 502, or
  * answer 502 to just its next few requests (or those to one path), as a deploy
- * does, and wait until it has answered 502 so many times.
+ * does, and wait until it has answered 502 so many times, or freeze, so it stops answering: open streams send
+ * nothing more and every later request waits for ever.
  * `silentConnection` connects to a server and sends nothing. `cuttableRelay`,
  * from the http module, is a link a test can cut and restore, from another
  * process too, as the browser tests do.
@@ -43,6 +45,7 @@ export {
   type Watched,
   watchCookout,
 } from "./lib/server/cli.ts";
+export { interruptCookout } from "./lib/server/cli-interrupt.ts";
 export { type DevProcess, startDev, startFakeRoutine } from "./lib/server/dev.ts";
 export {
   type InterruptedDev,
@@ -50,12 +53,14 @@ export {
   runCookoutBinary,
   watchCookoutBinary,
 } from "./lib/server/process.ts";
+export { signalWatchBinary, type StoppedWatch } from "./lib/server/cli-signal.ts";
 export { runCookoutWhile } from "./lib/server/cli-clock.ts";
 export { type IdentityFixtureOptions, identityFixture, identityName } from "./lib/server/identities.ts";
 export { type CuttableLink, cuttableLink } from "./lib/server/cuttable-link.ts";
 export { cuttableRelay } from "../http/server.ts";
 export { type SilentConnection, silentConnection } from "./lib/server/silent-connection.ts";
 export { type FixedAnswer, serverAnswering } from "./lib/server/fixed-answer.ts";
+export { type SilentServer, silentServer } from "./lib/server/silent-server.ts";
 export { type ForwardingProxy, forwardingProxy } from "./lib/server/forwarding-proxy.ts";
 export {
   type TwoSessions,

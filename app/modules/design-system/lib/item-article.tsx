@@ -4,7 +4,7 @@ import type { MessageItemParts } from "./parts.ts";
 import { MessageLayout } from "./message-layout.tsx";
 import type { ReactNode } from "react";
 import { messageClass } from "./message-class.ts";
-import { useReactionKeys } from "./use-reaction-keys.ts";
+import { useScrollWhenLinked } from "./use-scroll-when-linked.ts";
 
 const FOCUSABLE = 0;
 
@@ -21,11 +21,11 @@ export function ItemArticle(parts: ItemArticleParts): ReactNode {
     menu: message.menu,
     onAction: handleAction,
   });
-  const article = useReactionKeys(message.menu.reactions);
+  const article = useScrollWhenLinked({ linked: message.mark === "linked", menu: message.menu });
   return (
     <MessageContextMenu choices={choices}>
       <article
-        aria-current={message.mark === "open"}
+        aria-current={message.mark === "open" || message.mark === "linked"}
         className={messageClass(message)}
         data-for-you={message.mark === "for-you"}
         ref={article}

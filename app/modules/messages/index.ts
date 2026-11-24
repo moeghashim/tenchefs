@@ -136,8 +136,9 @@ export interface PostMessageRequest {
   readonly channel: string;
   readonly text: string;
   readonly data?: JsonValue;
-  /** Reply to this message. A reply to a reply goes to the top-level message's thread. */
+  /** Reply to this message. A reply to a reply goes to the top-level message's thread, which `close` also closes. */
   readonly replyTo?: number;
+  readonly close?: true;
 }
 
 /** The answer to posting a message. */

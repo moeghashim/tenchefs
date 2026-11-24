@@ -1,4 +1,4 @@
-import { Array as Arr, DateTime, Option, Predicate } from "effect";
+import { Array as Arr, DateTime, Option, Predicate, Struct } from "effect";
 import type {
   Closing,
   ListMessagesResponse,
@@ -27,6 +27,7 @@ type MessageContent = Omit<
 
 type NewMessage = MessageContent & {
   readonly replyTo?: MessageId;
+  readonly close?: true;
 };
 
 type AppendMessageResult =
@@ -34,7 +35,7 @@ type AppendMessageResult =
       readonly status: "appended";
       readonly message: Message;
       readonly receipts: readonly ReadReceipt[];
-      readonly reopened: TopLevelMessage | undefined;
+      readonly threadChanged: TopLevelMessage | undefined;
     }
   | { readonly status: "channel_not_found" }
   | { readonly status: "reply_to_not_found" }
@@ -129,10 +130,15 @@ function unreplied<Content extends MessageContent>(content: Content): Content & 
 }
 
 function placed({ id, message, placement }: Placing): Message {
+  const content = Struct.omit(message, ["close"]);
   if (placement.status === "reply") {
-    return { ...message, id, kind: "reply", replyTo: placement.parent };
+    return { ...content, id, kind: "reply", replyTo: placement.parent };
   }
-  return { ...unreplied(message), id };
+  return { ...unreplied(content), id };
+}
+
+function closingBy(reply: Reply): Closing {
+  return { closedAt: reply.createdAt, closedBy: reply.author.name };
 }
 
 interface Stamping {
@@ -185,6 +191,7 @@ export {
   type StoredThread,
   type ThreadStateChange,
   asMessageId,
+  closingBy,
   counted,
   isPlaced,
   placeIn,

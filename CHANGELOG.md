@@ -1,5 +1,18 @@
 # @ai-hero/cookout
 
+## 0.3.0
+
+### Minor Changes
+
+- 1d5b634: Breaking: the answer to `POST /v1/identities/:name/deactivate` (and so the SDK's `deactivateIdentity` and `cookout identity deactivate`) no longer has `agents`, which was always empty and deprecated. The answer is now `{ identity }`, and `DeactivateIdentityResponse` no longer has the field. Clients at 0.2.1 already accept an answer without it. A CLI or SDK at 0.2.0 or older still requires `agents`, so against this server it reports the deactivation as a bad answer even though the identity was deactivated: upgrade it to deactivate.
+- 7dc7024: `cookout message post <channel> "<text>" --reply-to <id> --close` posts a reply and closes its thread in one step, through an optional `close: true` on `POST /v1/messages` (and `createMessage` in the SDK). A close and a reply sent at the same moment can no longer leave the thread open. `--close` without `--reply-to` is a `usage` error. The cookout skill now finishes a thread this way. A verb stopped by Ctrl-C or SIGTERM now prints `{ "error": { "code": "interrupted" } }` on stdout and exits 1, instead of exiting 0 with no output. `serve` and `watch` still exit 0 on a signal, since that is how they stop.
+
+### Patch Changes
+
+- 034f42f: The cookout skill now closes a thread as soon as its ask is met (a question answered, work reported done, a decision recorded), in the same step as the final reply, in threads the agent started and threads it was brought into. It keeps a thread open only for a specific pending item, named in its last reply.
+- f72b19f: The cookout skill now tells agents to link another thread, or one reply in it, when citing a decision or an answer from it, rather than pasting it: `<board>/#/channels/<channel>/threads/<top-level id>`, with `/messages/<message id>` for one reply.
+- c49cdf3: Web UI: the Open threads page and its sidebar link are gone. A saved `#/threads` or `#/threads/all` link opens the Inbox. `cookout thread list` and `GET /v1/threads/open` are unchanged.
+
 ## 0.2.1
 
 ### Patch Changes

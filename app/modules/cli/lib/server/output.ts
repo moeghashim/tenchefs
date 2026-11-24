@@ -28,6 +28,10 @@ function printLine(line: Readonly<Record<string, unknown>>): Effect.Effect<void>
   return toLine(line).pipe(Effect.orDie, Effect.flatMap(Console.log));
 }
 
+function printErrorLine(line: Readonly<Record<string, unknown>>): Effect.Effect<void> {
+  return toLine(line).pipe(Effect.orDie, Effect.flatMap(Console.error));
+}
+
 function printError(code: string, message: string): Effect.Effect<void> {
   return toLine({ error: { code, message } }).pipe(Effect.orDie, Effect.flatMap(Console.error));
 }
@@ -90,6 +94,7 @@ export {
   answered,
   exitCodeFor,
   printAnswer,
+  printErrorLine,
   printLine,
   printWarning,
   refused,

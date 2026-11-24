@@ -23,7 +23,7 @@ interface Scope {
 interface ItemsStore {
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () =>
-    | { readonly status: "loaded"; readonly inbox: readonly InboxItem[] }
+    | { readonly status: "loaded"; readonly items: readonly InboxItem[] }
     | { readonly status: string };
 }
 
@@ -51,10 +51,10 @@ function idsOf(items: readonly InboxItem[]): string {
 
 function unreadIn(store: ItemsStore, scope: Scope | null): readonly InboxItem[] {
   const state = store.snapshot();
-  if (!("inbox" in state)) {
+  if (!("items" in state)) {
     return [];
   }
-  return state.inbox.filter((item) => inScope(item, scope));
+  return state.items.filter((item) => inScope(item, scope));
 }
 
 function createSelection(store: ItemsStore, scope: Scope | null): Selection {

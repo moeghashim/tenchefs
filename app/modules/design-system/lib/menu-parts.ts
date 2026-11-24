@@ -1,3 +1,5 @@
+import type { MenuIcon } from "./menu-icons.ts";
+
 interface ReactionChoice {
   readonly symbol: string;
   readonly key: string;
@@ -6,6 +8,7 @@ interface ReactionChoice {
 
 interface ThreadChoice {
   readonly label: string;
+  readonly icon: MenuIcon;
   readonly name: string;
   readonly onSelect: () => void;
 }
@@ -22,9 +25,14 @@ interface MessageActionParts {
   readonly onAction: (() => void) | null;
 }
 
+interface MenuChoiceLabel {
+  readonly label: string;
+  readonly icon: MenuIcon;
+}
+
 type MenuChoice =
-  | { readonly label: string; readonly href: string; readonly onSelect: null }
-  | { readonly label: string; readonly href: null; readonly onSelect: () => void };
+  | (MenuChoiceLabel & { readonly href: string; readonly onSelect: null })
+  | (MenuChoiceLabel & { readonly href: null; readonly onSelect: () => void; readonly shortcut?: string });
 
 interface HoverActionsParts extends MessageActionParts {
   readonly choices: readonly MenuChoice[];

@@ -39,7 +39,7 @@ export function InboxBody(props: InboxBodyProps): ReactNode {
   const held = unread.heldDeactivatedQuietAgents.length;
   return (
     <>
-      {unread.inbox.length + besideCountOf(unread) + held === NONE && <FeedNote place="empty">{TEXT.empty}</FeedNote>}
+      {unread.items.length + besideCountOf(unread) + held === NONE && <FeedNote place="empty">{TEXT.empty}</FeedNote>}
       <InboxAlerts alerts={unread.alerts} onMarkRead={props.onMarkAlertRead} />
       <InboxSection
         besides={unread.nudges.length + unread.deactivationOffers.length + unread.deactivatedQuietAgents.length}

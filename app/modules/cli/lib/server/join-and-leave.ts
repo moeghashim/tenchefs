@@ -11,6 +11,7 @@ import { cookoutUrl } from "../../../config/server.ts";
 
 interface JoinFlags {
   readonly as: IdentityName;
+  readonly displayName: Option.Option<string>;
   readonly force: boolean;
   readonly idleExpiry: Option.Option<string>;
 }
@@ -71,8 +72,35 @@ function alreadyJoined(identity: IdentityName): CallFailure {
   };
 }
 
-function joinRequest({ as, force, idleExpiry }: JoinFlags): JoinRequest {
-  const asked = Option.match(idleExpiry, { onNone: () => ({ as }), onSome: (expiry) => ({ as, idleExpiry: expiry }) });
+const codeWithDisplayName: CallFailure = {
+  code: "usage",
+  message:
+    "`cookout join --code` joins an agent that already exists: leave out --display-name, and set one with " +
+    "`cookout identity display-name <name> <display name>`.",
+};
+
+const displayNameRefusals: ReadonlySet<string> = new Set(["display_name_on_existing_agent", "display_name_required"]);
+
+function asUsage(failure: CallFailure): CallFailure {
+  if (displayNameRefusals.has(failure.code)) {
+    return { code: "usage", message: failure.message };
+  }
+  return failure;
+}
+
+function naming(displayName: Option.Option<string>): Pick<JoinRequest, "displayName" | "requireDisplayName"> {
+  return Option.match(displayName, {
+    onNone: () => ({ requireDisplayName: true }),
+    onSome: (name) => ({ displayName: name }),
+  });
+}
+
+function joinRequest({ as, displayName, force, idleExpiry }: JoinFlags): JoinRequest {
+  const named = { as, ...naming(displayName) };
+  const asked = Option.match(idleExpiry, {
+    onNone: () => named,
+    onSome: (expiry) => ({ ...named, idleExpiry: expiry }),
+  });
   if (force) {
     return { ...asked, force };
   }
@@ -85,7 +113,7 @@ function issueWithCredential(flags: JoinFlags): Effect.Effect<Issued, CallFailur
       issued,
       source: opened.source,
     })),
-  );
+  ).pipe(Effect.mapError(asUsage));
 }
 
 function isLoginMissing(failure: CallFailure): boolean {
@@ -150,6 +178,9 @@ function byCode(code: string, idleExpiry: Option.Option<string>): Joining {
 }
 
 function joiningOf({ as, code, ...flags }: JoinOptions): Effect.Effect<Joining, CallFailure> {
+  if (Option.isSome(code) && Option.isSome(flags.displayName)) {
+    return Effect.fail(codeWithDisplayName);
+  }
   if (Option.isSome(code)) {
     return Option.match(as, {
       onNone: () => Effect.succeed(byCode(code.value, flags.idleExpiry)),

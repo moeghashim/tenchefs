@@ -37,6 +37,18 @@
   --color-hover: rgb(255 255 255 / 0.035);
   --color-surface: #0f0f0f;
   --radius-lg: 0.5rem;
+  /* A message a link opened (#293): held for 1.5 s, then faded by 2 s (#298); with reduced motion it stays until unmarked. */
+  --animate-linked-fade: linked-fade 2s ease-in forwards;
+
+  @keyframes linked-fade {
+    0%,
+    75% {
+      background-color: var(--color-accent);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
 }
 
 :root {

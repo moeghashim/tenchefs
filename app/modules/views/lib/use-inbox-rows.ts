@@ -18,7 +18,7 @@ interface RowsOf {
 
 function itemsOf(unread: UnreadState): readonly InboxItem[] {
   if (unread.status === "loaded") {
-    return unread.inbox;
+    return unread.items;
   }
   return [];
 }

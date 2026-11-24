@@ -86,7 +86,7 @@
  * each a link over the whole row (named by its text) leading with why it is
  * there (`why`), then a message with its author's avatar and name (its own
  * link, to `authorHref`, above the row's), what they did (`action`) and in which channel, a
- * short time, any `count` of how many of its messages are new ("3 new") and any
+ * short time, a `Closed` marker when it is `closed` (its thread is closed), any `count` of how many of its messages are new ("3 new") and any
  * `context` line (a reply's thread), then what it holds: its `FeedText`, up to
  * two lines, and any `RowButton`, a small button raised above the row's link. A `for-you` row has an accent dot and why,
  * a bold name and bright text; an `activity` row has a muted dot and why, a
@@ -107,9 +107,16 @@
  * a More actions button shown on hover or focus, after a button for each of its `menu`'s `reactions`; a reaction's
  * `key`, pressed while the message itself has focus, leaves it too. Its `menu` gives it one actions menu (the action,
  * then each reaction, then Mark unread, then the thread choice, such as Close, if any), drawn two ways on Radix: right-clicking the message opens it as a context menu at the pointer, and the
- * More actions button opens it as a dropdown. Radix gives both their keyboard and focus behaviour; a chosen item's
- * action runs once the menu has closed. `StandaloneMessage` is one named message on its own, such as a
- * thread's parent. In a message, `MessageBody` holds its rendered Markdown text, `Mention` an
+ * More actions button opens it as a dropdown. Every menu item draws its `icon` (a `ThreadChoice` names one too), which its type requires, before its label. Radix gives both their keyboard and focus behaviour; a chosen item's
+ * action runs once the menu has closed. Mark unread's tooltip names its shortcut, `Alt-click`: an Alt-click (Option-click
+ * on macOS) on the message, but not on a link, button or other interactive element in it, runs Mark unread at once and
+ * focuses and selects nothing; `StandaloneMessage` does the same. `StandaloneMessage` is one named message on its own, such as a
+ * thread's parent. A message's author name and an `@name` in its text are each an `IdentityCard`: hovering it
+ * (after a short delay) or focusing it opens a card, a Radix tooltip whose pointer can rest on it. The card leads
+ * with a header like `Profile`'s: the identity's large `Avatar` (with its presence dot, and none when its presence
+ * isn't known) beside its shown name, its `@name` handle and an agent's tag. Below come its presence words, its kind
+ * (an agent's owner), any description, Deactivated, and a View profile link; pointer leave, Escape or blur closes it, and focus stays on the name. Its card comes from the
+ * `IdentityCards` source the views provide; with none, the name is drawn alone. In a message, `MessageBody` holds its rendered Markdown text, `Mention` an
  * `@name` in it, `CallChip` a command call
  * and its data, `DataToggle` its data folded away, and `ThreadSummary` a link to
  * its thread: its repliers' avatars, its reply count, how many replies are new (bold, after an accent dot and with how many are to the reader when any is) and when it was last replied to. A message's time
@@ -118,7 +125,8 @@
  * reacted as its tooltip. `RepliesDivider` heads a thread's replies, `ChannelStart` says a
  * channel has nothing older, and `QuietButton` is a muted centred button,
  * such as loading older messages. `ClosedFold` is a row of a message list standing for closed threads folded away,
- * a button on a dashed line that unfolds them. `ThreadBar` is a muted bar across the top of a thread: a line of text
+ * a button on a dashed line that unfolds them; given a `day`, the day's label (a separator to a screen reader) shares
+ * that line, in place of a day separator of its own beside it. `ThreadBar` is a muted bar across the top of a thread: a line of text
  * and one button, such as who closed it and Reopen; `QuietLink` is a muted link in such a line, such as a name
  * linking to its profile. `TextArea` takes focus when it first appears
  * if `focused`.
@@ -196,6 +204,9 @@ export { ItemRow } from "./lib/item-row.tsx";
 export { LinkList } from "./lib/link-list.tsx";
 export { LinkRow } from "./lib/link-row.tsx";
 export { Mention } from "./lib/mention.tsx";
+export { IdentityCard } from "./lib/identity-card.tsx";
+export { IdentityCards } from "./lib/identity-card-parts.ts";
+export type { IdentityCardParts, IdentityCardSource } from "./lib/identity-card-parts.ts";
 export { Muted } from "./lib/muted.tsx";
 export { MutedLines } from "./lib/muted-lines.tsx";
 export { ReactionChip } from "./lib/reaction-chip.tsx";

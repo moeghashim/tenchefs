@@ -3,7 +3,7 @@ import { shownIn, usePresences } from "./use-presence.ts";
 import { useCallback, useMemo } from "react";
 import type { Draft } from "../../composer/index.ts";
 import type { PresenceShown } from "./use-presence.ts";
-import type { Presences } from "../../presence-store/index.ts";
+import type { Presences } from "../../board/index.ts";
 
 const NONE = 0;
 const SIGN = 1;

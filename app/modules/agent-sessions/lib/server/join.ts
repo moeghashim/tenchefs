@@ -1,6 +1,6 @@
 import type { AgentSessionResponse, JoinRequest } from "../../index.ts";
 import { DateTime, Effect, Option } from "effect";
-import type { Identity, IdentityName } from "../../../identities/index.ts";
+import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
 import { agentSessionLive, idleExpiryTooLong } from "./refusals.ts";
 import { defaultIdleSeconds, idleSecondsOf } from "./idle-expiry.ts";
@@ -11,8 +11,9 @@ import { isoTimeOf } from "../../../time/server.ts";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
-interface Join extends Omit<JoinRequest, "as"> {
+interface Join extends Omit<JoinRequest, "as" | "displayName"> {
   readonly as: IdentityName;
+  readonly displayName?: DisplayName;
 }
 
 interface On {
@@ -61,7 +62,7 @@ function joiner(on: On) {
   const issue = issuer(on);
   return (caller: Identity, request: Join): Fails<AgentSessionResponse> =>
     Effect.gen(function* joinAs() {
-      const { created, identity: agent } = yield* agentToJoin({ as: request.as, caller, on });
+      const { created, identity: agent } = yield* agentToJoin({ as: request.as, caller, naming: request, on });
       const idleSeconds = yield* Option.match(Option.fromUndefinedOr(request.idleExpiry), {
         onNone: () => Effect.succeed(Math.min(defaultIdleSeconds, on.ceilingSeconds)),
         onSome: (asked) => idleSecondsFor(on, asked),

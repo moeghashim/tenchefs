@@ -69,7 +69,10 @@ it.effect("join inside Claude Code prints no agent session token, whether it use
     };
     yield* logIn(terminal, grace.token);
     const joins = [
-      { args: ["join", "--as", "triage-agent"], env: { ...terminal, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1" } },
+      {
+        args: ["join", "--as", "triage-agent", "--display-name", "Triage bot"],
+        env: { ...terminal, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1" },
+      },
       {
         args: ["join", "--as", "release-bot"],
         env: { ...terminal, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s2", COOKOUT_TOKEN: bot.token },

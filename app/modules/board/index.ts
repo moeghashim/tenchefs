@@ -61,6 +61,17 @@
  * its first), its own store: it reads it (`listMessages` with `before` and a limit of 1) when its first reader
  * subscribes, for the Inbox's channel conversation. `ack(id)` acks the message `id`, one ack at a time in the order
  * asked, for the Inbox's reader of a channel conversation; a refused ack leaves the message unread.
+ *
+ * `createBoardStore` makes the one board store, the normalized cache the web's stores move into one slice at a time
+ * (`docs/adr/0078-the-board-store-is-a-tested-interface-and-owns-catch-up.md`). It is a plain external store:
+ * `subscribe` and `snapshot` (`BoardState`, a new object whenever a slice's part changes, the same one until then),
+ * read through selectors such as `presences`, each returning the same object until what it reads changes. Nothing is
+ * read up front: `subscribeShowing(slice)` subscribes a view that shows that slice, and the slice is read when its first
+ * such reader arrives. Each event on `live` is applied to every slice, in one place; an event heard while a slice is
+ * being read is applied again on what the read brings, so the event wins, and an event heard twice changes nothing.
+ * When the link comes back after being down, each slice someone is showing is read again, and one nobody is showing
+ * is read again when it is next shown; that is the store's one catch-up. Its slices: `presence`, every identity's
+ * presence, read with `GET /v1/presence` and changed by `presence` events.
  */
 import type {
   ChannelMessages,
@@ -187,3 +198,4 @@ export type { Subscriptions, SubscriptionsState } from "./lib/subscriptions.ts";
 export type { ThreadMessages, ThreadMessagesState } from "./lib/thread-messages.ts";
 export type { ThreadClosing } from "./lib/thread-closing.ts";
 export type { MessageBeforeState } from "./lib/message-stores.ts";
+export { type BoardStore, type Presences, createBoardStore, presences } from "./lib/board-store.ts";

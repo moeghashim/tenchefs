@@ -38,6 +38,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
           if (row.kind === "fold") {
             return (
               <FoldEntry
+                day={row.day}
                 expanded={state.expanded}
                 fold={row.fold}
                 key={`fold-${row.fold.run.join("-")}`}

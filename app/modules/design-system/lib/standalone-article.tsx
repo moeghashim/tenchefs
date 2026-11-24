@@ -4,7 +4,7 @@ import { MessageLayout } from "./message-layout.tsx";
 import type { ReactNode } from "react";
 import type { StandaloneMessageParts } from "./parts.ts";
 import { messageClass } from "./message-class.ts";
-import { useReactionKeys } from "./use-reaction-keys.ts";
+import { useScrollWhenLinked } from "./use-scroll-when-linked.ts";
 
 interface StandaloneArticleParts {
   readonly message: StandaloneMessageParts;
@@ -19,10 +19,11 @@ export function StandaloneArticle(parts: StandaloneArticleParts): ReactNode {
     menu: message.menu,
     onAction: handleAction,
   });
-  const article = useReactionKeys(message.menu.reactions);
+  const article = useScrollWhenLinked({ linked: message.mark === "linked", menu: message.menu });
   return (
     <MessageContextMenu choices={choices}>
       <article
+        aria-current={message.mark === "linked"}
         aria-label={message.label}
         className={messageClass(message)}
         data-for-you={message.mark === "for-you"}

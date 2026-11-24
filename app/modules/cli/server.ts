@@ -6,6 +6,11 @@
  * from the caller: `serve` issues tokens with it, and `join`
  * names its agent session state file with it.
  *
+ * Ctrl-C or SIGTERM is how `serve` and `watch` stop, so they exit 0 on one. Any other verb so interrupted prints
+ * `{ error: { code: "interrupted" } }` on stderr, as every refusal is, and exits 1, never exit 0 with no output
+ * (mattpocock/cookout#297, mattpocock/cookout#299). A stopped `watch` waits at most 2 s for its clean close, and
+ * never for a connection it is still opening, so it exits promptly even when the board has stopped answering.
+ *
  * Any other failure before `serve` is listening, such as a port in use or a bad setting, prints one stderr line,
  * `cookout serve failed to start: <tag>: <message>`, plus the first stack frame for a defect, and exits 1
  * (mattpocock/cookout#261). A bad setting's line names the variable and its rule, never its value.
@@ -53,6 +58,7 @@ import { usageFailed, withJsonPresenter } from "./lib/server/output.ts";
 import { Effect } from "effect";
 import type { ServeLayers } from "./lib/server/serve.ts";
 import packageJson from "../../../package.json" with { type: "json" };
+import { sayInterrupted } from "./lib/server/interrupted.ts";
 import { verbCommands } from "./lib/server/verbs.ts";
 import { watchCommand } from "./lib/server/watch.ts";
 import { whoamiCommand } from "./lib/server/whoami.ts";
@@ -74,6 +80,7 @@ export const runCookout = (args: readonly string[], layers: ServeLayers) =>
     (command) => Command.runWith(command, { version: packageJson.version })(args),
     Effect.catchIf(CliError.isCliError, () => usageFailed),
     withJsonPresenter,
+    Effect.onInterrupt(() => sayInterrupted(args)),
   );
 
-export { exitCodeFor } from "./lib/server/output.ts";
+export { exitCodeAfterFailure } from "./lib/server/interrupted.ts";

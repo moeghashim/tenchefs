@@ -35,6 +35,7 @@ function threadChoice(closing: ThreadClosing | null, message: Message): ThreadCh
   const { id } = message;
   if ("closedAt" in message) {
     return {
+      icon: "reopen",
       label: TEXT.reopen,
       name: TEXT.reopenThread,
       onSelect: () => {
@@ -43,6 +44,7 @@ function threadChoice(closing: ThreadClosing | null, message: Message): ThreadCh
     };
   }
   return {
+    icon: "close",
     label: TEXT.close,
     name: TEXT.closeThread,
     onSelect: () => {

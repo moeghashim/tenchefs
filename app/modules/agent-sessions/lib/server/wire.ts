@@ -1,4 +1,4 @@
-import { AgentIdentitySchema, SentDescriptionSchema } from "../../../identities/server.ts";
+import { AgentIdentitySchema, SentDescriptionSchema, SentDisplayNameSchema } from "../../../identities/server.ts";
 import type {
   AgentJoinCollectedResponse,
   AgentJoinRequestResponse,
@@ -51,9 +51,11 @@ const TokenSchema = Schema.String.check(Schema.isPattern(tokenPattern).abort()).
 
 const JoinRequestSchema = Schema.Struct({
   as: IdentityNameSchema,
+  displayName: Schema.optionalKey(SentDisplayNameSchema),
   force: Schema.optionalKey(Schema.Boolean),
   host: Schema.optionalKey(HostSchema),
   idleExpiry: Schema.optionalKey(IdleExpirySchema),
+  requireDisplayName: Schema.optionalKey(Schema.Boolean),
 });
 
 const AgentSessionResponseSchema = matchesWire<AgentSessionResponse>()(

@@ -6,8 +6,8 @@ import type { MessageMenu } from "../../unread/index.ts";
 import type { ReactNode } from "react";
 import { StandaloneMessage } from "../../design-system/index.tsx";
 import { dayLabel } from "../../format/index.ts";
-import { markOf } from "./message-marks.ts";
 import { useAuthor } from "./use-author.ts";
+import { useMarkOf } from "./message-marks.ts";
 import { useMessageTime } from "./use-time-ago.ts";
 
 const REPLY = "Reply";
@@ -36,7 +36,7 @@ export function StandaloneEntry(props: StandaloneEntryProps): ReactNode {
       day={dayLabel(message.createdAt)}
       grouped={false}
       label={props.label}
-      mark={markOf({ me: props.me, message, open: null, parent: null })}
+      mark={useMarkOf({ me: props.me, message, open: null, parent: null })}
       menu={menu}
       name={message.author.name}
       nameHref={profileHref}

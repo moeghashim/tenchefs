@@ -1,3 +1,4 @@
+import { IdentityCard } from "./identity-card.tsx";
 import type { MessageHeaderParts } from "./parts.ts";
 import { MessageTime } from "./message-time.tsx";
 import type { ReactNode } from "react";
@@ -8,9 +9,11 @@ export function MessageHeader(parts: MessageHeaderParts): ReactNode {
   const { time } = parts;
   return (
     <header className="flex items-baseline gap-2">
-      <a className="text-sm font-semibold hover:underline" href={parts.nameHref}>
-        {parts.displayName ?? parts.name}
-      </a>
+      <IdentityCard name={parts.name}>
+        <a className="text-sm font-semibold hover:underline" href={parts.nameHref}>
+          {parts.displayName ?? parts.name}
+        </a>
+      </IdentityCard>
       {parts.displayName !== null && <span className="text-xs text-muted-foreground">{`@${parts.name}`}</span>}
       {parts.note !== null && <span className="text-xs text-muted-foreground">{parts.note}</span>}
       {parts.agent && (

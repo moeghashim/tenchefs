@@ -148,7 +148,8 @@ export type CookoutClient = CallGroups &
     readonly deleteChannel: (name: string) => Promise<ChannelResponse>;
     /**
      * `POST /v1/messages`: a top-level message, or a reply with `replyTo` (a reply to a reply joins the parent's thread).
-     * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`.
+     * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`. With `close`,
+     * the reply also closes its thread in one step.
      */
     readonly createMessage: (request: PostMessageRequest) => Promise<MessageResponse>;
     /**

@@ -17,6 +17,7 @@ interface CuttableLink {
   readonly url: string;
   readonly cut: Effect.Effect<void>;
   readonly stall: Effect.Effect<void>;
+  readonly freeze: Effect.Effect<void>;
   readonly takeDown: Effect.Effect<void>;
   readonly badGatewayFor: (requests: number, path?: string) => Effect.Effect<void>;
   readonly answeredBadGateway: (times: number) => Effect.Effect<void>;
@@ -31,6 +32,8 @@ interface Signal {
 interface Relay {
   readonly target: string;
   readonly isDown: Effect.Effect<boolean>;
+  readonly isFrozen: Effect.Effect<boolean>;
+  readonly unanswered: Effect.Effect<HttpServerResponse.HttpServerResponse>;
   readonly takesBadGateway: (url: string) => Effect.Effect<boolean>;
   readonly answerBadGateway: Effect.Effect<HttpServerResponse.HttpServerResponse>;
   readonly dropped: Effect.Effect<Effect.Effect<boolean>>;
@@ -83,6 +86,9 @@ function relayed(
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, never, HttpServerRequest.HttpServerRequest> {
   return Effect.gen(function* relayRequest() {
     const { method, url } = yield* HttpServerRequest.HttpServerRequest;
+    if (yield* relay.isFrozen) {
+      return yield* relay.unanswered;
+    }
     if ((yield* relay.isDown) || (yield* relay.takesBadGateway(url)) || !HttpMethod.isHttpMethod(method)) {
       return yield* relay.answerBadGateway;
     }
@@ -147,34 +153,60 @@ const badGateways: Effect.Effect<BadGateways> = Effect.gen(function* makeBadGate
   };
 });
 
+interface Outage {
+  readonly isDown: Effect.Effect<boolean>;
+  readonly goDown: Effect.Effect<void>;
+  readonly isFrozen: Effect.Effect<boolean>;
+  readonly goFrozen: Effect.Effect<void>;
+  readonly unanswered: Effect.Effect<HttpServerResponse.HttpServerResponse>;
+  readonly answerTheFrozen: Effect.Effect<void>;
+}
+
+const outage: Effect.Effect<Outage> = Effect.gen(function* makeOutage() {
+  const down = yield* Ref.make(false);
+  const frozen = yield* Ref.make(false);
+  const closed = yield* Deferred.make<boolean>();
+  return {
+    answerTheFrozen: Effect.asVoid(Deferred.succeed(closed, true)),
+    goDown: Ref.set(down, true),
+    goFrozen: Ref.set(frozen, true),
+    isDown: Ref.get(down),
+    isFrozen: Ref.get(frozen),
+    unanswered: Effect.as(Deferred.await(closed), HttpServerResponse.empty({ status: BAD_GATEWAY })),
+  };
+});
+
 function cuttableLink(target: string): Effect.Effect<CuttableLink, never, Scope.Scope> {
   return Effect.gen(function* openLink() {
     const client = yield* Effect.map(Layer.build(nodeHttpClient), Context.get(HttpClient.HttpClient));
     const drops = yield* signal;
     const stalls = yield* signal;
     const sent = yield* SubscriptionRef.make("");
-    const down = yield* Ref.make(false);
+    const outages = yield* outage;
     const gateways = yield* badGateways;
-    const changes = SubscriptionRef.changes(sent);
     const relay: Relay = {
       answerBadGateway: gateways.answer,
       dropped: Effect.map(drops.current, Deferred.await),
       execute: client.execute,
-      isDown: Ref.get(down),
+      isDown: outages.isDown,
+      isFrozen: outages.isFrozen,
       record: (text) => SubscriptionRef.update(sent, Str.concat(text)),
       stalled: Effect.map(stalls.current, Deferred.isDone),
       takesBadGateway: gateways.takes,
       target,
+      unanswered: outages.unanswered,
     };
     const url = yield* serving(relay);
+    yield* Effect.addFinalizer(() => outages.answerTheFrozen);
     return {
       answeredBadGateway: gateways.answered,
       badGatewayFor: gateways.forNext,
       cut: drops.fire,
+      freeze: Effect.andThen(outages.goFrozen, stalls.fire),
       relayed: (text: string, times = ONCE) =>
-        changes.pipe(Stream.filter(sentAtLeast(text, times)), Stream.runHead, Effect.asVoid),
+        SubscriptionRef.changes(sent).pipe(Stream.filter(sentAtLeast(text, times)), Stream.runHead, Effect.asVoid),
       stall: stalls.fire,
-      takeDown: Effect.andThen(Ref.set(down, true), drops.fire),
+      takeDown: Effect.andThen(outages.goDown, drops.fire),
       url,
     };
   }).pipe(Effect.orDie);

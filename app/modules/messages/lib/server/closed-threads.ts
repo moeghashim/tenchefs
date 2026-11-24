@@ -15,7 +15,7 @@ type ClosedThreadsService = Pick<MessagesService, "closeThread" | "reopenThread"
 
 interface ThreadHub {
   readonly changeThenPublish: (change: Effect.Effect<ThreadChange, StorageUnavailable>) => Fails<ThreadChange>;
-  readonly publishReopened: (parent: TopLevelMessage | undefined) => Effect.Effect<void>;
+  readonly publishThreadChange: (parent: TopLevelMessage | undefined) => Effect.Effect<void>;
   readonly threadChanged: Effect.Effect<PubSub.Subscription<TopLevelMessage>, never, Scope.Scope>;
 }
 
@@ -52,7 +52,7 @@ function threadHub(oneAtATime: OneAtATime): Effect.Effect<ThreadHub> {
     }
     return {
       changeThenPublish: (change) => oneAtATime(Effect.tap(change, (changed) => publish(changedParents(changed)))),
-      publishReopened: (parent) => publish(Arr.filter([parent], Predicate.isNotUndefined)),
+      publishThreadChange: (parent) => publish(Arr.filter([parent], Predicate.isNotUndefined)),
       threadChanged: PubSub.subscribe(threads),
     };
   });

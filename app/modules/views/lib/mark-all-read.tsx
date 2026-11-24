@@ -19,7 +19,7 @@ export function MarkAllRead(props: MarkAllReadProps): ReactNode {
   const handleClick = props.unread.markAllRead;
   return (
     <Button
-      disabled={state.inbox.length + besideCountOf(state) === NONE || state.markAll.status === "marking"}
+      disabled={state.items.length + besideCountOf(state) === NONE || state.markAll.status === "marking"}
       onClick={handleClick}
     >
       {TEXT.markAll}

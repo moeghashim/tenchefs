@@ -98,6 +98,7 @@ export function InboxRowView(props: InboxRowViewProps): ReactNode {
       author={message.author.name}
       authorHref={profileHref}
       channel={item.channel.name}
+      closed={typeof item.parent.closedAt === "string"}
       context={contextOf(item)}
       count={countOf(row, props.unread)}
       current={props.current}

@@ -1,8 +1,8 @@
 import { Argument, Command, Flag } from "effect/cli";
 import type { ListMessagesQuery, MessageId, PostMessageRequest } from "../../../messages/index.ts";
 import { Option, Schema } from "effect";
+import { answer, refused } from "./output.ts";
 import { joinCommand, leaveCommand } from "./join-command.ts";
-import { answer } from "./output.ts";
 import { commandCommand } from "./command.ts";
 import { helpCommand } from "./help-monitor.ts";
 import { identityCommand } from "./identity.ts";
@@ -61,6 +61,7 @@ const channelCommand = Command.make("channel").pipe(
 
 interface PostFlags {
   readonly channel: string;
+  readonly close: boolean;
   readonly data: Option.Option<Schema.Json>;
   readonly replyTo: Option.Option<number>;
   readonly text: string;
@@ -72,10 +73,25 @@ interface ListFlags {
   readonly limit: Option.Option<number>;
 }
 
-function postRequest({ channel, data, replyTo, text }: PostFlags): PostMessageRequest {
+const closeWithoutReplyTo = {
+  code: "usage",
+  message: "--close closes the thread a reply joins: give it with --reply-to <message-id>.",
+};
+
+function withClose(request: PostMessageRequest, close: boolean): PostMessageRequest {
+  if (close) {
+    return { ...request, close };
+  }
+  return request;
+}
+
+function postRequest({ channel, close, data, replyTo, text }: PostFlags): Option.Option<PostMessageRequest> {
   const withData = Option.match(data, { onNone: () => NOTHING, onSome: (value) => ({ data: value }) });
+  if (close && Option.isNone(replyTo)) {
+    return Option.none();
+  }
   const withReplyTo = Option.match(replyTo, { onNone: () => NOTHING, onSome: (value) => ({ replyTo: value }) });
-  return { channel, text, ...withData, ...withReplyTo };
+  return Option.some(withClose({ channel, text, ...withData, ...withReplyTo }, close));
 }
 
 function pageQuery({ before, limit }: Omit<ListFlags, "channel">): ListMessagesQuery {
@@ -100,6 +116,10 @@ const replyToFlag = Flag.Int("reply-to").pipe(
   Flag.optional,
   Flag.withDescription("Reply in this message's thread. A reply to a reply joins the same thread."),
 );
+const closeFlag = Flag.Boolean("close").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("With --reply-to, also close the thread, in the same step as the reply."),
+);
 const beforeFlag = Flag.Int("before").pipe(
   Flag.optional,
   Flag.withDescription("Only messages before this message ID."),
@@ -109,9 +129,13 @@ const messageIdArgument = Argument.Int("message-id").pipe(Argument.filterMap(mes
 
 const messagePostCommand = Command.make(
   "post",
-  { channel: channelArgument, data: dataFlag, replyTo: replyToFlag, text: textArgument },
-  (flags) => answer((client) => client.createMessage(postRequest(flags))),
-).pipe(Command.withDescription("Post a message, or a reply with --reply-to."));
+  { channel: channelArgument, close: closeFlag, data: dataFlag, replyTo: replyToFlag, text: textArgument },
+  (flags) =>
+    Option.match(postRequest(flags), {
+      onNone: () => refused(closeWithoutReplyTo),
+      onSome: (request) => answer((client) => client.createMessage(request)),
+    }),
+).pipe(Command.withDescription("Post a message, or a reply with --reply-to, which --close also closes in one step."));
 
 const messageListCommand = Command.make(
   "list",

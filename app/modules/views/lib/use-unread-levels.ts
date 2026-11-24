@@ -21,9 +21,9 @@ interface SidebarCounts {
   readonly inbox: UnreadCounts;
 }
 
-const NOTHING_LOADED = { inbox: [], items: [] } as const;
+const NOTHING_LOADED = { items: [] } as const;
 
-function itemsOf(state: UnreadState): Pick<Extract<UnreadState, { status: "loaded" }>, "inbox" | "items"> {
+function itemsOf(state: UnreadState): Pick<Extract<UnreadState, { status: "loaded" }>, "items"> {
   if (state.status !== "loaded") {
     return NOTHING_LOADED;
   }
@@ -44,10 +44,10 @@ function besidesOf(state: UnreadState): number {
 
 function useSidebarCounts({ me, state }: Counting): SidebarCounts {
   return useMemo(() => {
-    const { inbox } = itemsOf(state);
-    const counts = countsOf({ items: inbox, me });
+    const { items } = itemsOf(state);
+    const counts = countsOf({ items, me });
     return {
-      channels: countsByChannel({ items: inbox, me }),
+      channels: countsByChannel({ items, me }),
       inbox: { ...counts, forYou: counts.forYou + besidesOf(state) },
     };
   }, [state, me]);

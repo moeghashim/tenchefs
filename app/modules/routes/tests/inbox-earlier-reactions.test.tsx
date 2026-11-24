@@ -30,9 +30,6 @@ function idsOf(state: UnreadState | EarlierState): readonly MessageId[] {
   if (state.status !== "loaded") {
     return [];
   }
-  if ("inbox" in state) {
-    return state.inbox.map((item) => item.message.id);
-  }
   return state.items.map((item) => item.message.id);
 }
 

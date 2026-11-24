@@ -7,7 +7,9 @@
  * identity's profile open, `#/settings` the settings page and
  * `#/settings/<section>` the same with the focus on that section (`profile`,
  * `theme` or `agents`), `#/channels/<name>`,
- * `#/channels/<name>/threads/<id>`, `#/approve/<user code>` the approval
+ * `#/channels/<name>/threads/<id>`, `#/channels/<name>/threads/<id>/messages/<message id>`
+ * the same thread scrolled to that message and highlighted (the thread's own ID for its
+ * top-level message), `#/approve/<user code>` the approval
  * page for a login request and `#/approve-join/<user code>` for an agent join request); a channel name
  * that isn't a `ChannelName`, an identity name that isn't an `IdentityName`,
  * a thread ID that isn't a message ID, a section the settings page doesn't
@@ -25,21 +27,15 @@
  * that closes it.
  */
 import type { ChannelName, IdentityName, MessageId } from "../sdk/index.ts";
+import { inboxHref, messageIdOf, selectionOf } from "./lib/thread-selection.ts";
+import type { InboxSelection } from "./lib/thread-selection.ts";
 import { isChannelName } from "../channels/index.ts";
 import { isIdentityName } from "../identities/index.ts";
-import { isMessageId } from "../messages/index.ts";
 import { isUserCode } from "../logins/index.ts";
 
 const settingsSections = ["profile", "theme", "agents"] as const;
 
 type SettingsSection = (typeof settingsSections)[number];
-
-interface ThreadSelection {
-  readonly channel: ChannelName;
-  readonly thread: MessageId;
-}
-
-type InboxSelection = ThreadSelection | { readonly channel: ChannelName; readonly thread: null };
 
 type Route =
   | { readonly name: "login" }
@@ -48,7 +44,7 @@ type Route =
   | { readonly name: "profile"; readonly identity: IdentityName }
   | { readonly name: "inbox"; readonly selected: InboxSelection | null }
   | { readonly name: "channel"; readonly channel: ChannelName }
-  | { readonly name: "thread"; readonly channel: ChannelName; readonly thread: MessageId }
+  | { readonly name: "thread"; readonly channel: ChannelName; readonly thread: MessageId; readonly message?: MessageId }
   | { readonly name: "approve"; readonly userCode: string }
   | { readonly name: "approve-join"; readonly userCode: string }
   | { readonly name: "missing" };
@@ -70,12 +66,12 @@ const OLD_OPEN_THREADS = /^#\/threads(?:\/all)?$/u;
 const PROFILE = /^#\/people\/(?<identity>[^/]+(?:\/[^/]+)?)$/u;
 const CHANNEL = /^#\/channels\/(?<channel>[^/]+)$/u;
 const THREAD = /^#\/channels\/(?<channel>[^/]+)\/threads\/(?<thread>[^/]+)$/u;
+const REPLY = /^#\/channels\/(?<channel>[^/]+)\/threads\/(?<thread>[^/]+)\/messages\/(?<message>[^/]+)$/u;
 
 const PROFILE_QUERY = /\?profile=(?<profile>[^/?]*(?:\/[^/?]*)?)$/u;
 const WITH_PROFILE = /^.*\?profile=(?<profile>[^/?]*(?:\/[^/?]*)?)$/u;
 const APPROVE = /^#\/approve\/(?<code>[^/]+)$/u;
 const APPROVE_JOIN = /^#\/approve-join\/(?<code>[^/]+)$/u;
-const DIGITS = /^\d+$/u;
 const MISSING: Route = { name: "missing" };
 
 function channelRoute(channel: string): Route {
@@ -108,27 +104,28 @@ function approveRoute(userCode: string, name: "approve" | "approve-join" = "appr
   return { name, userCode };
 }
 
-function selectionOf(channel: string, thread: string): ThreadSelection | null {
-  const id = Number(thread);
-  if (!isChannelName(channel) || !DIGITS.test(thread) || !isMessageId(id)) {
-    return null;
-  }
-  return { channel, thread: id };
-}
-
 function threadRoute(channel: string, thread: string): Route {
-  const selection = selectionOf(channel, thread);
+  const selection = selectionOf({ channel, thread });
   if (selection === null) {
     return MISSING;
   }
   return { ...selection, name: "thread" };
 }
 
+function replyRoute(hash: string): Route {
+  const route = threadRoute(hash.replace(REPLY, "$<channel>"), hash.replace(REPLY, "$<thread>"));
+  const message = messageIdOf(hash.replace(REPLY, "$<message>"));
+  if (route.name !== "thread" || message === null) {
+    return MISSING;
+  }
+  return { ...route, message };
+}
+
 function inboxRoute(channel: string, thread: string): Route {
   if (thread === "" && isChannelName(channel)) {
     return { name: "inbox", selected: { channel, thread: null } };
   }
-  const selected = selectionOf(channel, thread);
+  const selected = selectionOf({ channel, thread });
   if (selected === null) {
     return MISSING;
   }
@@ -150,6 +147,7 @@ const matchers: readonly Matcher[] = [
   (hash) => APPROVE_JOIN.test(hash) && approveRoute(hash.replace(APPROVE_JOIN, "$<code>"), "approve-join"),
   (hash) => CHANNEL.test(hash) && channelRoute(hash.replace(CHANNEL, "$<channel>")),
   (hash) => THREAD.test(hash) && threadRoute(hash.replace(THREAD, "$<channel>"), hash.replace(THREAD, "$<thread>")),
+  (hash) => REPLY.test(hash) && replyRoute(hash),
 ];
 
 function settingsHref(section: SettingsSection | null): string {
@@ -163,17 +161,11 @@ function channelHref(route: Extract<Route, { readonly name: "channel" | "thread"
   if (route.name === "channel") {
     return `#/channels/${route.channel}`;
   }
-  return `#/channels/${route.channel}/threads/${String(route.thread)}`;
-}
-
-function inboxHref(selected: InboxSelection | null): string {
-  if (selected === null) {
-    return "#/inbox";
+  const thread = `#/channels/${route.channel}/threads/${String(route.thread)}`;
+  if (!("message" in route)) {
+    return thread;
   }
-  if (selected.thread === null) {
-    return `#/inbox/${selected.channel}`;
-  }
-  return `#/inbox/${selected.channel}/${String(selected.thread)}`;
+  return `${thread}/messages/${String(route.message)}`;
 }
 
 function pageHref(route: Extract<Route, { readonly name: "settings" | "channel" | "thread" }>): string {
@@ -285,4 +277,5 @@ export function closedHref(route: Route): string {
   return hrefOf(route);
 }
 
-export type { InboxSelection, LinkedRoute, Place, Route, SettingsSection, ThreadSelection };
+export type { LinkedRoute, Place, Route, SettingsSection };
+export type { InboxSelection, ThreadSelection } from "./lib/thread-selection.ts";

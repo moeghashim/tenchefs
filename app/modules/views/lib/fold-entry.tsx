@@ -8,6 +8,7 @@ import { useCallback } from "react";
 
 interface FoldEntryProps {
   readonly fold: Fold;
+  readonly day: string | null;
   readonly expanded: ReadonlyMap<MessageId, number>;
   readonly messages: ChannelMessages;
 }
@@ -17,5 +18,9 @@ export function FoldEntry(props: FoldEntryProps): ReactNode {
   const handleUnfold = useCallback(() => {
     messages.showClosed(fold.run, shownAfterClick({ expanded, run: fold.run }));
   }, [expanded, fold, messages]);
-  return <ClosedFold onClick={handleUnfold}>{fold.label}</ClosedFold>;
+  return (
+    <ClosedFold day={props.day} onClick={handleUnfold}>
+      {fold.label}
+    </ClosedFold>
+  );
 }

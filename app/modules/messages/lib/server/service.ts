@@ -21,8 +21,14 @@ import type {
   StorageUnavailable,
 } from "../../../storage/server.ts";
 import type { PubSub, Scope } from "effect";
+import {
+  closeWithCommandToken,
+  closeWithoutReplyTo,
+  messageNotFound,
+  replyInOtherChannel,
+  replyOutsideCommandThread,
+} from "./refusals.ts";
 import { mentionPattern, pageSize } from "../../index.ts";
-import { messageNotFound, replyInOtherChannel, replyOutsideCommandThread } from "./refusals.ts";
 import { react, shownPage, shownThread, unreact } from "./reactions.ts";
 import type { ChannelName } from "../../../channels/index.ts";
 import type { Reactions } from "./reactions.ts";
@@ -37,6 +43,7 @@ interface PostMessage {
   readonly text: string;
   readonly data?: JsonValue;
   readonly replyTo?: MessageId;
+  readonly close?: true;
   readonly harness?: Harness;
 }
 
@@ -83,6 +90,13 @@ function unknownMentionsIn({ mentions, text }: Message): readonly string[] {
   return Arr.filter(mentionedNames(text), (name) => !Arr.some(mentions, (mentioned) => mentioned === name));
 }
 
+function withClose(message: NewMessage, close: true | undefined): NewMessage {
+  if (Predicate.isUndefined(close)) {
+    return message;
+  }
+  return { ...message, close };
+}
+
 function withHarness(message: NewMessage, harness: Harness | undefined): NewMessage {
   if (Predicate.isUndefined(harness)) {
     return message;
@@ -91,9 +105,12 @@ function withHarness(message: NewMessage, harness: Harness | undefined): NewMess
 }
 
 function newMessage(author: Identity, posting: PostMessage, createdAt: NewMessage["createdAt"]): NewMessage {
-  const { harness, channel, data, replyTo, text } = posting;
+  const { close, harness, channel, data, replyTo, text } = posting;
   const mentions = Arr.filter(mentionedNames(text), isIdentityName);
-  const fields = withHarness({ author: authorOf(author), channel, createdAt, mentions, text }, harness);
+  const fields = withClose(
+    withHarness({ author: authorOf(author), channel, createdAt, mentions, text }, harness),
+    close,
+  );
   if (Predicate.isUndefined(data)) {
     return withReplyTo(fields, replyTo);
   }
@@ -134,6 +151,9 @@ const ONE_AT_A_TIME = 1;
 function postWith(hub: Hub, append: Append): (author: Identity, message: PostMessage) => Fails<MessageResponse> {
   return (author, message) =>
     Effect.gen(function* postMessage() {
+      if (Predicate.isNotUndefined(message.close) && Predicate.isUndefined(message.replyTo)) {
+        return yield* Effect.fail(closeWithoutReplyTo);
+      }
       const now = yield* DateTime.now;
       const stored = newMessage(author, message, isoTimeOf(now));
       const result = yield* hub.appendThenPublish(append, stored);
@@ -172,7 +192,10 @@ function messagesOn({ hub, reactions, storage }: MessagesOn): Omit<MessagesServi
       postWith(hub, (stored) => storage.appendCommandCall({ ...call, message: stored }))(author, message),
     postInThread: (author, message, threadId) =>
       Effect.gen(function* postInCommandThread() {
-        const { channel, replyTo } = message;
+        const { channel, close, replyTo } = message;
+        if (Predicate.isNotUndefined(close)) {
+          return yield* Effect.fail(closeWithCommandToken);
+        }
         if (Predicate.isUndefined(replyTo)) {
           return yield* Effect.fail(replyOutsideCommandThread);
         }

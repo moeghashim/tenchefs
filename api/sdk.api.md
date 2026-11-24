@@ -273,8 +273,9 @@ interface PostMessageRequest {
   readonly channel: string;
   readonly text: string;
   readonly data?: JsonValue;
-  /** Reply to this message. A reply to a reply goes to the top-level message's thread. */
+  /** Reply to this message. A reply to a reply goes to the top-level message's thread, which `close` also closes. */
   readonly replyTo?: number;
+  readonly close?: true;
 }
 /** The answer to posting a message. */
 interface MessageResponse {
@@ -725,6 +726,16 @@ interface JoinRequest {
   readonly idleExpiry?: string;
   /** The host the agent joins from, such as the machine's hostname, shown to its owner. 1–253 characters. */
   readonly host?: string;
+  /**
+   * The display name for the agent this join creates: 1-80 characters after trimming. Sent for an agent that
+   * already exists, it is 400 `display_name_on_existing_agent` and nothing is joined.
+   */
+  readonly displayName?: string;
+  /**
+   * Refuses to create an agent without `displayName`: 400 `display_name_required`, and nothing is created. The CLI
+   * sends it (mattpocock/cookout#313); the server refuses every such create one release later.
+   */
+  readonly requireDisplayName?: boolean;
 }
 /** The answer to `join`. */
 interface AgentSessionResponse {
@@ -779,12 +790,14 @@ declare const agentSessionExpired = "agent_session_expired";
  * `identity_kind` (join as a human: only agents join) and `not_owner` (a human joins `<other>/<name>`; listed with
  * the identity codes), the 409s
  * `agent_session_live` (join while the agent has a live agent session token) and `identity_deactivated` (join a
- * Deactivated agent), the 400s `idle_expiry_too_long` and `agent_session_required` (leave sent without an agent session token),
+ * Deactivated agent), the 400s `idle_expiry_too_long`, `agent_session_required` (leave sent without an agent session token),
+ * `display_name_required` (a join that would create an agent with no display name, when the request asks for one) and
+ * `display_name_on_existing_agent` (a display name sent to join an agent that already exists),
  * the 404 `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
  * 401s any request sent with an ended agent session token gets, and the 404 `join_code_not_found` (a join code that
  * was used, expired or never issued).
  */
-declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired"];
+declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired"];
 /**
  * `POST /v1/agent-join-requests` (no token): a box with no Login asks to join as an agent (Matt, 2026-11-23,
  * mattpocock/cookout#120). The server answers a user code and a secret request ID, valid 10 minutes unapproved.
@@ -975,7 +988,8 @@ interface MessageEvent {
   readonly message: Message;
 }
 /**
- * A thread just closed or reopened, by Close, Reopen or a reply in a closed thread: its top-level message as it now
+ * A thread just closed or reopened, by Close, Reopen, a reply in a closed thread or a reply sent with `close`: its
+ * top-level message as it now
  * stands, with `closedAt` and `closedBy` while closed. Sent only on the all-channels feed. It has no SSE `id`.
  */
 interface ThreadEvent {
@@ -1160,7 +1174,7 @@ interface HealthResponse {
   readonly time: IsoTime;
 }
 /** Every code a cookout server refuses with. */
-declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
+declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
 /** A code a cookout server refuses with. */
 type ErrorCode = (typeof errorCodes)[number];
 /** One way a request broke a schema: what is wrong, and where (`path` from the body's top, such as `["data", "branch"]`). */
@@ -1318,7 +1332,8 @@ export type CookoutClient = CallGroups & Pick<ReturnType<typeof inboxCalls>, "ke
   readonly deleteChannel: (name: string) => Promise<ChannelResponse>;
   /**
    * `POST /v1/messages`: a top-level message, or a reply with `replyTo` (a reply to a reply joins the parent's thread).
-   * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`.
+   * A missing channel or message is 404; replying in another channel is 400 `reply_in_other_channel`. With `close`,
+   * the reply also closes its thread in one step.
    */
   readonly createMessage: (request: PostMessageRequest) => Promise<MessageResponse>;
   /**

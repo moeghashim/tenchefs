@@ -13,7 +13,7 @@ import type { Author, Message, MessageId, TopLevelMessage } from "../../../messa
 import { EMPTY_INBOX, memoryReactions, withoutChannel, withoutIdentity } from "./inbox-memory-state.ts";
 import { afterAppend, memoryInbox } from "./inbox-memory.ts";
 import { asMessageId, isPlaced, placeIn, placed, stampedAfter, threadIdOf, withKnownMentions } from "./messages.ts";
-import { current, findMessage, memoryThreads, reopenedBy, repliesTo } from "./threads-memory.ts";
+import { current, findMessage, memoryThreads, repliesTo, threadChangedBy } from "./threads-memory.ts";
 import type { IdentitiesSection } from "./identities.ts";
 import type { MemoryChannelsSection } from "./channels.ts";
 import type { MemoryInbox } from "./inbox-memory-state.ts";
@@ -64,13 +64,14 @@ function append(data: MemoryMessages, appending: Mentioning): readonly [AppendMe
   const last = data.last + NEXT;
   const message = stampedAfter({ latest: data.latestAt, message: withKnownMentions(appending) });
   const stored = placed({ id: asMessageId(last), message, placement });
-  const [reopenedParent, { messages }] = reopenedBy({
+  const [changedParent, { messages }] = threadChangedBy({
+    close: appending.message.close,
     data: { ...data, messages: [...data.messages, stored] },
     stored,
   });
   const [receipts, inbox] = afterAppend({ inbox: data.inbox, message: stored, messages });
   return [
-    { message: stored, receipts, reopened: Option.getOrUndefined(reopenedParent), status: "appended" },
+    { message: stored, receipts, status: "appended", threadChanged: Option.getOrUndefined(changedParent) },
     { ...data, inbox, last, latestAt: Option.some(message.createdAt), messages },
   ];
 }

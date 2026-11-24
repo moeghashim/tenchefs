@@ -1,8 +1,9 @@
 import type { IdentityName, LiveConnectionDetail, Presence } from "../../sdk/index.ts";
 import { useContext, useSyncExternalStore } from "react";
 import { PresenceList } from "./presence-list.ts";
-import type { Presences } from "../../presence-store/index.ts";
+import type { Presences } from "../../board/index.ts";
 import { onTick } from "./use-time-ago.ts";
+import { presences } from "../../board/index.ts";
 import { timeAgo } from "../../format/index.ts";
 
 const TEXT = {
@@ -108,15 +109,15 @@ function detailOf(presence: Presence): string {
 
 function usePresences(): Presences {
   const store = useContext(PresenceList);
-  return useSyncExternalStore(store.subscribe, store.snapshot);
+  return useSyncExternalStore(store.subscribeShowing("presence"), () => presences(store.snapshot()));
 }
 
 function usePresenceOf(name: IdentityName): Presence | null {
   return usePresences().get(name) ?? null;
 }
 
-function shownIn({ name, presences }: Among): PresenceShown | null {
-  const presence = presences.get(name) ?? null;
+function shownIn(among: Among): PresenceShown | null {
+  const presence = among.presences.get(among.name) ?? null;
   if (presence === null) {
     return null;
   }

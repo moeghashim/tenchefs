@@ -1,10 +1,10 @@
 import type { AgentJoinApprovals, LoginApprovals, Session } from "../../session/index.ts";
 import type { Board, BoardOptions } from "../../board/index.ts";
-import type { PresenceStore, Reading, Unread } from "./defaults.ts";
+import type { BoardStore, Reading, Unread } from "./defaults.ts";
 import { adminClient, anonymousClient, sessionOf } from "./identities.ts";
+import { boardStoreFor, createUnread, readingFor, unreadFor } from "./defaults.ts";
 import { cleanup, render } from "@testing-library/react";
 import { createAgentJoinApprovals, createLoginApprovals } from "../../session/index.ts";
-import { createUnread, presenceFor, readingFor, unreadFor } from "./defaults.ts";
 import type { Composer } from "../../composer/index.ts";
 import { CookoutApp } from "../index.tsx";
 import type { CookoutClient } from "../../sdk/index.ts";
@@ -52,7 +52,7 @@ interface BoardOpening {
   readonly live?: NonNullable<BoardOptions["live"]>;
   readonly loginApprovals?: LoginApprovals;
   readonly agentJoinApprovals?: AgentJoinApprovals;
-  readonly presence?: PresenceStore;
+  readonly boardStore?: BoardStore;
   readonly reading?: Reading;
   readonly session: Session;
   readonly unread?: Unread;
@@ -116,18 +116,18 @@ export function openBoard(opening: BoardOpening): () => void {
   const composer = opening.composer ?? createComposer({ client: adminClient(), commands: opening.board.commands });
   const unread = unreadFor(opening.unread);
   const layout = opening.layout ?? browserLayout();
-  const presence = presenceFor({ client: adminClient(), live: opening.live, presence: opening.presence });
+  const boardStore = boardStoreFor({ boardStore: opening.boardStore, client: adminClient(), live: opening.live });
   const { agentJoinApprovals, loginApprovals } = approvalsOf(opening);
   onTestFinished(cleanup);
   return render(
     <CookoutApp
       agentJoinApprovals={agentJoinApprovals}
       board={opening.board}
+      boardStore={boardStore}
       composer={composer}
       layout={layout}
       live={opening.live ?? null}
       loginApprovals={loginApprovals}
-      presence={presence}
       reading={readingFor(opening.reading)}
       session={opening.session}
       unread={unread}
@@ -145,7 +145,7 @@ export function openAt(opening: Opening): () => void {
     ...(opening.live && { live: opening.live }),
     ...(opening.loginApprovals && { loginApprovals: opening.loginApprovals }),
     ...(opening.agentJoinApprovals && { agentJoinApprovals: opening.agentJoinApprovals }),
-    presence: presenceFor(opening),
+    boardStore: boardStoreFor(opening),
     reading: readingFor(opening.reading),
     session,
     unread: createUnread(opening),
