@@ -1,5 +1,5 @@
 import type { CookoutClient, Message } from "../../sdk/index.ts";
-import { adminClient, newIdentity, revocableView } from "./identities.ts";
+import { adminClient, agentShown, newIdentity, revocableView } from "./identities.ts";
 import { expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import type { Cuttable } from "./cuttable.ts";
@@ -162,7 +162,7 @@ it("every message posted while the live link was down shows once it is back, tho
   await screen.findByText("Or at two?");
 
   await expect(messagesIn("Messages")).resolves.toStrictEqual([
-    "web-catch-up-pages-posteragentDeploy at noon?",
+    `${agentShown("web-catch-up-pages-poster")}agentDeploy at noon?`,
     "Or at one?",
     "Or at two?",
   ]);

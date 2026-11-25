@@ -2,12 +2,17 @@ import type { Connected, StreamRequest } from "./source.ts";
 import { Effect, Stream } from "effect";
 import { Inbox, OfflineAlerts } from "../../../inbox/server.ts";
 import { OfflineAlertEventSchema, SubscriptionEventSchema } from "./wire.ts";
+import { TriggerChanges, TriggerEventSchema } from "../../../triggers/server.ts";
 import { Channels } from "../../../channels/server.ts";
+import type { Identity } from "../../../identities/index.ts";
 import type { SubscriptionResponse } from "../../../inbox/index.ts";
+import type { TriggerChange } from "../../../triggers/server.ts";
+import { broughtInBy } from "../../../identities/server.ts";
 import { sseEvent } from "./source.ts";
 
 const subscriptionEvent = sseEvent(SubscriptionEventSchema);
 const offlineAlertEvent = sseEvent(OfflineAlertEventSchema);
+const triggerEvent = sseEvent(TriggerEventSchema);
 
 function subscriptions({ caller }: StreamRequest): Connected<Inbox | Channels> {
   return Effect.gen(function* subscribeToSubscriptions() {
@@ -40,4 +45,22 @@ function offlineAlerts({ caller }: StreamRequest): Connected<OfflineAlerts> {
   });
 }
 
-export { offlineAlerts, subscriptions };
+function readableBy(caller: Identity): (change: TriggerChange) => boolean {
+  return ({ agent }) =>
+    agent.kind === "agent" && (agent.owner === caller.name || broughtInBy({ caller, target: agent }));
+}
+
+function triggers({ caller }: StreamRequest): Connected<TriggerChanges> {
+  return Effect.gen(function* subscribeToTriggers() {
+    const changes = yield* TriggerChanges;
+    const changed = yield* changes.changed;
+    return Stream.fromSubscription(changed).pipe(
+      Stream.filter(readableBy(caller)),
+      Stream.mapEffect(({ agent, trigger }) => triggerEvent({ identity: agent.name, trigger, type: "trigger" })),
+    );
+  });
+}
+
+type TriggerNeeds = TriggerChanges;
+
+export { type TriggerNeeds, offlineAlerts, subscriptions, triggers };

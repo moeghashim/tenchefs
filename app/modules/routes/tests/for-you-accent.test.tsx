@@ -39,7 +39,7 @@ it("a For you row in the Inbox has an accent dot, not a filled block", { timeout
 
 function repliesShown(): readonly string[] {
   const panel = screen.getByRole("complementary", { name: "Thread" });
-  return accentsOf(() => within(within(panel).getByRole("list", { name: "Replies" })).getAllByRole("article"));
+  return accentsOf(() => within(within(panel).getByRole("feed", { name: "Replies" })).getAllByRole("article"));
 }
 
 interface Threads {
@@ -105,7 +105,7 @@ it("in a channel, a message that mentions you has the filled accent block, and o
   await inPane().findByText("Lunch first");
 
   expect(
-    accentsOf(() => within(inPane().getByRole("list", { name: "Messages" })).getAllByRole("article")),
+    accentsOf(() => within(inPane().getByRole("feed", { name: "Messages" })).getAllByRole("article")),
   ).toStrictEqual([PLAIN, FILLED]);
 
   close();

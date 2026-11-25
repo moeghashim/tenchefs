@@ -83,6 +83,13 @@ function threadHref({ channel, message }: Linking): string | null {
   return hrefOf({ channel, name: "thread", thread: message.id });
 }
 
+function openThreadHref({ channel, message }: Linking): string | null {
+  if (channel === null || message.kind !== "top-level") {
+    return null;
+  }
+  return hrefOf({ channel, message: message.id, name: "thread", thread: message.id });
+}
+
 interface ThreadSummaryOf {
   readonly replyCount: number;
   readonly latestReplyAt: string;
@@ -96,4 +103,13 @@ function threadSummaryOf(message: Message): ThreadSummaryOf | null {
   return { latestReplyAt: message.latestReplyAt, repliers: message.repliers, replyCount: message.replyCount };
 }
 
-export { type NewsText, type ThreadSummaryOf, newsText, replies, threadHref, threadSummaryOf, useMarkOf };
+export {
+  type NewsText,
+  type ThreadSummaryOf,
+  newsText,
+  openThreadHref,
+  replies,
+  threadHref,
+  threadSummaryOf,
+  useMarkOf,
+};

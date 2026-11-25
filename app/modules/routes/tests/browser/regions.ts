@@ -2,13 +2,24 @@ import type { Locator, Page } from "@playwright/test";
 
 const SPECIAL = /[$()*+.?[\\\]^{|}]/gu;
 
+interface Labelled {
+  readonly page: Page;
+  readonly label: string;
+}
+
 interface Saying {
   readonly page: Page;
   readonly start: string;
 }
 
 export function inSidebar(page: Page): Locator {
-  return page.getByRole("navigation", { name: "Sidebar" });
+  return page.getByRole("navigation", { exact: true, name: "Sidebar" });
+}
+
+export function sidebarLink({ label, page }: Labelled): Locator {
+  return inSidebar(page)
+    .getByRole("link")
+    .filter({ has: page.getByText(label, { exact: true }) });
 }
 
 export function inPane(page: Page): Locator {
@@ -16,19 +27,19 @@ export function inPane(page: Page): Locator {
 }
 
 export function inThread(page: Page): Locator {
-  return page.getByRole("complementary", { name: "Thread" });
+  return page.getByRole("complementary", { exact: true, name: "Thread" });
 }
 
 export function inConversation(page: Page): Locator {
-  return page.getByRole("complementary", { name: "Conversation" });
+  return page.getByRole("complementary", { exact: true, name: "Conversation" });
 }
 
 export function inProfile(page: Page): Locator {
-  return page.getByRole("complementary", { name: "Profile" });
+  return page.getByRole("complementary", { exact: true, name: "Profile" });
 }
 
 export function inTopBar(page: Page): Locator {
-  return page.getByRole("banner", { name: "Top bar" });
+  return page.getByRole("banner", { exact: true, name: "Top bar" });
 }
 
 export function inDialog(page: Page): Locator {

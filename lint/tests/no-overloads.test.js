@@ -1,4 +1,4 @@
-import rule from "../rules/no-overloads.js";
+import { noOverloads as rule } from "../rules/type-declarations.js";
 import { ruleTester } from "./rule-tester.js";
 
 ruleTester.run("no-overloads", rule, {

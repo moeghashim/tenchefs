@@ -1,9 +1,10 @@
 import type { CookoutClient, EventStream } from "../../sdk/index.ts";
-import { adminClient, newIdentity } from "./identities.ts";
+import { adminClient, agentShown, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inPane, inProfile } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { testAgentDisplayName } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 
 const NONE = 0;
@@ -24,8 +25,8 @@ async function crewOf(prefix: string): Promise<Crew> {
 }
 
 async function clickAuthor(name: string): Promise<void> {
-  const messages = await inPane().findByRole("list", { name: "Messages" });
-  fireEvent.click(await within(messages).findByRole("link", { name }));
+  const messages = await inPane().findByRole("feed", { name: "Messages" });
+  fireEvent.click(await within(messages).findByRole("link", { name: testAgentDisplayName(name) }));
 }
 
 async function openedFromAuthor(prefix: string): Promise<readonly string[]> {
@@ -76,7 +77,7 @@ it("clicking a message's author opens their profile beside the channel, and Esca
   });
 
   expect([opened, globalThis.location.hash]).toStrictEqual([
-    [`#/channels/${prefix}?profile=${prefix}-bot`, `${prefix}-botagent`, "Deployed"],
+    [`#/channels/${prefix}?profile=${prefix}-bot`, `${agentShown(`${prefix}-bot`)}agent`, "Deployed"],
     `#/channels/${prefix}`,
   ]);
 
@@ -91,7 +92,7 @@ it("opening a profile from a thread replaces the thread panel", { timeout: 5000 
   const parent = await parentOf(prefix);
   const close = openAt({ client: stranger, hash: `#/channels/${prefix}/threads/${parent}` });
   const thread = await screen.findByRole("complementary", { name: "Thread" });
-  fireEvent.click(await within(thread).findByRole("link", { name: `${prefix}-bot` }));
+  fireEvent.click(await within(thread).findByRole("link", { name: testAgentDisplayName(`${prefix}-bot`) }));
   await inProfile().findByRole("heading", { level: 3 });
 
   expect([globalThis.location.hash, screen.queryAllByRole("complementary", { name: "Thread" })]).toStrictEqual([
@@ -109,9 +110,9 @@ it("an owner renames their agent in the panel and the new name shows on its mess
 
   const { close, events } = await watchAsOwner("web-panel-rename");
   await rename("Release Bot");
-  const messages = await inPane().findByRole("list", { name: "Messages" });
+  const messages = await inPane().findByRole("feed", { name: "Messages" });
   await waitFor(() => {
-    expect(within(messages).getByRole("listitem").textContent).toMatch(/Release Bot@web-panel-rename-bot/u);
+    expect(within(messages).getByRole("article").textContent).toMatch(/Release Bot@web-panel-rename-bot/u);
   });
 
   expect(inProfile().getByRole("button", { name: "Rotate token" })).toBeDefined();
@@ -164,7 +165,7 @@ it("a profile asked for beside the people page opens as the people page's own pr
   const heading = await inProfile().findByRole("heading", { level: 3 });
 
   expect([heading.textContent, hrefOfRow(`${prefix}-human`)]).toStrictEqual([
-    `${prefix}-botagent`,
+    `${agentShown(`${prefix}-bot`)}agent`,
     `#/people/${prefix}-human`,
   ]);
 

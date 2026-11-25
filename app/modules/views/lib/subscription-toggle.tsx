@@ -1,7 +1,8 @@
-import type { Subscriptions, SubscriptionsState } from "../../board/index.ts";
 import type { ChannelName } from "../../sdk/index.ts";
-import { PressButton } from "../../design-system/index.tsx";
+import { PressButton } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
+import type { SubscriptionsState } from "../../board/index.ts";
+import { useBoardStore } from "./use-board.ts";
 import { useCallback } from "react";
 
 const TEXT = { off: "Subscribe", on: "Subscribed" } as const;
@@ -18,15 +19,15 @@ type LoadedState = Extract<SubscriptionsState, { readonly status: "loaded" }>;
 interface SubscriptionToggleProps {
   readonly channel: ChannelName;
   readonly state: LoadedState;
-  readonly subscriptions: Subscriptions;
 }
 
 export function SubscriptionToggle(props: SubscriptionToggleProps): ReactNode {
-  const { channel, subscriptions } = props;
+  const { channel } = props;
+  const { calls } = useBoardStore();
   const subscribed = props.state.channels.includes(channel);
   const handleClick = useCallback(() => {
-    subscriptions.setSubscribed(channel, !subscribed, "channel-header");
-  }, [channel, subscribed, subscriptions]);
+    calls.setSubscribed(channel, !subscribed, "channel-header");
+  }, [calls, channel, subscribed]);
   return (
     <PressButton disabled={props.state.change.status === "changing"} onClick={handleClick} pressed={subscribed}>
       {labelOf(subscribed)}

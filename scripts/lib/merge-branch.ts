@@ -1,14 +1,20 @@
 import { DONE, git, stepOf, stop, tail } from "./merge-steps.ts";
 import type { Step } from "./merge-steps.ts";
+import { approvalTrailer } from "./merge-lint.ts";
 
 interface BranchOptions {
+  readonly approved?: string;
   readonly cwd: string;
   readonly ticket: number;
   readonly title: string;
 }
 
-function messageOf(options: BranchOptions): string {
+function titleOf(options: Pick<BranchOptions, "ticket" | "title">): string {
   return `Merge ticket-${options.ticket}: ${options.title} (#${options.ticket})`;
+}
+
+function messageOf(options: BranchOptions): string {
+  return `${titleOf(options)}${approvalTrailer(options.approved ?? "")}`;
 }
 
 function asOneTicketMerge(options: BranchOptions): Step {
@@ -31,4 +37,4 @@ function cleanTree(options: BranchOptions): Step {
   return stop(`The working tree is not clean; commit first.\n${status.output}`);
 }
 
-export { cleanTree, asOneTicketMerge, messageOf };
+export { cleanTree, asOneTicketMerge, messageOf, titleOf };

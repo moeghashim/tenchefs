@@ -68,7 +68,7 @@ export type { HealthResponse, SchemaProblem } from "../http/index.ts";
 export type { IsoTime } from "../time/index.ts";
 export type * from "./lib/identity-types.ts";
 export type * from "./lib/message-types.ts";
-export type * from "../agent-sessions/index.ts";
+export type * from "./lib/agent-session-types.ts";
 export type * from "./lib/inbox-types.ts";
 export type * from "../events/index.ts";
 export type { EventStream, WatchOptions } from "./lib/events.ts";

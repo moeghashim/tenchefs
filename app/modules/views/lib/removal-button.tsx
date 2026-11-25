@@ -1,6 +1,6 @@
 import type { IdentityActions, MessageCount } from "../../composer/index.ts";
 import { ActivationButton } from "./activation-button.tsx";
-import { Button } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 

@@ -1,6 +1,6 @@
 import { Array as Arr, Effect, Predicate } from "effect";
 import { Caller, announced, issueToken, requireAdmin, requireOwnerOrAdmin, tokensEnded } from "./auth.ts";
-import { CreateIdentityRequestSchema, createIdentity, humanCaller } from "./create.ts";
+import { CreateIdentityRequestSchema, createAgentByAgent, createIdentity } from "./create.ts";
 import {
   DeactivateIdentityResponseSchema,
   IdentityMessageCountResponseSchema,
@@ -10,7 +10,7 @@ import {
   ListIdentitiesResponseSchema,
 } from "./wire.ts";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import type { Identity, IdentityName, ListIdentitiesQuery } from "../../index.ts";
+import type { Identity, IdentityName, ListIdentitiesQuery, TokenHash } from "../../index.ts";
 import { identitiesPath, identityAdminPath, identityPath, identityTokenPath, isIdentityName } from "../../index.ts";
 import type { IdentityChanges } from "./auth.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -57,8 +57,13 @@ const withToken = HttpServerResponse.schemaJson(IdentityWithTokenResponseSchema)
 const createRoute: Route<Caller | Storage | Secrets | IdentityChanges> = {
   handle: () =>
     Effect.gen(function* createIdentityRoute() {
-      const caller = yield* humanCaller;
+      const caller = yield* Caller;
       const body = yield* HttpServerRequest.schemaBodyJson(CreateIdentityRequestSchema);
+      if (caller.kind === "agent") {
+        const brought = yield* createAgentByAgent({ body, caller });
+        yield* announced(brought.identity);
+        return yield* HttpServerResponse.schemaJson(IdentityResponseSchema)(brought, { status: CREATED });
+      }
       const created = yield* createIdentity({ body, caller });
       yield* announced(created.identity);
       return yield* withToken(created, { status: CREATED });
@@ -76,7 +81,7 @@ const listRoute: Route<Storage> = {
         Effect.provideService(HttpServerRequest.ParsedSearchParams, search),
       );
       const storage = yield* Storage;
-      const commands = yield* storage.listCommands;
+      const commands = yield* storage.listWebhookCommands;
       const stored = yield* storage.listIdentities();
       const handlers = new Set(Arr.map(commands, ({ handler }) => handler));
       const identities = Arr.map(shownFor(query, stored), (identity) => flaggedIfHandler(identity, handlers));
@@ -95,7 +100,7 @@ const getRoute: Route<Storage> = {
       if (Predicate.isUndefined(found)) {
         return yield* Effect.fail(identityNotFound(name));
       }
-      const commands = yield* storage.listCommands;
+      const commands = yield* storage.listWebhookCommands;
       const identity = flaggedIfHandler(found, new Set(Arr.map(commands, ({ handler }) => handler)));
       return yield* HttpServerResponse.schemaJson(IdentityResponseSchema)({ identity });
     }),
@@ -103,11 +108,12 @@ const getRoute: Route<Storage> = {
   path: identityPath,
 };
 
-const IDENTITY_TOKENS = { kind: "identity tokens" } as const;
-
-function rotatedBy(identity: IdentityName): Effect.Effect<void, never, Caller | IdentityChanges> {
+function rotatedBy(
+  identity: IdentityName,
+  loginCredentials: readonly TokenHash[],
+): Effect.Effect<void, never, Caller | IdentityChanges> {
   return Effect.flatMap(Caller, (caller) =>
-    tokensEnded({ by: caller.name, cause: "rotated", identity, tokens: IDENTITY_TOKENS }),
+    tokensEnded({ by: caller.name, cause: "rotated", identity, tokens: { kind: "identity tokens", loginCredentials } }),
   );
 }
 
@@ -122,7 +128,8 @@ const rotateRoute: Route<Caller | Storage | Secrets | IdentityChanges> = {
       if (result.status === "not_found") {
         return yield* Effect.fail(identityNotFound(name));
       }
-      yield* rotatedBy(name);
+      const endedSessions = yield* storage.revokeLoginCredentialsMadeWithRevokedTokens(name);
+      yield* rotatedBy(name, endedSessions);
       return yield* withToken({ identity: result.identity, token });
     }),
   method: "POST",

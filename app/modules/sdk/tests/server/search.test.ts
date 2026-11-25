@@ -1,4 +1,5 @@
 import { Array as Arr, Effect, Predicate, String as Str, Struct } from "effect";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import type { MessageId, SearchResponse } from "../../index.ts";
 import { TestCookout, answer, refusal, testCookout } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
@@ -69,6 +70,69 @@ it.effect("search pages newest first: each answer's cursor reads the next page",
       { cursor: null, hasMore: false, results: [{ message: { id: first } }] },
     ]);
   }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("search sorts newest first by default, and best match puts the message most about the words first", () =>
+  Effect.gen(function* searchSorts() {
+    const { ann, post } = yield* aBoard;
+    const mostlyDeploy = yield* post("deploy deploy deploy");
+    const once = yield* post("lunch is at noon, the coffee is fixed, and then we deploy");
+    const searched = yield* Effect.all(
+      [
+        answer(() => ann.client.search({ query: "deploy" })),
+        answer(() => ann.client.search({ query: "deploy", sort: "newest" })),
+        answer(() => ann.client.search({ query: "deploy", sort: "best" })),
+      ],
+      ONE_AT_A_TIME,
+    );
+    const ids = Arr.map(searched, ({ results }) => Arr.map(results, ({ message }) => message.id));
+
+    expect(ids).toStrictEqual([
+      [once, mostlyDeploy],
+      [once, mostlyDeploy],
+      [mostlyDeploy, once],
+    ]);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("best match pages by its own cursor: each answer's cursor reads the next page in the same order", () =>
+  Effect.gen(function* bestPages() {
+    const { ann, post } = yield* aBoard;
+    const mostlyDeploy = yield* post("deploy deploy");
+    const once = yield* post("the deploy went out after lunch");
+    const page = yield* answer(() => ann.client.search({ limit: PAGE_OF_ONE, query: "deploy", sort: "best" }));
+    const rest = yield* answer(() =>
+      ann.client.search({ cursor: String(page.cursor), limit: PAGE_OF_ONE, query: "deploy", sort: "best" }),
+    );
+
+    expect([page, rest]).toMatchObject([
+      { hasMore: true, results: [{ message: { id: mostlyDeploy } }] },
+      { cursor: null, hasMore: false, results: [{ message: { id: once } }] },
+    ]);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("an unknown sort, or a newest cursor sent with best match, is refused as invalid_request", () =>
+  Effect.gen(function* unknownSort() {
+    const cookout = yield* TestCookout;
+    const { ann, post } = yield* aBoard;
+    yield* post("deploy one");
+    yield* post("deploy two");
+    const newest = yield* answer(() => ann.client.search({ limit: PAGE_OF_ONE, query: "deploy" }));
+    const statuses = yield* Effect.forEach(
+      ["sort=oldest", `sort=best&cursor=${encodeURIComponent(String(newest.cursor))}`],
+      (params) =>
+        HttpClient.execute(
+          HttpClientRequest.get(`${cookout.url}/v1/search?q=deploy&${params}`).pipe(
+            HttpClientRequest.setHeader("authorization", `Bearer ${ann.token}`),
+          ),
+        ).pipe(Effect.flatMap((response) => Effect.map(response.json, (body) => ({ body, status: response.status })))),
+      ONE_AT_A_TIME,
+    );
+    const invalid = { body: { error: { code: "invalid_request" } }, status: BAD_REQUEST };
+
+    expect(statuses).toMatchObject([invalid, invalid]);
+  }).pipe(Effect.provide([testCookout(), FetchHttpClient.layer])),
 );
 
 it.effect("a search with no words is refused as empty_query", () =>

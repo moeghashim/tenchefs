@@ -4,10 +4,10 @@ import type { MemoryBoard } from "./service.ts";
 import type { Scope } from "effect";
 import { memoryAgentSessionSections } from "./agent-join-requests-memory.ts";
 import { memoryChannels } from "./channels.ts";
-import { memoryCommandCalls } from "./command-calls.ts";
-import { memoryCommands } from "./commands.ts";
 import { memoryHealth } from "./health.ts";
 import { memoryMessages } from "./messages-memory.ts";
+import { memoryWebhookCommandCalls } from "./command-calls.ts";
+import { memoryWebhookCommands } from "./commands.ts";
 import { openMemoryState } from "./memory-state.ts";
 
 function subscribingCreator(
@@ -33,11 +33,12 @@ export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> =
       state,
     });
     const { forgetChannel, forgetIdentity, ...messages } = memoryMessages({ channels, identities, state });
-    const { dropCommandTokens, dropCommandTokensOf, dropCommandsOf, dropDeliveries, ...commands } = memoryCommands({
-      findIdentity,
-      placeHandler,
-      state,
-    });
+    const { dropWebhookCommandTokens, dropWebhookCommandTokensOf, dropWebhookCommandsOf, dropDeliveries, ...commands } =
+      memoryWebhookCommands({
+        findIdentity,
+        placeHandler,
+        state,
+      });
     return {
       ...memoryHealth(state),
       ...identities,
@@ -45,13 +46,13 @@ export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> =
       ...messages,
       ...agentSessions,
       ...commands,
-      ...memoryCommandCalls({ ...commands, ...messages }),
+      ...memoryWebhookCommandCalls({ ...commands, ...messages }),
       ...memoryIdentityLifecycle({
         countMessagesBy: messages.countMessagesBy,
         deactivateIdentity: identities.deactivateIdentity,
         dropAgentSessionsOf,
-        dropCommandTokensOf,
-        dropCommandsOf,
+        dropWebhookCommandTokensOf,
+        dropWebhookCommandsOf,
         forgetIdentity,
         removeIdentity,
         revokeAgentSessionsOf,
@@ -65,7 +66,7 @@ export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> =
           }
           dropChannel(name);
           const { attachments, messageIds } = yield* forgetChannel(name);
-          dropCommandTokens(messageIds);
+          dropWebhookCommandTokens(messageIds);
           dropDeliveries(name);
           return { attachments, channel: found };
         }),

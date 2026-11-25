@@ -1,4 +1,4 @@
-import { ChoiceGroup, InputField } from "../../design-system/index.tsx";
+import { ChoiceGroup, InputField } from "../../design-system/controls.tsx";
 import type { ScheduleKind, Scheduling, SchedulingSnapshot } from "../../board/index.ts";
 import type { ReactNode } from "react";
 import { useCallback } from "react";

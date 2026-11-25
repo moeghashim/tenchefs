@@ -1,11 +1,6 @@
-import { TICKET, git, migrations, repo, repos } from "./lib/merge-repos.ts";
+import { TICKET, git, migrations, redCi, repo, repos } from "./lib/merge-repos.ts";
 import { expect, it } from "vitest";
 import type { Merged } from "../lib/merge-ticket.ts";
-import path from "node:path";
-import { writeFileSync } from "node:fs";
-
-const ONE_ATTEMPT = 1;
-const TWO_ATTEMPTS = 2;
 
 function refusal(merged: Merged): { readonly files: readonly string[]; readonly reason: string } {
   if (merged.ok) {
@@ -31,24 +26,17 @@ it("refuses a merge that inserts a migration before one v1 already has, naming t
   expect(git(origin, "rev-parse", "v1")).toBe(before);
 });
 
-it("puts v1's new migrations before the ticket's when v1 moved before the push", { timeout: 10_000 }, () => {
+it("puts v1's new migrations before the ticket's when v1 moved before --continue", { timeout: 10_000 }, () => {
   expect.hasAssertions();
 
-  const { origin, other, root, work } = repos();
+  const { origin, other, work } = repos();
   repo(work).commit("the ticket", { "migrations.ts": migrations("a", "c") });
-  const moved = path.join(root, "moved");
-  const v1Migrations = path.join(root, "v1-migrations.ts");
-  writeFileSync(v1Migrations, migrations("a", "b"));
-  const moveV1 = [
-    `cp ${v1Migrations} ${other}/migrations.ts`,
-    `git -C ${other} commit -q -am moved`,
-    `git -C ${other} push -q origin HEAD:v1`,
-    `touch ${moved}`,
-  ].join(" && ");
+  repo(work).merge({ ci: redCi });
+  repo(other).push({ "migrations.ts": migrations("a", "b") });
 
-  const merged = repo(work).merge({ check: ["sh", "-c", `test -f ${moved} || { ${moveV1}; }`] });
+  const merged = repo(work).continueMerge({});
 
-  expect(merged).toStrictEqual({ attempts: TWO_ATTEMPTS, ok: true, sha: git(origin, "rev-parse", "v1") });
+  expect(merged).toStrictEqual({ ok: true, sha: git(origin, "rev-parse", "v1") });
   expect(git(origin, "show", "v1:migrations.ts")).toBe(migrations("a", "b", "c").trim());
 });
 
@@ -66,6 +54,6 @@ it("lets a ticket move a migration that isn't deployed when the base is the depl
 
   const merged = repo(work).merge({ migrationsBase: "deploy/base" });
 
-  expect(merged).toStrictEqual({ attempts: ONE_ATTEMPT, ok: true, sha: git(origin, "rev-parse", "v1") });
+  expect(merged).toStrictEqual({ ok: true, sha: git(origin, "rev-parse", "v1") });
   expect(git(origin, "show", "v1:migrations.ts")).toBe(migrations("a", "c", "b").trim());
 });

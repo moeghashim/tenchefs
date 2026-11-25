@@ -1,5 +1,5 @@
-import type { MenuChoice } from "../../design-system/index.tsx";
-import { MoreActions } from "../../design-system/index.tsx";
+import type { MenuChoice } from "../../design-system/messages.tsx";
+import { MoreActions } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
@@ -15,5 +15,5 @@ export function ScheduleChoice(props: ScheduleChoiceProps): ReactNode {
     (): readonly MenuChoice[] => [{ href: null, icon: "schedule", label: TEXT.schedule, onSelect: onSchedule }],
     [onSchedule],
   );
-  return <MoreActions choices={choices} label={TEXT.label} />;
+  return <MoreActions choices={choices} label={TEXT.label} look="box" />;
 }

@@ -8,9 +8,9 @@ import type { Principal } from "./principals.ts";
 import type { Refusal } from "../../../http/index.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
-import { commandTokenPrincipal } from "./principals.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 import { messagesPath } from "../../../messages/index.ts";
+import { webhookCommandTokenPrincipal } from "./principals.ts";
 
 const authorizationHeader = /^Bearer +(\S+)\s*$/iu;
 
@@ -45,17 +45,21 @@ const agentSessionExpiredRefusal: Refusal = {
   status: 401,
 };
 
-const outsideCommandThread: Refusal = {
+const outsideWebhookCommandThread: Refusal = {
   code: "outside_command_thread",
   message: "A command token can only post replies in its call's thread.",
   status: 403,
 };
 
-const CommandThread = Context.Reference<Option.Option<MessageId>>("cookout/identities/CommandThread", {
+const WebhookCommandThread = Context.Reference<Option.Option<MessageId>>("cookout/identities/WebhookCommandThread", {
   defaultValue: Option.none,
 });
 
 const AgentSessionSent = Context.Reference<Option.Option<TokenHash>>("cookout/identities/AgentSessionSent", {
+  defaultValue: Option.none,
+});
+
+const LoginCredentialSent = Context.Reference<Option.Option<TokenHash>>("cookout/identities/LoginCredentialSent", {
   defaultValue: Option.none,
 });
 
@@ -75,12 +79,12 @@ interface RequestTarget {
   readonly url: string;
 }
 
-function requireCommandRoute({ method, url }: RequestTarget): Effect.Effect<void, Refusal> {
+function requireWebhookCommandRoute({ method, url }: RequestTarget): Effect.Effect<void, Refusal> {
   const [path] = Str.split("?")(url);
   if (method === "POST" && path === messagesPath) {
     return Effect.void;
   }
-  return Effect.fail(outsideCommandThread);
+  return Effect.fail(outsideWebhookCommandThread);
 }
 
 interface Credentials {
@@ -121,10 +125,15 @@ const endedAgentSession = {
 function agentSessionPrincipal(storage: Storage["Service"], hash: TokenHash) {
   return (used: UseAgentSessionResult): Effect.Effect<Principal, Refusal | StorageUnavailable> => {
     if (used.status === "active") {
-      return Effect.succeed({ agentSession: Option.some(hash), commandThread: Option.none(), identity: used.identity });
+      return Effect.succeed({
+        agentSession: Option.some(hash),
+        identity: used.identity,
+        loginCredential: Option.none(),
+        webhookCommandThread: Option.none(),
+      });
     }
     if (used.status === "unknown") {
-      return Effect.flatMap(storage.findCommandToken(hash), commandTokenPrincipal({ hash, storage }));
+      return Effect.flatMap(storage.findWebhookCommandToken(hash), webhookCommandTokenPrincipal({ hash, storage }));
     }
     return Effect.fail(endedAgentSession[used.status]);
   };
@@ -145,7 +154,12 @@ function principalOf(storage: Storage["Service"], hash: TokenHash) {
   return (found: TokenLookup): Effect.Effect<Principal, Refusal | StorageUnavailable> => {
     switch (found.status) {
       case "active": {
-        return Effect.succeed({ agentSession: Option.none(), commandThread: Option.none(), identity: found.identity });
+        return Effect.succeed({
+          agentSession: Option.none(),
+          identity: found.identity,
+          loginCredential: Option.none(),
+          webhookCommandThread: Option.none(),
+        });
       }
       case "revoked": {
         return Effect.fail(tokenRevoked);
@@ -244,11 +258,13 @@ export {
   AgentSessionSent,
   Caller,
   HarnessSent,
-  CommandThread,
+  LoginCredentialSent,
+  broughtInBy,
+  WebhookCommandThread,
   type Credentials,
   credentialsOf,
   ownsAgent,
-  requireCommandRoute,
+  requireWebhookCommandRoute,
   requireOwnerBringerOrAdmin,
   requireOwnerOrAdmin,
   sentHarness,

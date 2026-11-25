@@ -1,4 +1,4 @@
-import { Mention } from "../../design-system/index.tsx";
+import { Mention } from "../../design-system/messages.tsx";
 import type { Message } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import { mentionPattern } from "../../messages/index.ts";

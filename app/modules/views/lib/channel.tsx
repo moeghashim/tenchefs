@@ -1,12 +1,12 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
-import { Pane, PaneHeader } from "../../design-system/index.tsx";
-import type { Board } from "../../board/index.ts";
+import type { ComponentProps, ReactNode } from "react";
+import { Pane, PaneHeader } from "../../design-system/layout.tsx";
+import { useBoardStore, useChannelPage, useChannels, useSubscriptions } from "./use-board.ts";
 import { ChannelFeed } from "./channel-feed.tsx";
 import type { ChannelFeedProps } from "./channel-feed.tsx";
 import type { Composer } from "../../composer/index.ts";
 import { MessageFooter } from "./message-footer.tsx";
 import { NotBuiltView } from "./not-built.tsx";
-import type { ReactNode } from "react";
 import { SubscriptionRefusal } from "./subscription-refusal.tsx";
 import { SubscriptionToggle } from "./subscription-toggle.tsx";
 import { useSyncExternalStore } from "react";
@@ -14,9 +14,10 @@ import { useSyncExternalStore } from "react";
 const TEXT = { missing: "No channel has this name.", nothing: "Nothing here" } as const;
 
 interface ChannelProps {
-  readonly board: Board;
+  readonly scheduling: ComponentProps<typeof MessageFooter>["scheduling"];
   readonly channel: ChannelName;
   readonly composer: Composer;
+  readonly keymap: ComponentProps<typeof MessageFooter>["keymap"];
   readonly newLine: {
     readonly subscribe: (listener: () => void) => () => void;
     readonly snapshot: () => number | null;
@@ -26,8 +27,8 @@ interface ChannelProps {
   readonly unread: ChannelFeedProps["unread"];
 }
 
-function useDescription(board: Board, name: ChannelName): string | null {
-  const { channels } = useSyncExternalStore(board.subscribe, board.snapshot);
+function useDescription(name: ChannelName): string | null {
+  const channels = useChannels();
   if (channels.status !== "loaded") {
     return null;
   }
@@ -40,11 +41,10 @@ function useDescription(board: Board, name: ChannelName): string | null {
 }
 
 export function ChannelView(props: ChannelProps): ReactNode {
-  const messages = props.board.channel(props.channel);
-  const state = useSyncExternalStore(messages.subscribe, messages.snapshot);
-  const description = useDescription(props.board, props.channel);
-  const { subscriptions } = props.board;
-  const subscribed = useSyncExternalStore(subscriptions.subscribe, subscriptions.snapshot);
+  const store = useBoardStore();
+  const state = useChannelPage(props.channel);
+  const description = useDescription(props.channel);
+  const subscribed = useSubscriptions();
   const readPosition = useSyncExternalStore(props.newLine.subscribe, props.newLine.snapshot);
   if (state.status === "failed" && state.code === "channel_not_found") {
     return <NotBuiltView description={TEXT.missing} title={TEXT.nothing} />;
@@ -52,27 +52,23 @@ export function ChannelView(props: ChannelProps): ReactNode {
   return (
     <Pane>
       <PaneHeader description={description} title={`#${props.channel}`}>
-        {subscribed.status === "loaded" && (
-          <SubscriptionToggle channel={props.channel} state={subscribed} subscriptions={subscriptions} />
-        )}
+        {subscribed.status === "loaded" && <SubscriptionToggle channel={props.channel} state={subscribed} />}
       </PaneHeader>
       <SubscriptionRefusal channel={props.channel} state={subscribed} />
       <ChannelFeed
-        closing={props.board.closing}
+        closing={store.calls}
         channel={props.channel}
         me={props.me}
-        messages={messages}
         open={props.open}
         state={state}
         readPosition={readPosition}
         unread={props.unread}
       />
       <MessageFooter
-        commands={props.board.commands}
         channel={props.channel}
         draft={props.composer.channelDraft(props.channel)}
-        messages={messages}
-        scheduling={props.board.scheduling}
+        keymap={props.keymap}
+        scheduling={props.scheduling}
         state={state}
       />
     </Pane>

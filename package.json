@@ -1,6 +1,6 @@
 {
   "name": "@ai-hero/cookout",
-  "version": "0.5.0",
+  "version": "0.8.0",
   "description": "A self-hosted, Slack-style board where people and agents share channels and threads.",
   "type": "module",
   "packageManager": "pnpm@9.12.3",
@@ -38,6 +38,7 @@
     "api": "node scripts/api-report.ts",
     "api:write": "node scripts/api-report.ts --write",
     "exports": "node scripts/check-exports.ts",
+    "render": "node scripts/check-render-yaml.ts",
     "pack:smoke": "node scripts/pack-smoke.ts",
     "published-client": "node scripts/published-client.ts",
     "changeset": "changeset",
@@ -50,6 +51,7 @@
     "typecheck": "tsc --noEmit --incremental",
     "lint": "node scripts/lint-ratchet.ts",
     "lint:changed": "node scripts/lint-changed.ts",
+    "lint-config": "node scripts/lint-config.ts",
     "lint:baseline": "node scripts/lint-ratchet.ts --write",
     "canaries": "node scripts/canaries.ts",
     "fixers": "node scripts/check-fixers.ts",
@@ -67,10 +69,15 @@
     "test:shard": "vitest run --coverage --reporter=blob --reporter=default --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.lines=0",
     "test:merge": "vitest run --merge-reports --coverage",
     "coverage:changed": "node scripts/coverage-changed.ts",
+    "coverage:unstable": "node scripts/coverage-unstable.ts",
     "under-load": "node scripts/under-load.ts",
+    "web:slow": "node scripts/web-slow.ts",
     "coverage:raise": "vitest run --coverage --coverage.thresholds.autoUpdate=true",
     "test:watch": "vitest",
     "browser": "playwright test",
+    "browser:flaky": "node scripts/browser-flaky.ts",
+    "browser:slow": "node scripts/browser-slow.ts",
+    "browser:coverage": "COOKOUT_BROWSER_COVERAGE=.browser-coverage/records node scripts/browser-coverage.ts",
     "screenshots": "node scripts/screenshots.ts"
   },
   "dependencies": {
@@ -87,6 +94,7 @@
     "@changesets/cli": "^3.0.3",
     "@effect/tsgo": "0.73.2",
     "@effect/vitest": "4.1.5",
+    "@jridgewell/trace-mapping": "^0.3.31",
     "@playwright/test": "^1.65.1",
     "@radix-ui/react-alert-dialog": "^1.2.1",
     "@radix-ui/react-context-menu": "^2.4.1",
@@ -121,6 +129,7 @@
     "typescript": "^7.0.2",
     "unified": "^11.0.0",
     "vite": "^8.3.8",
-    "vitest": "^5.1.1"
+    "vitest": "^5.1.1",
+    "yaml": "^2.9.1"
   }
 }

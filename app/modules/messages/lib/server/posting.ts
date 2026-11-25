@@ -1,17 +1,17 @@
 import { Array as Arr, DateTime, Effect, Option, Predicate, String as Str, pipe } from "effect";
 import type { Attaching, Post, StoredFiles } from "../../../attachments/server.ts";
-import type { Author, JsonValue, Message, MessageId, MessageResponse, Reply } from "../../index.ts";
+import type { Author, JsonValue, Message, MessageId, MessageResponse } from "../../index.ts";
 import type { Harness, Identity } from "../../../identities/index.ts";
 import type { NewMessage, ScheduledRun, Storage, StorageUnavailable } from "../../../storage/server.ts";
 import type { PubSub, Scope } from "effect";
 import { closeWithoutReplyTo, messageNotFound, replyInOtherChannel, seenWithoutReplyTo } from "./refusals.ts";
-import { movedSince, threadMovedWarning } from "./thread-moved.ts";
 import type { ChannelName } from "../../../channels/index.ts";
 import type { Refusal } from "./refusals.ts";
 import { channelNotFound } from "../../../channels/server.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 import { mentionPattern } from "../../index.ts";
+import { refuseIfMoved } from "./thread-moved.ts";
 
 interface PostMessage {
   readonly channel: ChannelName;
@@ -123,20 +123,14 @@ function unfitRefusal({ close, replyTo, seen }: PostMessage): Option.Option<Refu
   return Option.map(Option.fromUndefinedOr(seen), () => seenWithoutReplyTo);
 }
 
-type Moved = Appended & { readonly moved: readonly Reply[] };
+type AppendedOk = Extract<Appended, { readonly status: "appended" }>;
 
-type AppendedMoved = Extract<Moved, { readonly status: "appended" }>;
-
-function appendNoting({ append, storage }: Posting, author: Identity, message: PostMessage) {
-  return (stored: NewMessage): Fails<Moved> =>
-    Effect.zipWith(
-      movedSince({ author, replyTo: message.replyTo, seen: message.seen, storage }),
-      append(stored),
-      (moved, appended) => ({ ...appended, moved }),
-    );
+function appendUnmoved({ append, storage }: Posting, author: Identity, message: PostMessage) {
+  return (stored: NewMessage): Fails<Appended> =>
+    Effect.andThen(refuseIfMoved({ author, replyTo: message.replyTo, seen: message.seen, storage }), append(stored));
 }
 
-function appendedOr(message: PostMessage): (result: Moved) => Fails<AppendedMoved> {
+function appendedOr(message: PostMessage): (result: Appended) => Fails<AppendedOk> {
   return (result) => {
     if (result.status !== "appended") {
       return Effect.fail(refusalOf(result.status, message));
@@ -145,13 +139,8 @@ function appendedOr(message: PostMessage): (result: Moved) => Fails<AppendedMove
   };
 }
 
-function answerTo(posting: Posting): (result: AppendedMoved) => Fails<MessageResponse> {
-  return (result) =>
-    Effect.map(threadMovedWarning({ moved: result.moved, storage: posting.storage }), (warned) => ({
-      message: result.message,
-      unknownMentions: unknownMentionsIn(result.message),
-      ...warned,
-    }));
+function answerTo(result: AppendedOk): MessageResponse {
+  return { message: result.message, unknownMentions: unknownMentionsIn(result.message) };
 }
 
 function postWith(posting: Posting): (author: Identity, message: PostMessage) => Fails<MessageResponse> {
@@ -165,11 +154,11 @@ function postWith(posting: Posting): (author: Identity, message: PostMessage) =>
       const files = yield* posting.attaching.store({ attachments, text: rest.text });
       const now = yield* DateTime.now;
       const stored = withAttachments(newMessage(author, rest, isoTimeOf(now)), files);
-      const result = yield* posting.hub.appendThenPublish(appendNoting(posting, author, rest), stored).pipe(
+      const result = yield* posting.hub.appendThenPublish(appendUnmoved(posting, author, rest), stored).pipe(
         Effect.flatMap(appendedOr(rest)),
         Effect.onError(() => files.remove),
       );
-      return yield* answerTo(posting)(result);
+      return answerTo(result);
     });
 }
 

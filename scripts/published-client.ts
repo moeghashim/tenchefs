@@ -42,7 +42,7 @@ const MS_PER_SECOND = 1000;
 const CHANNEL = "compat";
 const AGENT = "compat-agent";
 const CANARY_AGENT = "compat-canary";
-const COMMAND = "compat-command";
+const WEBHOOK_COMMAND = "compat-command";
 const STEPS = [
   "join",
   "post",
@@ -209,12 +209,20 @@ async function watch(board: Board): Promise<void> {
   }
 }
 
-function callCommand(board: Board): void {
+function callWebhookCommand(board: Board): void {
   const schema = path.join(root, "schema.json");
   writeFileSync(schema, JSON.stringify({ properties: { version: { type: "string" } }, type: "object" }));
   const url = "http://127.0.0.1:9/compat";
-  step("command add", board.admin, ["command", "add", COMMAND, "--url", url, "--schema", schema]);
-  step("command call", board.admin, ["command", "call", COMMAND, "--channel", CHANNEL, "--data", '{"version":"1"}']);
+  step("command add", board.admin, ["command", "add", WEBHOOK_COMMAND, "--url", url, "--schema", schema]);
+  step("command call", board.admin, [
+    "command",
+    "call",
+    WEBHOOK_COMMAND,
+    "--channel",
+    CHANNEL,
+    "--data",
+    '{"version":"1"}',
+  ]);
 }
 
 function canary(board: Board): void {
@@ -233,7 +241,7 @@ function canary(board: Board): void {
 async function drive(board: Board): Promise<void> {
   postAndRead(board);
   await watch(board);
-  callCommand(board);
+  callWebhookCommand(board);
   step("deactivate", board.admin, ["identity", "deactivate", AGENT]);
   step("reactivate", board.admin, ["identity", "reactivate", AGENT]);
   canary(board);

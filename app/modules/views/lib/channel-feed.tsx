@@ -26,7 +26,6 @@ export function ChannelFeed(props: ChannelFeedProps): ReactNode {
         closing={props.closing}
         held={held}
         me={props.me}
-        messages={props.messages}
         open={props.open}
         readPosition={props.readPosition}
         state={state}

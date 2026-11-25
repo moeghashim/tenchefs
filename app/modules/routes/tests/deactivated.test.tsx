@@ -1,10 +1,11 @@
-import { adminClient, clientWith, newIdentity } from "./identities.ts";
+import { adminClient, agentShown, clientWith, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inDialog, inPane, inProfile } from "./regions.ts";
-import { rowsOf, subscribedReader } from "./inbox-reader.ts";
+import { inboxOpened, rowsOf, subscribedReader } from "./inbox-reader.ts";
+import { profileOpened, viewOpened } from "./view-opened.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { openAt } from "./render.tsx";
+import type { OpenedView } from "./view-opened.ts";
 
 const ONE = 1;
 
@@ -38,17 +39,24 @@ async function profileHeading(): Promise<string> {
   return heading.textContent;
 }
 
-async function deactivateFromProfile(name: string): Promise<void> {
+async function deactivateFromProfile(name: string, answered: OpenedView["answered"]): Promise<void> {
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
   fireEvent.click(await inDialog().findByRole("button", { name: `Deactivate @${name}` }));
+  await answered("deactivateIdentity");
   await waitFor(async () => {
     await expect(profileHeading()).resolves.toBe(`${name}(deactivated)`);
   });
 }
 
-async function reactivateFromProfile(name: string): Promise<void> {
+async function deactivationAnswered(name: string, answered: OpenedView["answered"]): Promise<void> {
+  fireEvent.click(inDialog().getByRole("button", { name: `Deactivate @${name}` }));
+  await answered("deactivateIdentity");
+}
+
+async function reactivateFromProfile(name: string, answered: OpenedView["answered"]): Promise<void> {
   fireEvent.click(inProfile().getByRole("button", { name: "Reactivate" }));
   fireEvent.click(await inDialog().findByRole("button", { name: `Reactivate @${name}` }));
+  await answered("reactivateIdentity");
 }
 
 it("a deactivated author keeps their display name on their messages, marked (deactivated)", {
@@ -60,11 +68,15 @@ it("a deactivated author keeps their display name on their messages, marked (dea
   await adminClient().createChannel({ name: "web-off-author" });
   await bot.createMessage({ channel: "web-off-author", text: "Deployed" });
   await adminClient().deactivateIdentity("web-off-author-bot");
-  const close = openAt({ client: adminClient(), hash: "#/channels/web-off-author" });
-  const messages = await screen.findByRole("list", { name: "Messages" });
+  const { close } = await viewOpened({
+    client: adminClient(),
+    hash: "#/channels/web-off-author",
+    waitingOn: ["listMessages", "listIdentities"],
+  });
+  const messages = await screen.findByRole("feed", { name: "Messages" });
 
   await waitFor(() => {
-    expect(within(messages).getByRole("listitem").textContent).toMatch(
+    expect(within(messages).getByRole("article").textContent).toMatch(
       /Release Bot@web-off-author-bot\(deactivated\)agent.*Deployed/u,
     );
   });
@@ -78,11 +90,11 @@ it("an inbox row marks a deactivated author (deactivated)", { timeout: 5000 }, a
   const { poster, reader } = await subscribedReader("web-off-inbox");
   await poster.createMessage({ channel: "web-off-inbox", text: "Deployed" });
   await adminClient().deactivateIdentity("web-off-inbox-poster");
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { unmount: close } = await inboxOpened({ author: "web-off-inbox-poster", reader });
 
   await waitFor(() => {
     expect(rowsOf("Activity")).toStrictEqual([
-      "#/inbox/web-off-inbox New in #web-off-inboxweb-off-inbox-poster(deactivated)posted in#web-off-inboxjust nowDeployed",
+      `#/inbox/web-off-inbox New in #web-off-inbox${agentShown("web-off-inbox-poster")}(deactivated)posted in#web-off-inboxjust nowDeployed`,
     ]);
   });
 
@@ -94,7 +106,7 @@ it("people leaves deactivated identities out until Show deactivated is pressed",
 
   await crewOf("web-off-people");
   await adminClient().deactivateIdentity("web-off-people-bot");
-  const close = openAt({ client: adminClient(), hash: "#/people" });
+  const { close } = await viewOpened({ client: adminClient(), hash: "#/people", waitingOn: ["listIdentities"] });
   fireEvent.change(await screen.findByLabelText("Filter by name"), { target: { value: "web-off-people" } });
   await waitFor(() => {
     expect(rowNames()).toHaveLength(ONE);
@@ -119,10 +131,14 @@ it("an admin deactivates and reactivates from a profile, and the fresh token sho
   expect.hasAssertions();
 
   await crewOf("web-off-profile");
-  const close = openAt({ client: adminClient(), hash: "#/people/web-off-profile-human" });
-  await deactivateFromProfile("web-off-profile-human");
+  const { answered, close } = await profileOpened({
+    client: adminClient(),
+    name: "web-off-profile-human",
+    waitingOn: ["listIdentities"],
+  });
+  await deactivateFromProfile("web-off-profile-human", answered);
   const { identities } = await adminClient().listIdentities({ include: "deactivated" });
-  await reactivateFromProfile("web-off-profile-human");
+  await reactivateFromProfile("web-off-profile-human", answered);
   const token = await screen.findByLabelText("New Identity token");
   const { identity } = await clientWith(token.textContent).whoami();
 
@@ -139,10 +155,14 @@ it("deactivating a person asks without mentioning their agents, which stay activ
   expect.hasAssertions();
 
   const { bot } = await crewOf("web-off-person");
-  const close = openAt({ client: adminClient(), hash: "#/people/web-off-person-human" });
+  const { answered, close } = await profileOpened({
+    client: adminClient(),
+    name: "web-off-person-human",
+    waitingOn: ["listIdentities"],
+  });
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
   const { textContent: asked } = await screen.findByRole("alertdialog", { name: "Deactivate @web-off-person-human?" });
-  fireEvent.click(inDialog().getByRole("button", { name: "Deactivate @web-off-person-human" }));
+  await deactivationAnswered("web-off-person-human", answered);
   await waitFor(async () => {
     await expect(profileHeading()).resolves.toBe("web-off-person-human(deactivated)");
   });
@@ -159,11 +179,15 @@ it("the @ suggestions leave out deactivated identities", { timeout: 5000 }, asyn
   await crewOf("web-off-suggest");
   await adminClient().deactivateIdentity("web-off-suggest-bot");
   await adminClient().createChannel({ name: "web-off-suggest" });
-  const close = openAt({ client: adminClient(), hash: "#/channels/web-off-suggest" });
+  const { close } = await viewOpened({
+    client: adminClient(),
+    hash: "#/channels/web-off-suggest",
+    waitingOn: ["listMessages", "listIdentities"],
+  });
   fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "@web-off-suggest" } });
-  const list = await screen.findByRole("list", { name: "Mention suggestions" });
+  const list = await screen.findByRole("listbox", { name: "Mention suggestions" });
 
-  expect(textsOf(() => within(list).getAllByRole("button"))).toStrictEqual(["@web-off-suggest-human"]);
+  expect(textsOf(() => within(list).getAllByRole("option"))).toStrictEqual(["@web-off-suggest-human"]);
 
   close();
 });

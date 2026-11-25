@@ -1,7 +1,8 @@
-import type { IdentityCardLink, IdentityCardParts, IdentityCardSource } from "../../design-system/index.tsx";
+import type { IdentityCardLink, IdentityCardParts, IdentityCardSource } from "../../design-system/messages.tsx";
 import { identityList, presences } from "../../board/index.ts";
 import type { BoardStore } from "../../board/index.ts";
 import type { Identity } from "../../sdk/index.ts";
+import { createIdentityCardSessions } from "./identity-card-sessions.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { kindOf } from "./kind-of.ts";
 import { onTick } from "./use-time-ago.ts";
@@ -47,6 +48,7 @@ function cardFor(boardStore: BoardStore, identity: Identity): IdentityCardParts 
 export function createIdentityCards(boardStore: BoardStore): IdentityCardSource {
   const drawn = new Map<string, Drawn>();
   return {
+    ...createIdentityCardSessions(boardStore),
     cardOf: (name) => {
       const identity = identityList(boardStore.snapshot()).find((listed) => listed.name === name) ?? null;
       if (identity === null) {

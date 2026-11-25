@@ -2,6 +2,7 @@ import { AuthorSchema, MessageIdSchema, ScheduledMessageIdSchema, TextSchema } f
 import type {
   ListScheduledMessagesResponse,
   ScheduledMessage,
+  ScheduledMessageEvent,
   ScheduledMessagePreviewResponse,
   ScheduledMessageResponse,
   ScheduledMessageRun,
@@ -73,4 +74,12 @@ export const ScheduledMessageResponseSchema = matchesWire<ScheduledMessageRespon
 
 export const ListScheduledMessagesResponseSchema = matchesWire<ListScheduledMessagesResponse>()(
   Schema.Struct({ scheduledMessages: Schema.Array(ScheduledMessageSchema) }),
+);
+
+export const ScheduledMessageEventSchema = matchesWire<ScheduledMessageEvent>()(
+  Schema.Struct({
+    deleted: Schema.Boolean,
+    scheduledMessage: ScheduledMessageSchema,
+    type: Schema.Literal("scheduled-message"),
+  }),
 );

@@ -1,4 +1,4 @@
-import { ItemRow, Muted } from "../../design-system/index.tsx";
+import { ItemRow, Muted } from "../../design-system/content.tsx";
 import { alertTextOf, backTextOf } from "./alert-text.ts";
 import type { OfflineAlert } from "../../sdk/index.ts";
 import type { ReactNode } from "react";

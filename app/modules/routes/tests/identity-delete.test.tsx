@@ -3,7 +3,8 @@ import { expect, it, vi } from "vitest";
 import { fireEvent, waitFor } from "@testing-library/react";
 import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { openAt } from "./render.tsx";
+import type { OpenedView } from "./view-opened.ts";
+import { profileOpened } from "./view-opened.ts";
 
 async function listedNames(prefix: string): Promise<readonly string[]> {
   const { identities } = await adminClient().listIdentities({ include: "deactivated" });
@@ -16,9 +17,10 @@ it("an admin sees Delete on the profile of an identity with no messages, and del
   expect.hasAssertions();
 
   await newIdentity({ kind: "agent", name: "web-delete-bot" });
-  const close = openAt({ client: adminClient(), hash: "#/people/web-delete-bot" });
+  const { answered, close } = await profileOpened({ client: adminClient(), name: "web-delete-bot" });
   fireEvent.click(await inProfile().findByRole("button", { name: "Delete" }));
   fireEvent.click(await inDialog().findByRole("button", { name: "Delete @web-delete-bot" }));
+  await answered("deleteIdentity");
   await inProfile().findByText("Unknown identity");
 
   await expect(listedNames("web-delete-bot")).resolves.toStrictEqual([]);
@@ -34,7 +36,7 @@ it("an admin sees Deactivate, not Delete, on the profile of an identity with mes
   const talker = await newIdentity({ kind: "agent", name: "web-delete-talker" });
   await talker.client.createChannel({ name: "web-delete-talk" });
   await talker.client.createMessage({ channel: "web-delete-talk", text: "hello" });
-  const close = openAt({ client: adminClient(), hash: "#/people/web-delete-talker" });
+  const { close } = await profileOpened({ client: adminClient(), name: "web-delete-talker" });
   await inProfile().findByRole("button", { name: "Deactivate" });
   await waitFor(() => {
     expect(inProfile().queryByRole("button", { name: "Delete" })).toBeNull();
@@ -51,7 +53,7 @@ it("an admin sees Deactivate when the message count can't be read", { timeout: 5
   await newIdentity({ kind: "agent", name: "web-delete-uncounted" });
   const countMessagesBy = vi.fn<CookoutClient["countMessagesBy"]>().mockRejectedValue(new Error("unreachable"));
   const client = { ...adminClient(), countMessagesBy };
-  const close = openAt({ client, hash: "#/people/web-delete-uncounted" });
+  const { close } = await profileOpened({ client, name: "web-delete-uncounted" });
   await inProfile().findByRole("button", { name: "Deactivate" });
   await waitFor(() => {
     expect(countMessagesBy).toHaveBeenCalledWith("web-delete-uncounted");
@@ -78,6 +80,17 @@ function deferredCount(): {
   };
 }
 
+interface Counting {
+  readonly answered: OpenedView["answered"];
+  readonly count: ReturnType<typeof deferredCount>;
+  readonly messages: number;
+}
+
+async function countAnswered({ answered, count, messages }: Counting): Promise<void> {
+  count.resolve(messages);
+  await answered("countMessagesBy");
+}
+
 function expectNothingClickable(): void {
   expect(inProfile().queryByRole("button", { name: "Delete" })).toBeNull();
   expect(inProfile().getByRole("button", { name: "Deactivate" })).toHaveProperty("disabled", true);
@@ -90,10 +103,14 @@ it("an admin can click neither Deactivate nor Delete while the message count loa
 
   await newIdentity({ kind: "agent", name: "web-delete-pending-none" });
   const count = deferredCount();
-  const close = openAt({ client: { ...adminClient(), ...count }, hash: "#/people/web-delete-pending-none" });
+  const { answered, close } = await profileOpened({
+    client: { ...adminClient(), ...count },
+    name: "web-delete-pending-none",
+    waitingOn: ["listIdentities"],
+  });
   await inProfile().findByRole("button", { name: "Deactivate" });
   expectNothingClickable();
-  count.resolve(NO_MESSAGES);
+  await countAnswered({ answered, count, messages: NO_MESSAGES });
   await inProfile().findByRole("button", { name: "Delete" });
 
   expect(inProfile().queryByRole("button", { name: "Deactivate" })).toBeNull();
@@ -108,10 +125,14 @@ it("an admin can click neither Deactivate nor Delete while the message count loa
 
   await newIdentity({ kind: "agent", name: "web-delete-pending-some" });
   const count = deferredCount();
-  const close = openAt({ client: { ...adminClient(), ...count }, hash: "#/people/web-delete-pending-some" });
+  const { answered, close } = await profileOpened({
+    client: { ...adminClient(), ...count },
+    name: "web-delete-pending-some",
+    waitingOn: ["listIdentities"],
+  });
   await inProfile().findByRole("button", { name: "Deactivate" });
   expectNothingClickable();
-  count.resolve(SOME_MESSAGES);
+  await countAnswered({ answered, count, messages: SOME_MESSAGES });
   await inProfile().findEnabledButton("Deactivate");
 
   expect(inProfile().queryByRole("button", { name: "Delete" })).toBeNull();

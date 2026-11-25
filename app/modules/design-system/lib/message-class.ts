@@ -1,4 +1,4 @@
-import type { MessageItemParts } from "./parts.ts";
+import type { MessageItemParts } from "./message-parts.ts";
 
 const MARKS: Readonly<Record<MessageItemParts["mark"], string>> = {
   "for-you": "bg-mention-bg shadow-[inset_2px_0_0_var(--color-mention-bar)]",

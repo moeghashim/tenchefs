@@ -1,6 +1,6 @@
 import type { DeactivationOffers, DeactivationOffersState } from "../../unread/index.ts";
 import type { DeactivationOffer } from "../../sdk/index.ts";
-import { FeedList } from "../../design-system/index.tsx";
+import { FeedList } from "../../design-system/feed.tsx";
 import { OfferRow } from "./offer-row.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

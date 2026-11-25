@@ -1,0 +1,181 @@
+const SCOPES = [
+  "search box",
+  "prompt form",
+  "text box",
+  "person",
+  "people list",
+  "profile panel",
+  "thread panel",
+  "channel row",
+  "sidebar",
+  "message",
+  "message list",
+  "inbox",
+  "everywhere",
+] as const;
+
+type Scope = (typeof SCOPES)[number];
+
+const TEXT_SCOPES: ReadonlySet<Scope> = new Set(["search box", "text box"]);
+
+const GROUPS: Readonly<Record<Scope, string>> = {
+  "channel row": "Channel in the sidebar",
+  everywhere: "Everywhere",
+  inbox: "Inbox row",
+  message: "Message",
+  "message list": "Message list",
+  "people list": "People list",
+  person: "Person",
+  "profile panel": "Profile panel",
+  "prompt form": "Form in place of the message box",
+  "search box": "Search box",
+  sidebar: "Sidebar",
+  "text box": "Message box",
+  "thread panel": "Thread panel",
+};
+
+const KEYS = [
+  { action: "openSearch", chord: "Mod+K", does: "Open the search box", scope: "everywhere" },
+  { action: "openShortcutList", chord: "?", does: "Show the keyboard shortcuts", scope: "everywhere" },
+  { action: "openShortcutList", chord: "Mod+/", does: "Show the keyboard shortcuts", scope: "everywhere" },
+  { action: "nextChannel", chord: "Alt+ArrowDown", does: "Open the next channel", scope: "everywhere" },
+  { action: "previousChannel", chord: "Alt+ArrowUp", does: "Open the previous channel", scope: "everywhere" },
+  {
+    action: "nextUnreadChannel",
+    chord: "Alt+Shift+ArrowDown",
+    does: "Open the next channel with unread messages",
+    scope: "everywhere",
+  },
+  {
+    action: "previousUnreadChannel",
+    chord: "Alt+Shift+ArrowUp",
+    does: "Open the previous channel with unread messages",
+    scope: "everywhere",
+  },
+  {
+    action: "nextRegion",
+    chord: "Control+]",
+    does: "Next column: the sidebar, the messages, the thread panel",
+    scope: "everywhere",
+  },
+  {
+    action: "previousRegion",
+    chord: "Control+[",
+    does: "Previous column: the sidebar, the messages, the thread panel",
+    scope: "everywhere",
+  },
+  {
+    action: "markShownChannelRead",
+    chord: "Escape",
+    does: "Mark the channel read, with nothing left to close",
+    scope: "everywhere",
+  },
+  { action: "nextLink", chord: "ArrowDown", does: "Next link", scope: "sidebar" },
+  { action: "previousLink", chord: "ArrowUp", does: "Previous link", scope: "sidebar" },
+  { action: "closeSidebar", chord: "Escape", does: "Close the sidebar, on a narrow screen", scope: "sidebar" },
+  {
+    action: "intoMessages",
+    chord: "ArrowRight",
+    does: "Into its messages or the Inbox's rows, on the selected or newest one",
+    scope: "channel row",
+  },
+  { action: "markChannelRead", chord: "e", does: "Mark all as read", scope: "channel row" },
+  { action: "toggleSubscription", chord: "s", does: "Subscribe or unsubscribe", scope: "channel row" },
+  { action: "openSchedules", chord: "Shift+S", does: "Show its scheduled messages", scope: "channel row" },
+  { action: "pickSuggestion", chord: "Tab", does: "Put in the highlighted filter suggestion", scope: "search box" },
+  { action: "pickSuggestion", chord: "Enter", does: "Put in the highlighted filter suggestion", scope: "search box" },
+  { action: "dismissSuggestions", chord: "Escape", does: "Hide the filter suggestions", scope: "search box" },
+  {
+    action: "highlightNext",
+    chord: "ArrowDown",
+    does: "Highlight the next suggestion or result",
+    scope: "search box",
+  },
+  {
+    action: "highlightPrevious",
+    chord: "ArrowUp",
+    does: "Highlight the previous suggestion or result",
+    scope: "search box",
+  },
+  { action: "openHighlighted", chord: "Enter", does: "Open the highlighted result", scope: "search box" },
+  { action: "closeSearch", chord: "Escape", does: "Close the search box", scope: "search box" },
+  { action: "cancelPrompt", chord: "Escape", does: "Cancel the form", scope: "prompt form" },
+  { action: "leaveTextBox", chord: "Escape", does: "Leave the box, keeping what you typed", scope: "text box" },
+  {
+    action: "newestMessage",
+    chord: "ArrowUp",
+    does: "Newest message, from the box's first character",
+    scope: "text box",
+  },
+  { action: "viewProfile", chord: "Enter", does: "View profile", scope: "person" },
+  { action: "messagePerson", chord: "m", does: "Message them, where there's a message box", scope: "person" },
+  { action: "copyName", chord: "c", does: "Copy their name", scope: "person" },
+  { action: "nextPerson", chord: "ArrowDown", does: "Next person", scope: "people list" },
+  { action: "previousPerson", chord: "ArrowUp", does: "Previous person", scope: "people list" },
+  { action: "closeProfile", chord: "Escape", does: "Close the profile", scope: "profile panel" },
+  { action: "closeThread", chord: "Escape", does: "Close the thread", scope: "thread panel" },
+  { action: "toggleThumbsUp", chord: "+", does: "React with 👍, or take it back", scope: "message" },
+  { action: "toggleThumbsDown", chord: "-", does: "React with 👎, or take it back", scope: "message" },
+  { action: "replyToMessage", chord: "r", does: "Reply in its thread", scope: "message" },
+  { action: "openThread", chord: "ArrowRight", does: "Open its thread", scope: "message" },
+  { action: "openThread", chord: "t", does: "Open its thread", scope: "message" },
+  { action: "openThread", chord: "Enter", does: "Open its thread", scope: "message" },
+  { action: "backToChannel", chord: "ArrowLeft", does: "Back to the thread's channel message", scope: "message" },
+  { action: "markUnread", chord: "Alt+Enter", does: "Mark it and everything after it unread", scope: "message" },
+  { action: "copyMessageLink", chord: "l", does: "Copy its link", scope: "message" },
+  { action: "toggleThreadClosed", chord: "x", does: "Close its thread, or reopen it", scope: "message" },
+  { action: "toSidebar", chord: "ArrowLeft", does: "Sidebar, on the channel's link", scope: "message" },
+  { action: "intoMessageBox", chord: "ArrowDown", does: "Message box, from the newest message", scope: "message" },
+  { action: "nextMessage", chord: "j", does: "Next message", scope: "message list" },
+  { action: "nextMessage", chord: "ArrowDown", does: "Next message", scope: "message list" },
+  {
+    action: "previousMessage",
+    chord: "k",
+    does: "Previous message, loading older ones past the oldest",
+    scope: "message list",
+  },
+  {
+    action: "previousMessage",
+    chord: "ArrowUp",
+    does: "Previous message, loading older ones past the oldest",
+    scope: "message list",
+  },
+  {
+    action: "firstMessage",
+    chord: "Home",
+    does: "First loaded message, or the thread's top message",
+    scope: "message list",
+  },
+  { action: "lastMessage", chord: "End", does: "Last message", scope: "message list" },
+  { action: "unfoldClosed", chord: "Enter", does: "Unfold the closed threads", scope: "message list" },
+  { action: "nextRow", chord: "j", does: "Next row", scope: "inbox" },
+  { action: "nextRow", chord: "ArrowDown", does: "Next row", scope: "inbox" },
+  { action: "previousRow", chord: "k", does: "Previous row", scope: "inbox" },
+  { action: "previousRow", chord: "ArrowUp", does: "Previous row", scope: "inbox" },
+  { action: "replyToRow", chord: "Enter", does: "Reply", scope: "inbox" },
+  { action: "replyToRow", chord: "r", does: "Reply", scope: "inbox" },
+  { action: "markRowRead", chord: "e", does: "Mark read", scope: "inbox" },
+  { action: "markRowUnread", chord: "u", does: "Mark unread", scope: "inbox" },
+  { action: "openRow", chord: "o", does: "Open in its channel", scope: "inbox" },
+  { action: "toSidebar", chord: "ArrowLeft", does: "Sidebar, on the Inbox's link", scope: "inbox" },
+  { action: "backToRows", chord: "Escape", does: "Back to the rows", scope: "inbox" },
+  {
+    action: "markSelectedRowRead",
+    chord: "Escape",
+    does: "Mark the selected row read, with nothing left to close",
+    scope: "inbox",
+  },
+] as const satisfies readonly {
+  readonly action: string;
+  readonly chord: string;
+  readonly does: string;
+  readonly scope: Scope;
+}[];
+
+type Key = (typeof KEYS)[number];
+
+type Action = Key["action"];
+
+type ActionOf<Covered extends Scope> = Exclude<Extract<Key, { readonly scope: Covered }>["action"], "openShortcutList">;
+
+export { type Action, type ActionOf, GROUPS, KEYS, type Key, SCOPES, type Scope, TEXT_SCOPES };

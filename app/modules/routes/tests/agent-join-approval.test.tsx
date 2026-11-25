@@ -14,10 +14,15 @@ interface Opened {
   readonly expiresAt: string;
 }
 
-async function openedFor(
-  human: Awaited<ReturnType<typeof newIdentity>>,
-  asked: StartAgentJoinRequest,
-): Promise<Opened> {
+type Human = Awaited<ReturnType<typeof newIdentity>>;
+
+async function ownerOf(name: string, agent: string): Promise<Human> {
+  const human = await newIdentity({ kind: "human", name });
+  await newIdentity({ kind: "agent", name: agent, owner: name });
+  return human;
+}
+
+async function openedFor(human: Human, asked: StartAgentJoinRequest): Promise<Opened> {
   const started = await anonymousClient().startAgentJoin(asked);
   const close = openAt({
     agentJoinApprovals: createAgentJoinApprovals(human.client),
@@ -32,7 +37,7 @@ async function shownTexts(): Promise<readonly unknown[]> {
   return [
     code.textContent,
     screen.getByText(/asks to join from build-box/u).textContent,
-    screen.getByText(/^Creates /u).textContent,
+    screen.getByText(/^Joins as /u).textContent,
     screen.getByLabelText<HTMLInputElement>(/^Idle expiry/u).value,
   ];
 }
@@ -49,7 +54,7 @@ it("the approval page shows the agent, host, code and asked expiry, and approves
 }, async () => {
   expect.hasAssertions();
 
-  const human = await newIdentity({ kind: "human", name: "web-join-ada" });
+  const human = await ownerOf("web-join-ada", "web-join-triage");
   const opened = await openedFor(human, { as: "web-join-triage", host: "build-box", idleExpiry: "30d" });
   const shown = await shownTexts();
   const approved = await approvedLowered();
@@ -59,11 +64,14 @@ it("the approval page shows the agent, host, code and asked expiry, and approves
   expect(shown).toStrictEqual([
     opened.userCode,
     `web-join-triage asks to join from build-box, until ${opened.expiresAt}.`,
-    "Creates web-join-triage, owned by you, and joins as it.",
+    "Joins as web-join-triage, which you own.",
     "30d",
   ]);
   expect(approved).toMatch(/^Approved, with an idle expiry of 7d\./u);
-  expect(collected).toMatchObject({ agentSession: { created: true, identity: "web-join-triage" }, status: "approved" });
+  expect(collected).toMatchObject({
+    agentSession: { created: false, identity: "web-join-triage" },
+    status: "approved",
+  });
 });
 
 async function refusedThenReplaced(): Promise<string | null> {
@@ -83,7 +91,7 @@ it("for an agent with a live session, approving says so until the approver ticks
   expect.hasAssertions();
 
   const human = await newIdentity({ kind: "human", name: "web-join-grace" });
-  await human.client.join({ as: "web-join-live" });
+  await human.client.join({ as: "web-join-live", displayName: "Live agent" });
   const opened = await openedFor(human, { as: "web-join-live", host: "build-box" });
   const refusedText = await refusedThenReplaced();
   opened.close();
@@ -111,7 +119,7 @@ it("a user code with no live agent join request says why it can't be shown", { t
 it("an agent join request approved already shows as approved", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const human = await newIdentity({ kind: "human", name: "web-join-done" });
+  const human = await ownerOf("web-join-done", "web-join-done-agent");
   const started = await anonymousClient().startAgentJoin({ as: "web-join-done-agent", host: "build-box" });
   await human.client.approveAgentJoin(started.userCode);
   const close = openAt({
@@ -125,4 +133,48 @@ it("an agent join request approved already shows as approved", { timeout: 5000 }
   expect(approved.textContent).toMatch(/idle expiry of 7d/u);
 
   close();
+});
+
+async function dismissedTexts(): Promise<readonly (string | null)[]> {
+  const live = await screen.findByText(/^web-join-dismissed is already joined in another session/u);
+  fireEvent.click(inPane().getByRole("button", { name: "Dismiss" }));
+  const dismissed = await screen.findByText(/^Dismissed\./u);
+  return [live.textContent, dismissed.textContent];
+}
+
+it("for an agent already joined in another session, the approval page says so, and Dismiss clears the request", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const human = await newIdentity({ kind: "human", name: "web-join-hopper" });
+  await human.client.join({ as: "web-join-dismissed", displayName: "Dismissed agent" });
+  const opened = await openedFor(human, { as: "web-join-dismissed", host: "build-box" });
+  const texts = await dismissedTexts();
+  const refused = await anonymousClient()
+    .collectAgentJoin(opened.requestId)
+    .catch((error: unknown) => error);
+  opened.close();
+
+  expect(texts).toStrictEqual([
+    expect.stringContaining(
+      "Tick Replace its live session to end that session and join this one, or Dismiss this request.",
+    ),
+    "Dismissed. The waiting join stops; you can close this page.",
+  ]);
+  expect(refused).toMatchObject({ code: "agent_join_request_denied" });
+});
+
+it("a Dismiss of a request approved meanwhile says why, and the page stays open", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const human = await ownerOf("web-join-late", "web-join-late-agent");
+  const opened = await openedFor(human, { as: "web-join-late-agent", host: "build-box" });
+  await screen.findByText(/^Joins as web-join-late-agent/u);
+  await human.client.approveAgentJoin(opened.userCode);
+  fireEvent.click(inPane().getByRole("button", { name: "Dismiss" }));
+  const refused = await alertSaying("Couldn't");
+  opened.close();
+
+  expect(refused.textContent).toMatch(/\(agent_join_request_not_found\)/u);
 });

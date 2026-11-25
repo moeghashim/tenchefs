@@ -94,7 +94,7 @@ it("opening the channel of a reaction's message acks it, so it leaves the Inbox"
   openAt({ client: reader, hash: "#/inbox", live });
   await stream;
   fireEvent.click(await inPane().findByRole("link", { name: /reacted with/u }));
-  await screen.findByRole("list", { name: "Messages" });
+  await screen.findByRole("feed", { name: "Messages" });
   globalThis.location.hash = "#/inbox";
 
   await waitFor(() => {

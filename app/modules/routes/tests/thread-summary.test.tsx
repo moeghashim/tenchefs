@@ -1,16 +1,10 @@
 import type { Message, ServerSentEvent } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
-import type { Live } from "../../live/index.ts";
-import { createLive } from "../../live/index.ts";
 import { inPane } from "./regions.ts";
 import { openWithClockStopped } from "./clock.ts";
+import { scriptedLive } from "../../testing/web.ts";
 import { within } from "@testing-library/react";
-
-interface Scripted {
-  readonly live: Live;
-  readonly send: (event: ServerSentEvent) => void;
-}
 
 interface Summary {
   readonly name: string | null;
@@ -24,23 +18,6 @@ interface Replied {
 }
 
 const CHANNEL = "web-thread-summary";
-
-function scripted(): Scripted {
-  const opened: ((event: ServerSentEvent) => void)[] = [];
-  const live = createLive({
-    open: (onEvent) => {
-      opened.push(onEvent);
-    },
-  });
-  return {
-    live,
-    send: (event: Readonly<ServerSentEvent>) => {
-      for (const onEvent of opened) {
-        onEvent(event);
-      }
-    },
-  };
-}
 
 function sent(message: Readonly<Message>): ServerSentEvent {
   return { data: JSON.stringify({ message, type: "message" }), event: "message" };
@@ -60,8 +37,8 @@ async function threadRepliedTo(): Promise<Replied> {
   const bot = await newIdentity({ kind: "agent", name: "bot-summary", owner: "admin" });
   await adminClient().createChannel({ name: CHANNEL });
   const { message: parent } = await adminClient().createMessage({ channel: CHANNEL, text: "The parent" });
-  await ada.client.createMessage({ channel: CHANNEL, replyTo: parent.id, text: "First" });
-  await bot.client.createMessage({ channel: CHANNEL, replyTo: parent.id, text: "Second" });
+  const { message: first } = await ada.client.createMessage({ channel: CHANNEL, replyTo: parent.id, text: "First" });
+  await bot.client.createMessage({ channel: CHANNEL, replyTo: parent.id, seen: first.id, text: "Second" });
   return { ada, parent };
 }
 
@@ -71,7 +48,7 @@ it("a message with replies shows who replied, how many, how many are new and whe
   expect.hasAssertions();
 
   const { ada, parent } = await threadRepliedTo();
-  const { live, send } = scripted();
+  const { live, send } = scriptedLive();
   const close = openWithClockStopped({ client: adminClient(), hash: `#/channels/${CHANNEL}`, live });
 
   await expect(summaryShown("2 replies")).resolves.toStrictEqual({

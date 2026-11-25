@@ -2,7 +2,7 @@ import type { NewsText, ThreadSummaryOf } from "./message-marks.ts";
 import { newsText, replies } from "./message-marks.ts";
 import type { ReactNode } from "react";
 import type { ThreadNews } from "../../unread/index.ts";
-import { ThreadSummary } from "../../design-system/index.tsx";
+import { ThreadSummary } from "../../design-system/messages.tsx";
 import { useDrawnAuthors } from "./use-author.ts";
 import { useTimeAgo } from "./use-time-ago.ts";
 

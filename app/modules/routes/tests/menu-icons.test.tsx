@@ -6,7 +6,7 @@ import { postedIn } from "./feed.ts";
 import { pressed } from "./menus.ts";
 
 const TEXTS = ["Before.", "Deploy?", "After."] as const;
-const REACTIONS = ["React with 👍", "React with 👎"] as const;
+const REACTIONS = ["React with 👍+", "React with 👎-"] as const;
 const ICON_FIRST = ':scope > svg[aria-hidden="true"]:first-child';
 
 type Shown = readonly (readonly [string, boolean])[];
@@ -38,7 +38,7 @@ it("every item in a message's More actions menu shows an icon before its label",
   pressed(() => button);
 
   await expect(itemsOf("More actions")).resolves.toStrictEqual(
-    withIcons(["Reply", ...REACTIONS, "Mark unread", "Close"]),
+    withIcons(["Replyr", "Open thread→ or t or Enter", ...REACTIONS, "Mark unreadAlt+Enter", "Copy linkl", "Closex"]),
   );
 
   close();
@@ -53,7 +53,7 @@ it("every item in a closed message's context menu shows an icon before its label
   fireEvent.contextMenu(await inPane().findByText("Deploy?"));
 
   await expect(itemsOf("Message actions")).resolves.toStrictEqual(
-    withIcons(["Reply", ...REACTIONS, "Mark unread", "Reopen"]),
+    withIcons(["Replyr", "Open thread→ or t or Enter", ...REACTIONS, "Mark unreadAlt+Enter", "Copy linkl", "Reopenx"]),
   );
 
   close();

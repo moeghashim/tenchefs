@@ -49,7 +49,7 @@ it("the sidebar's Settings link opens the settings page, with a heading for each
     screen.getByRole("heading", { level: 1, name: "Settings" }).textContent,
     sectionHeadings(),
     inSidebar().queryByRole("button", { name: "Settings" }),
-  ]).toStrictEqual(["#/settings", "page", "Settings", ["Profile", "Theme", "My agents"], null]);
+  ]).toStrictEqual(["#/settings", "page", "Settings", ["Profile", "Theme", "My agents", "Session"], null]);
 
   close();
 });

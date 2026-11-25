@@ -1,16 +1,17 @@
+import type { FailedTest, LoadedSuites } from "./lib/under-load.ts";
 import { SUITE_LOCK_FILE, holdMachineLock, waitingLine } from "./lib/machine-lock.ts";
 import { availableParallelism, tmpdir } from "node:os";
 import {
   failingOnlyUnderLoad,
   failureList,
   filesOf,
+  loadedSuites,
   playwrightCount,
   playwrightFailures,
   vitestCount,
   vitestFailures,
 } from "./lib/under-load.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import type { FailedTest } from "./lib/under-load.ts";
 import { once } from "node:events";
 import { parseArgs } from "node:util";
 import { parseJson } from "./lib/json.ts";
@@ -26,12 +27,15 @@ const BROWSER_DIR = "app/modules/routes/tests/browser";
 const BROWSER_REPORT = ".timings/browser.json";
 const BUSY_LOOP = "const end = Date.now() + Number(process.argv[1]); while (Date.now() < end) {}";
 
-const { values } = parseArgs({
+const { positionals, values } = parseArgs({
+  allowPositionals: true,
   options: {
     minutes: { default: "10", type: "string" },
+    "web-only": { default: false, type: "boolean" },
     workers: { default: String(availableParallelism() - SPARE_CORES), type: "string" },
   },
 });
+const loading = loadedSuites({ files: positionals, webOnly: values["web-only"] });
 const workerCount = Number(values.workers);
 const runLimitMs = Number(values.minutes) * MS_PER_MINUTE;
 
@@ -103,8 +107,35 @@ function both(web: Outcome, browser: Outcome): Outcome {
   };
 }
 
-async function wholeSuite(directory: string): Promise<Outcome> {
-  return both(await webOutcome({ directory, files: [] }), await browserOutcome({ directory, files: [] }));
+interface Choosing {
+  readonly choice: LoadedSuites["web"];
+  readonly directory: string;
+  readonly outcome: (suite: Suite) => Promise<Outcome>;
+}
+
+async function chosen({ choice, directory, outcome }: Choosing): Promise<Outcome> {
+  if (choice === "none") {
+    return nothingRun;
+  }
+  if (choice === "all") {
+    const all = await outcome({ directory, files: [] });
+    return all;
+  }
+  const named = await outcome({ directory, files: choice });
+  return named;
+}
+
+async function loadedRun(directory: string): Promise<Outcome> {
+  const web = await chosen({ choice: loading.web, directory, outcome: webOutcome });
+  const browser = await chosen({ choice: loading.browser, directory, outcome: browserOutcome });
+  return both(web, browser);
+}
+
+function whatRuns(): string {
+  if (loading.browser === "none") {
+    return "the web tests";
+  }
+  return "the web and browser tests";
 }
 
 async function fileOutcomes(suite: Suite): Promise<Outcome> {
@@ -122,12 +153,12 @@ async function fileOutcomes(suite: Suite): Promise<Outcome> {
 }
 
 async function underLoad(directory: string): Promise<Outcome> {
-  console.error(`${SCRIPT}: the web and browser tests, with ${String(workerCount)} busy workers`);
+  console.error(`${SCRIPT}: ${whatRuns()}, with ${String(workerCount)} busy workers`);
   const busy = Array.from({ length: workerCount }, () =>
     spawn(process.execPath, ["-e", BUSY_LOOP, String(runLimitMs)], { stdio: "ignore" }),
   );
   try {
-    return await wholeSuite(directory);
+    return await loadedRun(directory);
   } finally {
     for (const worker of busy) {
       worker.kill();

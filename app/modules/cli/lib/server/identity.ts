@@ -1,4 +1,5 @@
 import { Argument, Command, Flag } from "effect/cli";
+import type { CreateIdentityRequest, IdentityResponse, IdentityWithTokenResponse } from "../../../identities/index.ts";
 import { Effect, Option } from "effect";
 import { answer, answered } from "./output.ts";
 import { deactivation, identitiesAnswer, identityAnswer } from "./handles.ts";
@@ -15,11 +16,28 @@ const agentDisplayNameMissing: CallFailure = {
   message: "A new agent needs a display name: add --display-name, such as --display-name 'Triage bot'.",
 };
 
+function created(
+  request: CreateIdentityRequest,
+): ReturnType<typeof callServer<IdentityResponse | IdentityWithTokenResponse>> {
+  const { kind, ...agent } = request;
+  return Effect.gen(function* createAsCaller() {
+    const { identity } = yield* callServer((client) => client.whoami());
+    if (identity.kind === "agent" && kind === "agent") {
+      return yield* callServer((client) => client.createAgentForOwner(agent));
+    }
+    return yield* callServer((client) => client.createIdentity(request));
+  });
+}
+
 const identityName = Argument.String("name").pipe(Argument.withDescription("The identity's name."));
 
 const identityCreateCommand = Command.make(
   "create",
   {
+    description: Flag.String("description").pipe(
+      Flag.optional,
+      Flag.withDescription("What the agent handles, such as 'Runs the build': 1-500 characters. An agent only."),
+    ),
     displayName: Flag.String("display-name").pipe(
       Flag.optional,
       Flag.withDescription(
@@ -33,21 +51,22 @@ const identityCreateCommand = Command.make(
     owner: Flag.String("owner").pipe(
       Flag.optional,
       Flag.withDescription(
-        "The human who owns the agent (admin only, unless it is you). Left out, you own it. A human has no owner.",
+        "The human who owns the agent (admin only, unless it is you, or your owner when you are an agent). Left out, you own it, or your owner does. A human has no owner.",
       ),
     ),
   },
-  ({ displayName, kind, name, owner }) => {
+  ({ description, displayName, kind, name, owner }) => {
     if (kind === "agent" && Option.isNone(displayName)) {
       return answered(Effect.fail(agentDisplayNameMissing));
     }
     const withOwner = Option.match(owner, { onNone: () => NOTHING, onSome: (value) => ({ owner: value }) });
     const named = Option.match(displayName, { onNone: () => NOTHING, onSome: (value) => ({ displayName: value }) });
-    return answer((client) => client.createIdentity({ kind, name, ...withOwner, ...named }));
+    const described = Option.match(description, { onNone: () => NOTHING, onSome: (value) => ({ description: value }) });
+    return answered(created({ kind, name, ...withOwner, ...named, ...described }));
   },
 ).pipe(
   Command.withDescription(
-    "Create an identity. Any human creates agents it owns; only an admin creates humans. Its token is shown this once.",
+    "Create an identity. Any human creates agents it owns, and its token is shown this once; only an admin creates humans. An agent creates agents for its owner, brought in by it, with no token: the new agent joins with `cookout join --as`, which you approve.",
   ),
 );
 
@@ -248,3 +267,5 @@ const keepCommand = Command.make("keep", { id: offerIdArgument }, ({ id }) =>
 );
 
 export { identityCommand, keepCommand };
+
+export { avatarCommand } from "./avatar.ts";

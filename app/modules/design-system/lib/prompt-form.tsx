@@ -4,30 +4,10 @@ import type { PromptFormParts } from "./prompt-parts.ts";
 import type { ReactNode } from "react";
 
 const FIRST_FIELD = "input, select, textarea";
-const ESCAPE = "Escape";
 
 export function PromptForm(parts: PromptFormParts): ReactNode {
   const handleCancel = parts.onCancel;
-  const { onEscape } = parts;
   const form = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    const shown = form.current;
-    function escaped(event: KeyboardEvent): void {
-      if (event.key === ESCAPE) {
-        event.preventDefault();
-        onEscape();
-      }
-    }
-    function stop(): void {
-      if (shown !== null) {
-        shown.removeEventListener("keydown", escaped);
-      }
-    }
-    if (shown !== null) {
-      shown.addEventListener("keydown", escaped);
-    }
-    return stop;
-  }, [onEscape]);
   useEffect(() => {
     const shown = form.current;
     if (shown !== null) {

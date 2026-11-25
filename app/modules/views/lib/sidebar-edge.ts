@@ -1,5 +1,5 @@
 import type { Layout } from "../../layout/index.ts";
-import type { PanelEdgeParts } from "../../design-system/index.tsx";
+import type { PanelEdgeParts } from "../../design-system/layout.tsx";
 import { sidebarWidths } from "../../layout/index.ts";
 
 const LABEL = "Resize the sidebar";

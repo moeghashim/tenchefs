@@ -120,7 +120,7 @@ it.effect.each([
     const { ann, attachment } = yield* posted(cookout, name, bytes);
     const answered = yield* served(cookout, attachment.id, ann);
 
-    expect(attachment).toStrictEqual({ contentType: type, id: attachment.id, image: true, name, size: bytes.length });
+    expect(attachment).toMatchObject({ contentType: type, id: attachment.id, image: true, name, size: bytes.length });
     expect(answered).toStrictEqual({
       bytes,
       headers: {

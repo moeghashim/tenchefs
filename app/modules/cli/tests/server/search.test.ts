@@ -59,6 +59,27 @@ it.effect("cookout search prints the answer as JSON, and pages with --limit and 
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
+it.effect("cookout search --sort best sends the sort and prints its answer", () =>
+  Effect.gen(function* searchBest() {
+    const { ann, env } = yield* annPostsTwice;
+    const best = yield* answer(() => ann.client.search({ query: "freeze", sort: "best" }));
+    const newest = yield* answer(() => ann.client.search({ query: "freeze" }));
+    const results = yield* runAll(env, [
+      ["search", "freeze", "--sort", "best"],
+      ["search", "freeze", "--sort", "newest"],
+    ]);
+
+    expect(best.results).toMatchObject([
+      { message: { text: "the deploy freeze" } },
+      { message: { text: "deployed after the freeze" } },
+    ]);
+    expect(results).toMatchObject([
+      { exitCode: 0, stdoutJson: best },
+      { exitCode: 0, stdoutJson: newest },
+    ]);
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
 it.effect("cookout search with no words prints the refusal on stderr and exits 1", () =>
   Effect.gen(function* searchRefused() {
     const { env } = yield* annPostsTwice;

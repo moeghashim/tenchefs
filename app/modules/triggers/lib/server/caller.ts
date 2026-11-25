@@ -1,10 +1,11 @@
-import { Context, Effect, Layer } from "effect";
+import { Array as Arr, Context, Effect, Layer, Record } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import type { TriggerToken } from "../../index.ts";
+import type { TriggerHeader, TriggerToken } from "../../index.ts";
 
 interface TriggerCall {
   readonly url: string;
   readonly token: TriggerToken;
+  readonly headers: readonly TriggerHeader[];
   readonly text: string;
 }
 
@@ -18,8 +19,10 @@ class TriggerCaller extends Context.Service<TriggerCaller, TriggerCallerService>
 
 const UNREACHABLE = "the trigger URL couldn't be reached";
 
-function requestOf({ text, token, url }: TriggerCall): HttpClientRequest.HttpClientRequest {
+function requestOf({ headers, text, token, url }: TriggerCall): HttpClientRequest.HttpClientRequest {
+  const extra = Record.fromEntries(Arr.map(headers, ({ name, value }) => [name, value] as const));
   return HttpClientRequest.post(url).pipe(
+    HttpClientRequest.setHeaders(extra),
     HttpClientRequest.setHeader("authorization", `Bearer ${token}`),
     HttpClientRequest.bodyJsonUnsafe({ text }),
   );

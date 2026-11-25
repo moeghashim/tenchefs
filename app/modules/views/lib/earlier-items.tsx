@@ -1,4 +1,4 @@
-import { FeedList, FeedNote } from "../../design-system/index.tsx";
+import { FeedList, FeedNote } from "../../design-system/feed.tsx";
 import type { InboxItem } from "../../sdk/index.ts";
 import { InboxRowView } from "./inbox-row-view.tsx";
 import type { InboxSelection } from "../../paths/index.ts";

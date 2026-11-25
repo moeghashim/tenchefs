@@ -1,9 +1,9 @@
 import { Array as Arr, Effect } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import { TestCookout, answer, commandFixture, refusal, testCookout } from "../../../testing/server.ts";
+import { TestCookout, answer, refusal, testCookout, webhookCommandFixture } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { TestCookoutService } from "../../../testing/server.ts";
-import { commandsPath } from "../../../commands/index.ts";
+import { webhookCommandsPath } from "../../../webhook-commands/index.ts";
 
 interface RawAnswer {
   readonly json: unknown;
@@ -15,11 +15,11 @@ const NO_REPLIES = 0;
 const schema = { properties: { branch: { type: "string" } }, required: ["branch"], type: "object" };
 const deploy = { name: "deploy", schema, url: "https://hooks.example.com/deploy" };
 
-function postRawCommand(
+function postRawWebhookCommand(
   cookout: TestCookoutService,
   body: string,
 ): Effect.Effect<RawAnswer, never, HttpClient.HttpClient> {
-  return HttpClientRequest.post(`${cookout.url}${commandsPath}`).pipe(
+  return HttpClientRequest.post(`${cookout.url}${webhookCommandsPath}`).pipe(
     HttpClientRequest.setHeader("authorization", `Bearer ${cookout.adminToken}`),
     HttpClientRequest.bodyText(body, "application/json"),
     HttpClient.execute,
@@ -36,7 +36,7 @@ it.effect("a command add by an identity that is not an admin is refused with 403
     const { commands } = yield* answer(cookout.client.listCommands);
 
     expect(error).toMatchObject({ code: "admin_only", status: 403 });
-    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["spawn-agent"]);
+    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual([]);
   }).pipe(Effect.provide(testCookout())),
 );
 
@@ -59,7 +59,7 @@ it.effect(
       };
 
       expect(added).toStrictEqual({ command, secret: "hmac_test_3" });
-      expect(Arr.filter(listed.commands, ({ name }) => name !== "spawn-agent")).toStrictEqual([command]);
+      expect(listed.commands).toStrictEqual([command]);
       expect(Arr.filter(identities, (identity) => "handler" in identity)).toStrictEqual([
         { admin: false, createdAt: BOOT, handler: true, kind: "agent", name: "deploy", owner: "admin" },
       ]);
@@ -104,7 +104,7 @@ it.effect("a command name in use, or a human's name, is refused with 409", () =>
       { code: "command_exists", status: 409 },
       { code: "handler_not_agent", status: 409 },
     ]);
-    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["deploy", "spawn-agent"]);
+    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["deploy"]);
   }).pipe(Effect.provide(testCookout())),
 );
 
@@ -113,7 +113,10 @@ it.effect("a command with a bad name, url or schema is refused with 400", () =>
     const cookout = yield* TestCookout;
     const name = yield* refusal(() => cookout.client.addCommand({ ...deploy, name: "Deploy!" }));
     const url = yield* refusal(() => cookout.client.addCommand({ ...deploy, url: "ftp://example.com" }));
-    const notObject = yield* postRawCommand(cookout, '{"name":"deploy","url":"https://example.com","schema":[]}');
+    const notObject = yield* postRawWebhookCommand(
+      cookout,
+      '{"name":"deploy","url":"https://example.com","schema":[]}',
+    );
 
     expect([name, url]).toMatchObject([
       { code: "invalid_request", schemaProblems: [{ path: ["name"] }], status: 400 },
@@ -194,7 +197,7 @@ it.effect("a call to a command that doesn't exist, or into a channel that doesn'
   Effect.gen(function* missing() {
     const cookout = yield* TestCookout;
     yield* withDeployInGrill(cookout);
-    const noCommand = yield* refusal(() =>
+    const noWebhookCommand = yield* refusal(() =>
       cookout.client.callCommand("release", { channel: "grill", data: { branch: "main" } }),
     );
     const notAName = yield* refusal(() =>
@@ -204,7 +207,7 @@ it.effect("a call to a command that doesn't exist, or into a channel that doesn'
       cookout.client.callCommand("deploy", { channel: "lounge", data: { branch: "main" } }),
     );
 
-    expect([noCommand, notAName, noChannel]).toMatchObject([
+    expect([noWebhookCommand, notAName, noChannel]).toMatchObject([
       { code: "command_not_found", status: 404 },
       { code: "command_not_found", status: 404 },
       { code: "channel_not_found", status: 404 },
@@ -218,11 +221,11 @@ it.effect("a secret rotation by an identity that is not an admin is refused with
     const added = yield* answer(() => cookout.client.addCommand(deploy));
     const ann = yield* cookout.createIdentity("ann");
     const notAdmin = yield* refusal(() => ann.client.rotateCommandSecret("deploy"));
-    const noCommand = yield* refusal(() => cookout.client.rotateCommandSecret("release"));
+    const noWebhookCommand = yield* refusal(() => cookout.client.rotateCommandSecret("release"));
     const notAName = yield* refusal(() => cookout.client.rotateCommandSecret("Deploy"));
     const rotated = yield* answer(() => cookout.client.rotateCommandSecret("deploy"));
 
-    expect([notAdmin, noCommand, notAName]).toMatchObject([
+    expect([notAdmin, noWebhookCommand, notAName]).toMatchObject([
       { code: "admin_only", status: 403 },
       { code: "command_not_found", status: 404 },
       { code: "command_not_found", status: 404 },
@@ -235,7 +238,7 @@ it.effect("a secret rotation by an identity that is not an admin is refused with
 it.effect("a call to a stored command whose schema doesn't compile fails with 500 and posts nothing", () =>
   Effect.gen(function* storedBadSchema() {
     const cookout = yield* TestCookout;
-    const stored = commandFixture("deploy");
+    const stored = webhookCommandFixture("deploy");
     yield* cookout.seedCommand({ ...stored, command: { ...stored.command, schema: { type: "strnig" } } });
     yield* answer(() => cookout.client.createChannel({ name: "grill" }));
     const error = yield* refusal(() => cookout.client.callCommand("deploy", { channel: "grill", data: {} }));
@@ -253,11 +256,11 @@ it.effect("a command whose schema is not a JSON Schema is refused with 400 when 
     const { commands } = yield* answer(cookout.client.listCommands);
 
     expect(error).toMatchObject({ code: "invalid_request", details: [{ path: ["schema"] }], status: 400 });
-    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["spawn-agent"]);
+    expect(Arr.map(commands, ({ name }) => name)).toStrictEqual([]);
   }).pipe(Effect.provide(testCookout())),
 );
 
-const ordinaryCommands = [
+const ordinaryWebhookCommands = [
   { ...deploy, schema: { properties: { at: { format: "date-time", type: "string" } }, type: "object" } },
   {
     ...deploy,
@@ -272,7 +275,7 @@ it.effect(
   () =>
     Effect.gen(function* ordinarySchema() {
       const cookout = yield* TestCookout;
-      yield* Effect.forEach(ordinaryCommands, (command) => answer(() => cookout.client.addCommand(command)), {
+      yield* Effect.forEach(ordinaryWebhookCommands, (command) => answer(() => cookout.client.addCommand(command)), {
         concurrency: 1,
       });
       yield* answer(() => cookout.client.createChannel({ name: "grill" }));
@@ -281,7 +284,7 @@ it.effect(
       );
       const { commands } = yield* answer(cookout.client.listCommands);
 
-      expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["deploy", "release", "spawn-agent", "tag"]);
+      expect(Arr.map(commands, ({ name }) => name)).toStrictEqual(["deploy", "release", "tag"]);
       expect(badDate).toMatchObject({ code: "invalid_request", details: [{ path: ["data", "at"] }], status: 400 });
     }).pipe(Effect.provide(testCookout())),
 );

@@ -1,5 +1,5 @@
 import type { CookoutClient, CookoutEvent, EventStream } from "../../index.ts";
-import { TestCookout, answer, testCookout } from "../../../testing/server.ts";
+import { TestCookout, answer, testCookout, watchingAllChannels } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import type { Scope } from "effect";
@@ -53,7 +53,7 @@ it.effect("the creator's other sessions hear the new channel and their subscript
   Effect.gen(function* creatorHears() {
     const cookout = yield* TestCookout;
     const ann = yield* cookout.createIdentity("ann");
-    const events = yield* watching(ann.client, true);
+    const events = yield* watchingAllChannels(ann);
     const { channel } = yield* answer(() => ann.client.createChannel({ name: "grill" }));
     const first = yield* answer(() => events.next());
     const second = yield* answer(() => events.next());

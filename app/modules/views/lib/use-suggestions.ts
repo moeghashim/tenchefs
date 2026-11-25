@@ -1,9 +1,10 @@
 import type { Command, Identity } from "../../sdk/index.ts";
-import { shownIn, usePresences } from "./use-presence.ts";
 import { useCallback, useMemo } from "react";
 import type { Draft } from "../../composer/index.ts";
-import type { PresenceShown } from "./use-presence.ts";
+import type { MentionOption } from "./mention-option.ts";
 import type { Presences } from "../../board/index.ts";
+import { mentionOptionOf } from "./mention-option.ts";
+import { usePresences } from "./use-presence.ts";
 
 const NONE = 0;
 const SIGN = 1;
@@ -16,16 +17,9 @@ interface SuggestionsOf {
   readonly commands: readonly Command[];
 }
 
-interface Suggestion {
-  readonly option: string;
-  readonly detail: string | null;
-  readonly spoken: string;
-  readonly presence: PresenceShown | null;
-}
-
 interface Shown {
   readonly label: string;
-  readonly options: readonly Suggestion[];
+  readonly options: readonly MentionOption[];
   readonly onChoose: (option: string) => void;
 }
 
@@ -34,30 +28,18 @@ interface Handlers {
   readonly command: (option: string) => void;
 }
 
-function spokenMention(identity: Identity): string {
-  const displayName = identity.displayName ?? null;
-  if (displayName === null) {
-    return `@${identity.name}`;
-  }
-  return `${displayName}, @${identity.name}`;
-}
-
 function shownFor({ commands, suggestions }: SuggestionsOf, handlers: Handlers, presences: Presences): Shown {
   if (commands.length > NONE) {
     const options = commands.map((command) => ({
       detail: command.description ?? null,
+      identity: null,
       option: `/${command.name}`,
       presence: null,
       spoken: `/${command.name}`,
     }));
     return { label: COMMANDS, onChoose: handlers.command, options };
   }
-  const options = suggestions.map((identity) => ({
-    detail: identity.displayName ?? null,
-    option: `@${identity.name}`,
-    presence: shownIn({ name: identity.name, presences }),
-    spoken: spokenMention(identity),
-  }));
+  const options = suggestions.map((identity) => mentionOptionOf({ identity, presences }));
   return { label: MENTIONS, onChoose: handlers.mention, options };
 }
 

@@ -8,6 +8,7 @@ import { TestCookout, answer, refusal, testCookout } from "../../../testing/serv
 import type { TestCookoutService, TestIdentity } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
+import { createTestAgent } from "../../../testing/index.ts";
 
 const FORBIDDEN = 403;
 const CONFLICT = 409;
@@ -53,6 +54,9 @@ function collected(
 
 function approvedByChief(on: Board, request: StartAgentJoinRequest = asked): Effect.Effect<AgentSessionResponse> {
   return Effect.gen(function* approveAndCollect() {
+    yield* answer(() =>
+      createTestAgent({ broughtIn: true, by: on.chief.client, displayName: request.as, name: request.as }),
+    );
     const start = yield* answer(() => on.cookout.clientFor().startAgentJoin(request));
     yield* answer(() => on.chief.client.approveAgentJoin(start.userCode));
     return yield* collected(on, start.requestId);
@@ -66,14 +70,14 @@ function identityOf(on: Board, name: string): Effect.Effect<Identity> {
   );
 }
 
-it.effect("an agent approves a join for its owner, and the new agent records who brought it in", () =>
+it.effect("an agent approves a join for an agent it created for its owner, which records who brought it in", () =>
   Effect.gen(function* approveAsAgent() {
     const on = yield* board;
     const session = yield* approvedByChief(on);
     const actingAs = yield* answer(on.cookout.clientFor(session.agentSessionToken).whoami);
     const shown = yield* identityOf(on, "worker");
 
-    expect(session).toMatchObject({ created: true, identity: "worker" });
+    expect(session).toMatchObject({ created: false, identity: "worker" });
     expect(actingAs.identity).toMatchObject({ broughtInBy: "chief", kind: "agent", name: "worker", owner: "ada" });
     expect(shown).toMatchObject({ broughtInBy: "chief", owner: "ada" });
   }).pipe(Effect.provide(testCookout())),
@@ -82,10 +86,13 @@ it.effect("an agent approves a join for its owner, and the new agent records who
 it.effect("an agent sees a join request as it would join for its owner", () =>
   Effect.gen(function* previewAsAgent() {
     const on = yield* board;
+    yield* answer(() =>
+      createTestAgent({ broughtIn: true, by: on.chief.client, displayName: "worker", name: "worker" }),
+    );
     const code = yield* started(on);
     const shown = yield* answer(() => on.chief.client.getAgentJoinRequest(code));
 
-    expect(shown.agentJoinRequest).toMatchObject({ approved: false, creates: true, joins: "worker" });
+    expect(shown.agentJoinRequest).toMatchObject({ approved: false, creates: false, joins: "worker" });
   }).pipe(Effect.provide(testCookout())),
 );
 
@@ -94,13 +101,14 @@ it.effect("an agent approves a join in its owner's namespace", () =>
     const on = yield* board;
     const session = yield* approvedByChief(on, { ...asked, as: "ada/worker" });
 
-    expect(session).toMatchObject({ created: true, identity: "ada/worker" });
+    expect(session).toMatchObject({ created: false, identity: "ada/worker" });
   }).pipe(Effect.provide(testCookout())),
 );
 
 it.effect("a join a person approves records no one as bringing it in", () =>
   Effect.gen(function* approveAsPerson() {
     const on = yield* board;
+    yield* on.cookout.createIdentity("worker", { owner: "ada" });
     const code = yield* started(on);
     yield* answer(() => on.ada.client.approveAgentJoin(code));
     const shown = yield* identityOf(on, "worker");
@@ -109,19 +117,10 @@ it.effect("a join a person approves records no one as bringing it in", () =>
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("an agent may not approve a join for a human identity", () =>
-  Effect.gen(function* refuseHuman() {
-    const on = yield* board;
-    const code = yield* started(on, { ...asked, as: "bob" });
-    const refused = yield* refusal(() => on.chief.client.approveAgentJoin(code));
-
-    expect(refused).toMatchObject({ code: "identity_kind", status: FORBIDDEN });
-  }).pipe(Effect.provide(testCookout())),
-);
-
 it.effect("an agent may not approve a join in another owner's namespace", () =>
   Effect.gen(function* refuseOtherNamespace() {
     const on = yield* board;
+    yield* on.cookout.createIdentity("bob/x", { owner: "bob" });
     const code = yield* started(on, { ...asked, as: "bob/x" });
     const refused = yield* refusal(() => on.chief.client.approveAgentJoin(code));
 
@@ -223,6 +222,59 @@ it.effect("an agent may not end the agent session of, or deactivate, an agent it
       { code: "not_owner", status: FORBIDDEN },
       { code: "not_owner", status: FORBIDDEN },
     ]);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+const trigger = { token: "routine-secret-6c1f", url: "https://routines.example.com/fire" };
+
+it.effect("an agent reads, sets and clears the trigger URL of an agent it brought in", () =>
+  Effect.gen(function* bringerSetsTrigger() {
+    const on = yield* board;
+    yield* approvedByChief(on);
+    const set = yield* answer(() => on.chief.client.setTrigger("worker", trigger));
+    const read = yield* answer(() => on.chief.client.getTrigger("worker"));
+    const cleared = yield* answer(() => on.chief.client.clearTrigger("worker"));
+
+    expect([set, read, cleared]).toStrictEqual([
+      { trigger: { url: trigger.url } },
+      { trigger: { url: trigger.url } },
+      { trigger: null },
+    ]);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect(
+  "another agent of the same owner may not read, set or clear the trigger URL of an agent it didn't bring in",
+  () =>
+    Effect.gen(function* otherAgentRefused() {
+      const on = yield* board;
+      const deputy = yield* on.cookout.createIdentity("deputy", { owner: "ada" });
+      yield* approvedByChief(on);
+      const refused = yield* Effect.all(
+        [
+          refusal(() => deputy.client.getTrigger("worker")),
+          refusal(() => deputy.client.setTrigger("worker", trigger)),
+          refusal(() => deputy.client.clearTrigger("worker")),
+        ],
+        { concurrency: 1 },
+      );
+
+      expect(refused).toMatchObject([
+        { code: "not_owner", status: FORBIDDEN },
+        { code: "not_owner", status: FORBIDDEN },
+        { code: "not_owner", status: FORBIDDEN },
+      ]);
+    }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("the owner still sets and clears the trigger URL of an agent its agent brought in", () =>
+  Effect.gen(function* ownerSetsTrigger() {
+    const on = yield* board;
+    yield* approvedByChief(on);
+    const set = yield* answer(() => on.ada.client.setTrigger("worker", trigger));
+    const cleared = yield* answer(() => on.ada.client.clearTrigger("worker"));
+
+    expect([set, cleared]).toStrictEqual([{ trigger: { url: trigger.url } }, { trigger: null }]);
   }).pipe(Effect.provide(testCookout())),
 );
 

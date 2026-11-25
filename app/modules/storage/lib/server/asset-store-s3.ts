@@ -1,7 +1,7 @@
 import { AssetStore, missing } from "./asset-store.ts";
 import { Effect, Layer, Option, Record as Rec, Redacted, String as Str, Stream } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import type { AttachmentId } from "../../../attachments/index.ts";
+import type { AssetKey } from "./asset-store.ts";
 import { AwsV4Signer } from "aws4fetch";
 import type { HttpClientResponse } from "effect/http";
 import { StorageUnavailable } from "./errors.ts";
@@ -20,7 +20,7 @@ type Response = HttpClientResponse.HttpClientResponse;
 
 interface Sending {
   readonly method: Method;
-  readonly id: AttachmentId;
+  readonly id: AssetKey;
   readonly body: Option.Option<Uint8Array>;
 }
 
@@ -34,9 +34,9 @@ function unreachable({ message }: { readonly message: string }): StorageUnavaila
   return StorageUnavailable.make({ message: `The asset store's S3 bucket could not be reached: ${message}` });
 }
 
-function refusedBy(method: Method, id: AttachmentId, status: number): StorageUnavailable {
+function refusedBy(method: Method, id: AssetKey, status: number): StorageUnavailable {
   return StorageUnavailable.make({
-    message: `The asset store's S3 bucket answered ${String(status)} to ${method} for attachment ${id}.`,
+    message: `The asset store's S3 bucket answered ${String(status)} to ${method} for asset ${id}.`,
   });
 }
 
@@ -44,7 +44,7 @@ function succeeded(response: Response): boolean {
   return response.status >= OK && response.status <= LAST_SUCCESS;
 }
 
-function objectUrl({ bucket, endpoint }: S3Bucket, id: AttachmentId): string {
+function objectUrl({ bucket, endpoint }: S3Bucket, id: AssetKey): string {
   return `${Str.replace(TRAILING_SLASHES, "")(endpoint)}/${encodeURIComponent(bucket)}/${encodeURIComponent(id)}`;
 }
 
@@ -71,7 +71,7 @@ function withBody(body: Option.Option<Uint8Array>) {
     });
 }
 
-function expectSuccess(method: Method, id: AttachmentId) {
+function expectSuccess(method: Method, id: AssetKey) {
   return (response: Response): Effect.Effect<void, StorageUnavailable> => {
     if (succeeded(response)) {
       return Effect.void;
@@ -80,7 +80,7 @@ function expectSuccess(method: Method, id: AttachmentId) {
   };
 }
 
-function bodyOf(id: AttachmentId) {
+function bodyOf(id: AssetKey) {
   return (response: Response): Stream.Stream<Uint8Array, StorageUnavailable> => {
     if (response.status === NOT_FOUND) {
       return Stream.fail(missing(id));

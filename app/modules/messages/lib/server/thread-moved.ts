@@ -1,7 +1,8 @@
 import { Array as Arr, Effect, Predicate } from "effect";
-import type { MessageId, Reply, ThreadMovedWarning } from "../../index.ts";
+import type { MessageId, Reply } from "../../index.ts";
 import type { Storage, StorageUnavailable, StoredThread } from "../../../storage/server.ts";
 import type { Identity } from "../../../identities/index.ts";
+import type { Refusal } from "../../../http/index.ts";
 import { withReactions } from "./reactions.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
@@ -18,17 +19,9 @@ interface Moving extends Watching {
   readonly storage: Store;
 }
 
-interface Missed {
-  readonly storage: Store;
-  readonly moved: readonly Reply[];
-}
-
-interface Warned {
-  readonly warning?: ThreadMovedWarning;
-}
-
 const NONE: readonly Reply[] = [];
 const ONE = 1;
+const CONFLICT = 409;
 
 function newerByOthers(thread: StoredThread | undefined, upTo: MessageId, author: Identity): readonly Reply[] {
   if (Predicate.isUndefined(thread)) {
@@ -58,13 +51,20 @@ function movedMessage(count: number): string {
   return `The thread has ${String(count)} newer replies you haven't seen. Read them before you post again.`;
 }
 
-function threadMovedWarning({ moved, storage }: Missed): Fails<Warned> {
-  if (!Arr.isReadonlyArrayNonEmpty(moved)) {
-    return Effect.succeed({});
-  }
-  return Effect.map(withReactions({ shown: moved, storage }), (replies) => ({
-    warning: { code: "thread_moved", details: { replies }, message: movedMessage(replies.length) },
-  }));
+function refuseIfMoved(moving: Moving): Effect.Effect<void, Refusal | StorageUnavailable> {
+  return Effect.flatMap(movedSince(moving), (moved) => {
+    if (!Arr.isReadonlyArrayNonEmpty(moved)) {
+      return Effect.void;
+    }
+    return Effect.flatMap(withReactions({ shown: moved, storage: moving.storage }), (replies) =>
+      Effect.fail({
+        code: "thread_moved",
+        details: { replies },
+        message: movedMessage(replies.length),
+        status: CONFLICT,
+      }),
+    );
+  });
 }
 
-export { movedSince, threadMovedWarning };
+export { refuseIfMoved };

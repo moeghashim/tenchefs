@@ -24,6 +24,7 @@ export default defineConfig({
         "app/dev.ts",
         "app/web.tsx",
         "app/modules/live/lib/event-source.ts",
+        "app/modules/probe/web.ts",
         "app/modules/format/lib/browser-clock.ts",
         "app/modules/page-focus/lib/document.ts",
         "app/modules/unread/lib/browser-reading.ts",

@@ -55,7 +55,7 @@ it.effect("a name someone else owns makes <caller>/<name>, created once and join
     const cookout = yield* TestCookout;
     yield* cookout.createIdentity("triage-agent", { owner: "grace" });
     const ada = yield* humanFromClaudeCode(cookout, "ada");
-    const first = yield* answer(() => ada.join({ as: "triage-agent" }));
+    const first = yield* answer(() => ada.join({ as: "triage-agent", displayName: "Triage" }));
     yield* answer(() => cookout.clientFor(first.agentSessionToken).leave());
     const second = yield* answer(() => ada.join({ as: "triage-agent" }));
     const owners = yield* Effect.all(
@@ -73,8 +73,8 @@ it.effect("a free name is created as an agent the caller owns", () =>
   Effect.gen(function* joinFree() {
     const cookout = yield* TestCookout;
     const ada = yield* humanFromClaudeCode(cookout, "ada");
-    const joined = yield* answer(() => ada.join({ as: "scout" }));
-    const ownNamespace = yield* answer(() => ada.join({ as: "ada/helper" }));
+    const joined = yield* answer(() => ada.join({ as: "scout", displayName: "Scout" }));
+    const ownNamespace = yield* answer(() => ada.join({ as: "ada/helper", displayName: "Helper" }));
     const owner = yield* ownerOf(cookout, "scout");
 
     expect(joined).toMatchObject({ created: true, identity: "scout" });
@@ -93,7 +93,7 @@ it.effect("a human's name and another human's namespace are refused", () =>
       [
         refusal(() => ada.join({ as: "grace" })),
         refusal(() => ada.join({ as: "ada" })),
-        refusal(() => ada.join({ as: "grace/x" })),
+        refusal(() => ada.join({ as: "grace/x", displayName: "X" })),
         refusal(() => ada.join({ as: "grace/y" })),
       ],
       ONE_AT_A_TIME,
@@ -124,7 +124,7 @@ it.effect("a human's token from a harness is accepted by the join route only", (
   Effect.gen(function* guardExemption() {
     const cookout = yield* TestCookout;
     const grace = yield* humanFromClaudeCode(cookout, "grace");
-    const joined = yield* answer(() => grace.join({ as: "scout" }));
+    const joined = yield* answer(() => grace.join({ as: "scout", displayName: "Scout" }));
     const refused = yield* Effect.all(
       [refusal(() => grace.whoami()), refusal(() => grace.createMessage({ channel: "grill", text: "as grace" }))],
       ONE_AT_A_TIME,

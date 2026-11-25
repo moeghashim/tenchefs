@@ -1,5 +1,6 @@
-import { Alert, AreaForm } from "../../design-system/index.tsx";
 import { useCallback, useSyncExternalStore } from "react";
+import { Alert } from "../../design-system/content.tsx";
+import { AreaForm } from "../../design-system/controls.tsx";
 import type { DisplayNameDraft } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 import { descriptionLength } from "../../identities/client.ts";

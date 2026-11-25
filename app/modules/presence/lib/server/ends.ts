@@ -76,6 +76,19 @@ function hashOf(sentWith: SentWith): TokenHash | null {
   return null;
 }
 
+function madeWithIdentityToken(sentWith: SentWith, loginCredentials: readonly TokenHash[]): boolean {
+  if (sentWith.kind === "identity token") {
+    return true;
+  }
+  if (sentWith.kind === "web") {
+    return Option.match(sentWith.loginCredential, {
+      onNone: () => true,
+      onSome: (hash) => loginCredentials.includes(hash),
+    });
+  }
+  return false;
+}
+
 function sentWithEnded(tokens: EndedTokens): (connection: Connection) => boolean {
   return ({ sentWith }) => {
     if (tokens.kind === "all") {
@@ -87,7 +100,7 @@ function sentWithEnded(tokens: EndedTokens): (connection: Connection) => boolean
     if (tokens.kind === "agent sessions") {
       return sentWith.kind === "agent session";
     }
-    return sentWith.kind === "identity token";
+    return madeWithIdentityToken(sentWith, tokens.loginCredentials);
   };
 }
 

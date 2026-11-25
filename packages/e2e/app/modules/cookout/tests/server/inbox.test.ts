@@ -70,6 +70,7 @@ it.live(
         ],
       });
       expect(firstAfter).toStrictEqual({
+        agentJoinRequests: [],
         alerts: [],
         deactivatedQuietAgents: [],
         deactivationOffers: [],
@@ -102,6 +103,7 @@ it.live("an agent's ack clears its inbox items, and the next inbox run no longer
       { ...succeeded, stdoutJson: { readPosition: { channel, messageId: reply, thread: top } } },
     ]);
     expect(after).toStrictEqual({
+      agentJoinRequests: [],
       alerts: [],
       deactivatedQuietAgents: [],
       deactivationOffers: [],

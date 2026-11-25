@@ -2,6 +2,7 @@ import type { Command, Step } from "./merge-steps.ts";
 import { DONE, run, stop, tail } from "./merge-steps.ts";
 import { field, list, parseJson, text } from "./json.ts";
 import type { CheckRun } from "./check-run.ts";
+import { cutOffStop } from "./time-limits.ts";
 import { redJobs } from "./check-run.ts";
 
 interface Polled {
@@ -13,6 +14,7 @@ interface SameCommit extends Polled {
   readonly args: readonly string[];
   readonly checkRun: CheckRun;
   readonly cwd: string;
+  readonly event: string;
   readonly gh: Command;
   readonly subject: string;
 }
@@ -37,7 +39,7 @@ const CANCELLED = "cancelled";
 const COMPLETED = "completed";
 const NOT_FOUND = "none";
 const ALONE: Verdict = { kind: "alone" };
-const LIST = ["run", "list", "--workflow", "Check", "--event", "push", "--json", "databaseId,status,conclusion,url"];
+const FIELDS = ["--json", "databaseId,status,conclusion,url"];
 
 function ghJson(options: SameCommit, args: readonly string[]): unknown {
   const ran = run(options.cwd, ...options.gh, ...args);
@@ -69,7 +71,10 @@ function listedOf(value: unknown): readonly Listed[] {
 }
 
 function othersOn(options: SameCommit, sha: string): readonly Listed[] {
-  const runs = list(ghJson(options, [...LIST, "--commit", sha])) ?? [];
+  const runs =
+    list(
+      ghJson(options, ["run", "list", "--workflow", "Check", "--event", options.event, ...FIELDS, "--commit", sha]),
+    ) ?? [];
   return runs
     .flatMap((value) => listedOf(value))
     .filter(({ runNumber }) => runNumber !== options.runNumber)
@@ -105,6 +110,10 @@ function failedOrCancelled(options: SameCommit, others: readonly Listed[]): Verd
   const failed = others.find(({ conclusion, status }) => status === COMPLETED && conclusion !== CANCELLED) ?? NOT_FOUND;
   if (failed !== NOT_FOUND) {
     return { kind: "red", runNumber: failed.runNumber };
+  }
+  const cutOff = cutOffStop(options);
+  if (cutOff !== null) {
+    return { kind: "next", lines: cutOff.lines, next: cutOff.stopped };
   }
   return rerun(options, Math.max(options.runNumber, ...others.map(({ runNumber }) => runNumber)));
 }

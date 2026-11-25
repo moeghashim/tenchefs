@@ -1,9 +1,13 @@
 import type { Locator, Page } from "@playwright/test";
 import { adminClient, newIdentity } from "./people.ts";
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Person } from "./people.ts";
-import { inSidebar } from "./regions.ts";
 import { logInWithStream } from "./login.ts";
+import { probeFixtures } from "./probe.ts";
+import { sidebarLink } from "./regions.ts";
+import { unique } from "./names.ts";
+
+const test = base.extend(probeFixtures);
 
 interface Watching {
   readonly poster: Person;
@@ -17,7 +21,7 @@ async function watchList(page: Page, channel: string): Promise<Watching> {
   const reader = await newIdentity({ kind: "human", name: `${channel}-reader` });
   await reader.client.subscribe(channel);
   await logInWithStream({ page, token: reader.token });
-  const row = inSidebar(page).getByRole("link", { name: new RegExp(`^#${channel}(?![a-z-])`, "u") });
+  const row = sidebarLink({ label: `#${channel}`, page });
 
   await expect(row).toBeVisible();
 
@@ -29,26 +33,24 @@ async function rowInSecondTab(page: Page, channel: string): Promise<Locator> {
   const streamOpen = other.waitForResponse((response) => response.url().includes("/v1/events"));
   await other.goto("/");
   await streamOpen;
-  return inSidebar(other).getByRole("link", { name: new RegExp(`^#${channel}(?![a-z-])`, "u") });
+  return sidebarLink({ label: `#${channel}`, page: other });
 }
 
 async function openChannel(page: Page, row: Locator, newest: string): Promise<void> {
   await row.click();
 
-  await expect(page.getByRole("list", { name: "Messages" })).toContainText(newest);
+  await expect(page.getByRole("feed", { exact: true, name: "Messages" })).toContainText(newest);
 }
 
 async function openAndGoBack(page: Page, row: Locator, newest: string): Promise<void> {
   await openChannel(page, row, newest);
-  await inSidebar(page)
-    .getByRole("link", { name: /^Inbox/u })
-    .click();
+  await sidebarLink({ label: "Inbox", page }).click();
 }
 
 test("a channel's unread count goes up when another identity posts, then to zero once it is opened", async ({
   page,
 }) => {
-  const channel = "browser-unread";
+  const channel = unique("browser-unread");
   const { poster, row } = await watchList(page, channel);
 
   await expect(row).toHaveAccessibleName(`#${channel}`);
@@ -69,7 +71,7 @@ test("a channel's unread count goes up when another identity posts, then to zero
 test("a message that mentions the reader shows in the channel's count for you, apart from its unread count", async ({
   page,
 }) => {
-  const channel = "browser-unread-mention";
+  const channel = unique("browser-unread-mention");
   const { poster, row } = await watchList(page, channel);
 
   await poster.client.createMessage({ channel, text: "Deploy at noon?" });
@@ -80,7 +82,7 @@ test("a message that mentions the reader shows in the channel's count for you, a
 });
 
 test("a message that arrives in a channel the reader has open counts as read, in every tab", async ({ page }) => {
-  const channel = "browser-unread-open";
+  const channel = unique("browser-unread-open");
   const { poster, reader, row } = await watchList(page, channel);
   const otherRow = await rowInSecondTab(page, channel);
   await poster.client.createMessage({ channel, text: "Deploy at noon?" });

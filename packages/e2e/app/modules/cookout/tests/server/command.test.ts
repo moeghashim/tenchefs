@@ -4,9 +4,9 @@ import {
   CookoutUnderTest,
   calledThreadId,
   cookoutUnderTest,
-  exampleCommand,
+  exampleWebhookCommand,
   openRelay,
-  requireExampleCommand,
+  requireExampleWebhookCommand,
   succeeded,
   watchExitTokenRevoked,
   watchLine,
@@ -30,13 +30,13 @@ const ITEM = "event: inbox-item";
 const ACCEPTED = 202;
 const POLL = Schedule.spaced("500 millis");
 const RETRIED_WITHIN = 60_000;
-const callPath = `/v1/commands/${exampleCommand}/calls`;
-const done = `/${exampleCommand} is done.`;
+const callPath = `/v1/commands/${exampleWebhookCommand}/calls`;
+const done = `/${exampleWebhookCommand} is done.`;
 
 const cookoutWithHandler: Effect.Effect<CookoutUnderTestService, never, CookoutUnderTest> = Effect.gen(
   function* checkTheHandler() {
     const cookout = yield* CookoutUnderTest;
-    yield* requireExampleCommand(cookout);
+    yield* requireExampleWebhookCommand(cookout);
     return cookout;
   },
 );
@@ -57,7 +57,15 @@ function callerWatching(cookout: CookoutUnderTestService): Effect.Effect<Watchin
 
 function callExample(session: Session, channel: string, data: string): Effect.Effect<MessageId, never, SessionNeeds> {
   return Effect.gen(function* callFromTheCli() {
-    const called = yield* session.cookout("command", "call", exampleCommand, "--channel", channel, "--data", data);
+    const called = yield* session.cookout(
+      "command",
+      "call",
+      exampleWebhookCommand,
+      "--channel",
+      channel,
+      "--data",
+      data,
+    );
 
     expect(called).toMatchObject(succeeded);
 
@@ -75,8 +83,8 @@ function calledWhileWatching(watching: Watching): Effect.Effect<MessageId, never
     expect(answered).toContainEqual({ method: "POST", path: callPath, status: ACCEPTED });
     expect(parent).toMatchObject({
       author: { name: caller.name },
-      data: { command: exampleCommand, data: { branch: "main" } },
-      text: `/${exampleCommand}`,
+      data: { command: exampleWebhookCommand, data: { branch: "main" } },
+      text: `/${exampleWebhookCommand}`,
     });
 
     return thread;
@@ -104,7 +112,7 @@ function callAndWatch(): Effect.Effect<void, never, Scope.Scope> {
     const watched = yield* watching.stopWatching;
 
     expect(replies).toMatchObject([
-      { author: { name: exampleCommand }, data: { received: { branch: "main" } }, text: done },
+      { author: { name: exampleWebhookCommand }, data: { received: { branch: "main" } }, text: done },
     ]);
     expect(watched.exitCode).toBe(watchExitTokenRevoked);
     expect(watchOutput(watched).items).toStrictEqual(Arr.map(replies, lineFor(watching.channel, thread)));
@@ -120,13 +128,13 @@ function callFailFirst(): Effect.Effect<void, never, Scope.Scope> {
     const replies = yield* repliesOnceThere(cookout, thread);
 
     expect(replies).toMatchObject([
-      { author: { name: exampleCommand }, data: { received: { branch: "main", failFirst: true } }, text: done },
+      { author: { name: exampleWebhookCommand }, data: { received: { branch: "main", failFirst: true } }, text: done },
     ]);
   }).pipe(Effect.provide([cookoutUnderTest, NodeServices.layer]));
 }
 
 it.live(
-  "a CLI call to the example command answers 202 at once with the call message, and the handler's result reply arrives over cookout watch",
+  "a CLI call to the example Webhook command answers 202 at once with the call message, and the handler's result reply arrives over cookout watch",
   callAndWatch,
 );
 

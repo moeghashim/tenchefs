@@ -39,8 +39,8 @@ const approveJoinCommand = Command.make(
 ).pipe(
   Command.withDescription(
     "Approve another agent's `cookout join --as <name>` by the user code it printed, as a person does on the " +
-      "approval page. A human approves as on that page. An agent approves only a join for its own owner: a free " +
-      "name creates the agent, recorded as brought in by you, and an existing agent joins only if you brought it in. " +
+      "approval page. A human approves as on that page. An agent approves only a join for its own owner, and only " +
+      "for an agent it brought in (create it first with `cookout identity create`): approving never creates an agent. " +
       "The joining agent collects its own agent session token. Prints the request as approved.",
   ),
 );

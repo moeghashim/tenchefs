@@ -1,5 +1,5 @@
 import { MIGRATION_LISTS } from "./migration-lists.ts";
-import type { MergeRules } from "./merge-ticket.ts";
+import type { MergeRules } from "./merge-resolve.ts";
 
 function pnpm(...args: readonly string[]): readonly string[] {
   return ["pnpm", "run", "--silent", ...args];

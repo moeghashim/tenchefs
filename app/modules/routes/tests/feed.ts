@@ -1,6 +1,8 @@
 import type { CookoutClient, MessageId } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { screen, within } from "@testing-library/react";
+import { answering } from "./answering.ts";
+import { openAt } from "./render.tsx";
 
 const FOLD = /^(?:\d+ closed threads?|\d+ more)$/u;
 
@@ -76,14 +78,33 @@ function shownIn(item: () => HTMLElement, texts: readonly string[]): string {
 }
 
 async function feedOf(texts: readonly string[]): Promise<readonly string[]> {
-  const list = await screen.findByRole("list", { name: "Messages" });
+  const list = await screen.findByRole("feed", { name: "Messages" });
   const shown: string[] = [];
-  for (const item of within(list).queryAllByRole("listitem")) {
-    if (item.parentElement === list) {
-      shown.push(shownIn(() => item, texts));
-    }
+  for (const item of within(list).queryAllByRole("article")) {
+    shown.push(shownIn(() => item, texts));
   }
   return shown;
 }
 
-export { type Posted, feedOf, idOf, postedIn };
+interface FeedOpening {
+  readonly hash: string;
+  readonly pageSize?: number;
+  readonly reader: CookoutClient;
+}
+
+interface OpenedFeed {
+  readonly close: () => void;
+  readonly pageRead: () => Promise<void>;
+}
+
+async function feedOpened({ hash, pageSize, reader }: FeedOpening): Promise<OpenedFeed> {
+  const { answered, client } = answering(reader);
+  const close = openAt({ client, hash, ...(typeof pageSize === "number" && { pageSize }) });
+  async function pageRead(): Promise<void> {
+    await answered("listMessages");
+  }
+  await pageRead();
+  return { close, pageRead };
+}
+
+export { type Posted, feedOf, feedOpened, idOf, postedIn };

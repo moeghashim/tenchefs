@@ -60,12 +60,13 @@ function issue(sessions: Sessions, { force, session }: IssueAgentSession): Issue
   return { status: "issued" };
 }
 
-function listed({ expiresAt, host, issuedAt, lastUsedAt }: Kept): LiveAgentSession {
+function listed({ expiresAt, host, issuedAt, lastUsedAt, sessionUrl }: Kept): LiveAgentSession {
   return listedSession({
     expiresAt,
     host: Option.fromUndefinedOr(host),
     issuedAt,
     lastUsedAt: Option.fromUndefinedOr(lastUsedAt),
+    sessionUrl: Option.fromUndefinedOr(sessionUrl),
   });
 }
 

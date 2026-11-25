@@ -10,6 +10,7 @@ export type {
   DeactivationOfferId,
   DeactivationOfferResponse,
   FollowResponse,
+  InboxAgentJoinRequest,
   InboxHistoryItem,
   InboxHistoryNudge,
   InboxHistoryQuery,

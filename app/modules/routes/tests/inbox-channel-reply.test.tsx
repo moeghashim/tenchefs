@@ -2,9 +2,10 @@ import type { CookoutClient, MessageId } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, waitFor, within } from "@testing-library/react";
+import type { OpenedView } from "./view-opened.ts";
 import { chose } from "./menus.ts";
+import { conversationOpened } from "./view-opened.ts";
 import { inConversation } from "./regions.ts";
-import { openWithClockStopped } from "./clock.ts";
 
 interface TwoPosts {
   readonly channel: string;
@@ -24,10 +25,17 @@ async function twoPostsBy(channel: string): Promise<TwoPosts> {
   return { channel, newest: newest.id, older: older.id, reader: reader.client };
 }
 
-async function sent(label: string, text: string): Promise<HTMLElement> {
+interface Sending {
+  readonly answered: OpenedView["answered"];
+  readonly label: string;
+  readonly text: string;
+}
+
+async function sent({ answered, label, text }: Sending): Promise<HTMLElement> {
   const box = await inConversation().findByRole("textbox", { name: label });
   fireEvent.change(box, { target: { value: text } });
   fireEvent.click(await inConversation().findEnabledButton("Send"));
+  await Promise.all([answered("createMessage"), answered("getThread")]);
   return box;
 }
 
@@ -47,7 +55,7 @@ async function messageSaying(text: string): Promise<HTMLElement> {
 
 function textsIn(label: string): readonly string[] {
   const texts: string[] = [];
-  for (const article of within(inConversation().getByRole("list", { name: label })).getAllByRole("article")) {
+  for (const article of within(inConversation().getByRole("feed", { name: label })).getAllByRole("article")) {
     texts.push(article.textContent);
   }
   return texts;
@@ -59,9 +67,13 @@ it("in a channel conversation, the box replies to the newest post's author, and 
   expect.hasAssertions();
 
   const posts = await twoPostsBy("web-inbox-channel-reply");
-  const unmount = openWithClockStopped({ client: posts.reader, hash: `#/inbox/${posts.channel}` });
-  const box = await sent("Reply to @web-inbox-channel-reply-bob", "Nice");
-  await inConversation().findByRole("list", { name: "Replies to the post" });
+  const { answered, close: unmount } = await conversationOpened({
+    client: posts.reader,
+    hash: `#/inbox/${posts.channel}`,
+    waitingOn: ["listMessages", "getThread"],
+  });
+  const box = await sent({ answered, label: "Reply to @web-inbox-channel-reply-bob", text: "Nice" });
+  await inConversation().findByRole("feed", { name: "Replies to the post" });
   await waitFor(() => {
     expect(box).toHaveProperty("value", "");
   });
@@ -81,11 +93,16 @@ it("reply on an older post in a channel conversation retargets the box to that p
   expect.hasAssertions();
 
   const posts = await twoPostsBy("web-inbox-channel-retarget");
-  const unmount = openWithClockStopped({ client: posts.reader, hash: `#/inbox/${posts.channel}` });
+  const { answered, close: unmount } = await conversationOpened({
+    client: posts.reader,
+    hash: `#/inbox/${posts.channel}`,
+    waitingOn: ["listMessages", "getThread"],
+  });
   fireEvent.contextMenu(await messageSaying("Deploy at noon?"));
   await chose("Reply");
-  const box = await sent("Reply to @web-inbox-channel-retarget-ada", "Noon works");
-  await within(await inConversation().findByRole("list", { name: "Replies to the post" })).findByText("Noon works");
+  await answered("getThread");
+  const box = await sent({ answered, label: "Reply to @web-inbox-channel-retarget-ada", text: "Noon works" });
+  await within(await inConversation().findByRole("feed", { name: "Replies to the post" })).findByText("Noon works");
 
   expect([
     await repliesIn(posts.reader, posts.older),

@@ -2,6 +2,7 @@ import type {
   AgentJoinCollectedResponse,
   AgentJoinRequestStartedResponse,
   AgentSessionResponse,
+  StartAgentJoinRequest,
 } from "../../../agent-sessions/index.ts";
 import { Console, Duration, Effect, Function, Option } from "effect";
 import type { CallFailure } from "./adapters/sdk.ts";
@@ -17,6 +18,7 @@ interface JoinAsked {
   readonly url: string;
   readonly as: IdentityName;
   readonly idleExpiry: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
 const NOTHING = {};
@@ -59,13 +61,23 @@ function approvalPrompt(url: string, { approvalPath, expiresAt, userCode }: Agen
   );
 }
 
-function joinByBrowser({ as, idleExpiry, url }: JoinAsked): Effect.Effect<AgentSessionResponse, CallFailure> {
+function watchedAt(sessionUrl: Option.Option<string>): Pick<StartAgentJoinRequest, "sessionUrl"> {
+  return Option.match(sessionUrl, { onNone: () => NOTHING, onSome: (url) => ({ sessionUrl: url }) });
+}
+
+function joinByBrowser({
+  as,
+  idleExpiry,
+  sessionUrl,
+  url,
+}: JoinAsked): Effect.Effect<AgentSessionResponse, CallFailure> {
   return Effect.gen(function* approveJoinInBrowser() {
     const client = yield* Effect.try({ catch: toFailure, try: () => createCookoutClient({ env: NOTHING, url }) });
     const host = yield* machineName;
+    const asked = { as, host, ...watchedAt(sessionUrl) };
     const request = Option.match(idleExpiry, {
-      onNone: () => ({ as, host }),
-      onSome: (asked) => ({ as, host, idleExpiry: asked }),
+      onNone: () => asked,
+      onSome: (expiry) => ({ ...asked, idleExpiry: expiry }),
     });
     const started = yield* Effect.tryPromise({ catch: toFailure, try: () => client.startAgentJoin(request) });
     yield* Console.error(approvalPrompt(url, started));
@@ -78,15 +90,22 @@ interface CodeGiven {
   readonly url: string;
   readonly code: string;
   readonly idleExpiry: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
-function joinByCode({ code, idleExpiry, url }: CodeGiven): Effect.Effect<AgentSessionResponse, CallFailure> {
+function joinByCode({
+  code,
+  idleExpiry,
+  sessionUrl,
+  url,
+}: CodeGiven): Effect.Effect<AgentSessionResponse, CallFailure> {
   return Effect.gen(function* redeemJoinCode() {
     const client = yield* Effect.try({ catch: toFailure, try: () => createCookoutClient({ env: NOTHING, url }) });
     const host = yield* machineName;
+    const asked = { host, joinCode: code, ...watchedAt(sessionUrl) };
     const request = Option.match(idleExpiry, {
-      onNone: () => ({ host, joinCode: code }),
-      onSome: (asked) => ({ host, idleExpiry: asked, joinCode: code }),
+      onNone: () => asked,
+      onSome: (expiry) => ({ ...asked, idleExpiry: expiry }),
     });
     return yield* Effect.tryPromise({ catch: toFailure, try: () => client.redeemJoinCode(request) });
   });

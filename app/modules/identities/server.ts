@@ -7,13 +7,14 @@
 import {
   AgentSessionSent,
   Caller,
-  CommandThread,
   HarnessSent,
+  LoginCredentialSent,
+  WebhookCommandThread,
   authenticate,
   credentialsOf,
   harnessOf,
   issueToken,
-  requireCommandRoute,
+  requireWebhookCommandRoute,
 } from "./lib/server/auth.ts";
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import type { Credentials, IdentityChanges, IssuedToken, Principal } from "./lib/server/auth.ts";
@@ -33,11 +34,14 @@ export { Caller };
  * and an open stream checks it is still live.
  */
 export { AgentSessionSent } from "./lib/server/auth.ts";
+
+/** The hash of the Login credential the request was sent with, if it was: a web session's cookie holds one (ADR 0103). */
+export { LoginCredentialSent } from "./lib/server/auth.ts";
 /**
  * The one thread a request may reply in when it carries a command token, and none for any other token. `Messages`
  * posts such a request only as a reply in this thread.
  */
-export { CommandThread } from "./lib/server/auth.ts";
+export { WebhookCommandThread } from "./lib/server/auth.ts";
 /**
  * The harness the request named in `cookout-harness`, as a field to spread into a message to post: only an
  * agent identity's request carries one (a human's is refused with 403 `agent_as_human`), and none without the header.
@@ -89,16 +93,19 @@ export const requireToken: Gate<
   Effect.gen(function* () {
     const identities = yield* Identities;
     const request = yield* HttpServerRequest.HttpServerRequest;
-    const { agentSession, commandThread, identity } = yield* identities.authenticate(credentialsOf(request));
+    const { agentSession, identity, loginCredential, webhookCommandThread } = yield* identities.authenticate(
+      credentialsOf(request),
+    );
     const harness = yield* harnessOf({ headers: request.headers, identity, target: request });
-    if (Option.isSome(commandThread)) {
-      yield* requireCommandRoute(request);
+    if (Option.isSome(webhookCommandThread)) {
+      yield* requireWebhookCommandRoute(request);
     }
     return yield* effect.pipe(
       Effect.provideService(Caller, identity),
-      Effect.provideService(CommandThread, commandThread),
+      Effect.provideService(WebhookCommandThread, webhookCommandThread),
       Effect.provideService(HarnessSent, harness),
       Effect.provideService(AgentSessionSent, agentSession),
+      Effect.provideService(LoginCredentialSent, loginCredential),
     );
   });
 
@@ -139,6 +146,7 @@ export function adminTokenSet(
       const hash = yield* secrets.hashToken(adminToken);
       const admin = yield* humanAdmin(adminName);
       yield* storage.setOnlyToken(admin, hash);
+      yield* storage.revokeLoginCredentialsMadeWithRevokedTokens(admin.name);
       return yield* storage.setAdmin(admin.name, true);
     }),
   );
@@ -196,6 +204,12 @@ export { requireAdmin } from "./lib/server/auth.ts";
  */
 export { requireOwnerBringerOrAdmin, requireOwnerOrAdmin } from "./lib/server/auth.ts";
 
+/**
+ * Whether `caller` is the agent that brought in the agent `target`, for the same owner (mattpocock/cookout#370): it
+ * may deactivate that agent, end its agent session and set or clear its trigger URL, and nothing more.
+ */
+export { broughtInBy } from "./lib/server/auth.ts";
+
 /** Reads the `:name` path parameter, refusing a name no identity could have with 404 `identity_not_found`. */
 export { identityNotFound, nameParam } from "./lib/server/routes.ts";
 
@@ -211,6 +225,14 @@ export { displayNameRoutes, displayNamesLayer } from "./lib/server/display-names
  * is 403 `identity_kind`). The `PATCH` needs `Caller`, which `requireToken` provides.
  */
 export { descriptionRoutes } from "./lib/server/descriptions.ts";
+/**
+ * `PUT /v1/identities/:name/avatar` sets an identity's avatar and `GET /v1/avatars/:id` serves its bytes behind the
+ * token gate (#478). Only the identity itself or, for an agent, its owner may set one (403 `not_owner`, admins too).
+ * The server takes only a PNG of exactly 256 by 256 pixels, judged by its signature and IHDR header with no image
+ * library; the browser crops and resizes (Matt, 2026-11-25, board msg 4362). The bytes are stored first, then the
+ * avatar is recorded, and only then are the replaced avatar's bytes removed.
+ */
+export { avatarRoutes } from "./lib/server/avatars.ts";
 
 /**
  * The `IdentityChanges` hub: every route that creates an identity or changes one (its display name, admin flag,

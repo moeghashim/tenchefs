@@ -1,5 +1,5 @@
 import { Array as Arr, Effect, Predicate, Schema } from "effect";
-import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
+import type { DialectForms, SqlDatabase, SqlValue } from "./adapters/sql-database.ts";
 import type { SearchCursor, SearchPageRequest, SearchQuery, SearchSection, StoredSearchPage } from "./search.ts";
 import type { MessageReader } from "./inbox-sqlite.ts";
 import type { SearchResult } from "../../../search/index.ts";
@@ -59,7 +59,7 @@ interface SearchOptions {
 
 interface Condition {
   readonly sql: string;
-  readonly params: readonly string[];
+  readonly params: readonly SqlValue[];
 }
 
 interface SearchSql {
@@ -70,6 +70,7 @@ interface SearchSql {
 interface WordMatching {
   readonly sql: string;
   readonly match: (words: readonly string[]) => string;
+  readonly rank: string;
 }
 
 function firstCharacters(word: string): string {
@@ -83,6 +84,7 @@ const WORD_MATCHING: DialectForms<WordMatching> = {
         Arr.map(words, (word) => `'${firstCharacters(word)}':*`),
         ALL_OF,
       ),
+    rank: "ts_rank(message_search_words(text), ?::tsquery, 2) DESC, ",
     sql: "message_search_words(text) @@ ?::tsquery",
   },
   sqlite: {
@@ -91,21 +93,39 @@ const WORD_MATCHING: DialectForms<WordMatching> = {
         Arr.map(words, (word) => `"${word}"*`),
         WORD_SEPARATOR,
       ),
+    rank: "(SELECT bm25(message_search) FROM message_search WHERE message_search MATCH ? AND rowid = messages.id), ",
     sql: "id IN (SELECT rowid FROM message_search WHERE message_search MATCH ?)",
   },
 };
 
-function searchSql({ columns, conditions }: SearchSql): string {
-  const filters = Arr.join(
-    Arr.map(conditions, ({ sql }) => `${sql}${AND}`),
-    NOTHING,
-  );
+interface Ranking {
+  readonly sql: string;
+  readonly params: readonly string[];
+}
+
+interface SearchSql extends Ranking {
+  readonly columns: string;
+  readonly conditions: readonly Condition[];
+  readonly paging: string;
+}
+
+function whereOf(conditions: readonly Condition[]): string {
+  if (Arr.isReadonlyArrayEmpty(conditions)) {
+    return NOTHING;
+  }
+  return `WHERE ${Arr.join(
+    Arr.map(conditions, ({ sql }) => sql),
+    AND,
+  )}`;
+}
+
+function searchSql({ columns, conditions, paging, sql: ranking }: SearchSql): string {
   return `SELECT ${columns},
     (SELECT thread.closed_at IS NOT NULL FROM messages AS thread
       WHERE thread.id = coalesce(messages.reply_to, messages.id)) AS thread_closed
   FROM messages
-  WHERE ${filters}(created_at, id) < (?, ?)
-  ORDER BY created_at DESC, id DESC LIMIT ?`;
+  ${whereOf(conditions)}
+  ORDER BY ${ranking}created_at DESC, id DESC ${paging}`;
 }
 
 function wordsCondition(matching: WordMatching, words: readonly string[]): readonly Condition[] {
@@ -155,6 +175,38 @@ function startOf(after: SearchCursor | undefined): readonly [string, number] {
   return [after.createdAt, after.id];
 }
 
+interface Ordering {
+  readonly db: SqlDatabase;
+  readonly query: SearchQuery;
+  readonly page: SearchPageRequest;
+}
+
+interface Ordered extends Ranking {
+  readonly paging: string;
+  readonly after: readonly Condition[];
+  readonly pagingParams: readonly number[];
+}
+
+function orderedBy({ db, page, query }: Ordering): Ordered {
+  const limit = page.limit + ONE_MORE;
+  if (page.sort !== "best") {
+    const [createdAt, id] = startOf(page.after);
+    return {
+      after: [{ params: [createdAt, id], sql: "(created_at, id) < (?, ?)" }],
+      paging: "LIMIT ?",
+      pagingParams: [limit],
+      params: [],
+      sql: NOTHING,
+    };
+  }
+  const byOffset = { after: [], paging: "LIMIT ? OFFSET ?", pagingParams: [limit, page.offset] };
+  if (Arr.isReadonlyArrayEmpty(query.words)) {
+    return { ...byOffset, params: [], sql: NOTHING };
+  }
+  const matching = WORD_MATCHING[db.dialect];
+  return { ...byOffset, params: [matching.match(query.words)], sql: matching.rank };
+}
+
 function resultOf(reader: MessageReader): (row: unknown) => Fails<SearchResult> {
   return (row) =>
     Effect.gen(function* readResult() {
@@ -172,10 +224,11 @@ interface Searching extends SearchOptions {
 }
 
 function searchPage({ db, page, query, reader }: Searching): Fails<StoredSearchPage> {
-  const conditions = conditionsOf(db, query);
-  const params = Arr.flatMap(conditions, (condition) => condition.params);
-  const sql = searchSql({ columns: reader.columns, conditions });
-  return db.all(sql, ...params, ...startOf(page.after), page.limit + ONE_MORE).pipe(
+  const ordered = orderedBy({ db, page, query });
+  const conditions = [...conditionsOf(db, query), ...ordered.after];
+  const params = [...Arr.flatMap(conditions, (condition) => condition.params), ...ordered.params];
+  const sql = searchSql({ ...ordered, columns: reader.columns, conditions });
+  return db.all(sql, ...params, ...ordered.pagingParams).pipe(
     Effect.flatMap((rows) => Effect.forEach(rows, resultOf(reader), ONE_AT_A_TIME)),
     Effect.map((results: readonly SearchResult[]) => ({
       hasMore: results.length > page.limit,

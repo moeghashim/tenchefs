@@ -3,8 +3,9 @@
  * Events stream (ADR 0002). The stream merges separate event sources, each
  * started when the caller connects with the caller and the request, so each
  * new kind of event is one more entry in `sources` (`lib/server/sources.ts`):
- * a first `connected` event with the board's latest message ID, read once
- * every other source is listening; the
+ * a `connected` event with the board's latest message ID, its live connection
+ * held only once every other source is listening, so the caller's own coming
+ * online reaches the `presence` source of this very stream; the
  * caller's new inbox items, which the `Messages` service's hub feeds; the
  * caller's Nudges as the `Nudges` scheduler raises them, and as the `Inbox` marks them read; the
  * caller's new read positions, which the `Inbox` service's hub feeds on every
@@ -12,7 +13,7 @@
  * every new message on every channel, every identity created, changed or
  * deleted (fed by the `IdentityChanges` hubs), every channel created or deleted (fed by the
  * `Channels` service's hubs), every command registered or rotated (fed by the
- * `CommandChanges` hub) and, to an agent's owner and to admins, every change
+ * `WebhookCommandChanges` hub) and, to an agent's owner and to admins, every change
  * to the agent's agent session (fed by the `AgentSessions` service's hub), for
  * the web UI; and a comment
  * heartbeat every 15 s, so proxies keep the connection open. On a reconnect
@@ -34,6 +35,7 @@
  * `GET /v1/presence`, is among the Schemas below so the SDK reads it with the event.
  */
 import {
+  AgentJoinRequestsEventSchema,
   AgentSessionEventSchema,
   ChannelDeletedEventSchema,
   ChannelEventSchema,
@@ -83,14 +85,12 @@ const eventsRoute: Route<Needs> = {
       const lastEventId = lastEventIdIn(headers["last-event-id"]);
       const connection = yield* Scope.make();
       yield* holdStreamPlace.pipe(Scope.provide(connection));
-      const streams = yield* Effect.forEach(
-        sources,
-        (source) => source({ authorization: headers["authorization"], caller, lastEventId, url }),
-        {
-          concurrency: "unbounded",
-        },
-      ).pipe(Scope.provide(connection));
-      const body = Stream.mergeAll(streams, { concurrency: "unbounded" }).pipe(
+      const request = { authorization: headers["authorization"], caller, lastEventId, url };
+      const listening = yield* Effect.forEach(sources.listening, (source) => source(request), {
+        concurrency: "unbounded",
+      }).pipe(Scope.provide(connection));
+      const held = yield* sources.connected(request).pipe(Scope.provide(connection));
+      const body = Stream.mergeAll([held, ...listening], { concurrency: "unbounded" }).pipe(
         Stream.takeUntil(isLast),
         Stream.map(sseText),
         Stream.prepend([OPENED]),
@@ -112,6 +112,7 @@ export const eventRoutes: readonly Route<Needs>[] = [eventsRoute, ...cleanCloseR
 
 /** The Schemas of the stream's events, for the SDK's generated validators. */
 export const eventResponseSchemas = {
+  AgentJoinRequestsEvent: AgentJoinRequestsEventSchema,
   AgentSessionEvent: AgentSessionEventSchema,
   ChannelDeletedEvent: ChannelDeletedEventSchema,
   ChannelEvent: ChannelEventSchema,

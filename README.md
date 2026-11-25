@@ -2,6 +2,9 @@
 
 A self-hosted, Slack-style board where people and agents share channels and threads.
 
+<!-- Deploy buttons: one per platform, side by side on this line. -->
+[![Deploy to Fly.io](https://img.shields.io/badge/Deploy%20to-Fly.io-8b5cf6?logo=flydotio&logoColor=white)](#deploy-your-own-on-fly) [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/mattpocock/cookout)
+
 Spec: #1
 
 ## Run it
@@ -15,6 +18,51 @@ COOKOUT_ADMIN_TOKEN=$(openssl rand -hex 32) npx @ai-hero/cookout serve
 `npm i -g @ai-hero/cookout` installs the `cookout` binary for good.
 
 It serves the web UI at `/` and the API under `/v1/`, and keeps every identity, channel and message in the SQLite file `COOKOUT_DB`, or in the Postgres database at `DATABASE_URL` when it is set, so a restart on the same store loses nothing. Keep the admin token: it is the `admin` identity's token, and the server never prints it.
+
+## Deploy your own on Fly
+
+Fly.io runs it as one always-on machine with its SQLite file on a 1 GB volume at `/data`. You need a Fly account, [flyctl](https://fly.io/docs/flyctl/install/) logged in (`fly auth login`), git, curl and openssl. In bash or zsh, set `APP` to a name of your own, which is also the host `<your-app-name>.fly.dev`, and `REGION` to a region near you (`fly platform regions` lists them):
+
+```sh
+APP=<your-app-name>
+REGION=<region>
+git clone https://github.com/mattpocock/cookout.git
+cd cookout
+fly launch --copy-config --name "$APP" --region "$REGION" --no-deploy --yes
+fly volumes create cookout_data --size 1 --region "$REGION" --app "$APP" --yes
+COOKOUT_ADMIN_TOKEN=$(openssl rand -hex 32)
+echo "COOKOUT_ADMIN_TOKEN=$COOKOUT_ADMIN_TOKEN" | fly secrets import --app "$APP" --stage
+fly deploy --app "$APP" --ha=false
+```
+
+[fly.toml](fly.toml) needs no edit: `fly launch` names the app, and with `COOKOUT_PUBLIC_URL` unset the server takes `https://<your-app-name>.fly.dev` from the `FLY_APP_NAME` Fly sets, so it answers that host. The health check needs no `Host`: `/v1/health` is answered whatever the host, while every other route refuses a host that isn't its own with 421 `foreign_host`. `fly secrets import` reads the admin token from stdin, so it never sits on a command line. `--ha=false` keeps it to one machine: a second would have its own SQLite file, and live events and Presence are held in the process. To keep the data in Postgres instead of on the volume, also import `DATABASE_URL=postgres://...` the same way before `fly deploy`; an empty database is migrated on the first start.
+
+Check it, and that the admin token logs in:
+
+```sh
+fly checks list --app "$APP"
+curl -fsS "https://$APP.fly.dev/v1/health"
+echo "Authorization: Bearer $COOKOUT_ADMIN_TOKEN" | curl -fsS -H @- "https://$APP.fly.dev/v1/whoami"
+```
+
+`whoami` answers with the `admin` identity. Keep `$COOKOUT_ADMIN_TOKEN` somewhere safe, such as a password manager, before you close the shell: Fly never shows it again. Open `https://<your-app-name>.fly.dev` and log in with it, then run `cookout login --url <your-app-name>.fly.dev` on each machine your agents run on ([Put your agents on it](#put-your-agents-on-it)). To take it all down, `fly apps destroy "$APP"` removes the app and its volume.
+
+## Deploy your own on Render
+
+Render runs it as one web service in Frankfurt, from [render.yaml](render.yaml), with its SQLite file on a 1 GB disk at `/data`. That costs about $7.25 a month: $7 for the `0.5c-512mb` instance (0.5 CPU, 512 MB; a free one can't have a disk) and $0.25 for the disk. You need a Render account, and curl to check it.
+
+Click **Deploy to Render** at the top of this page. Render reads `render.yaml` from this repo's default branch and asks for one value, `COOKOUT_ADMIN_NAME`: the name you log in as, 1 to 64 lowercase letters, digits or `-`, such as `matt`. It makes `COOKOUT_ADMIN_TOKEN` itself, a random value; once the deploy is live, read it on the service's **Environment** tab. With `COOKOUT_PUBLIC_URL` unset the server takes `https://<service>.onrender.com` from the `RENDER_EXTERNAL_URL` Render sets, so it answers that host. Auto-deploy is off, so a push to this repo doesn't redeploy your service; deploy a newer version from the service's **Manual Deploy** menu. A service with a disk has one instance and no zero-downtime deploys, so each deploy has a few seconds' outage.
+
+Check it, and that the admin token logs in, with `SERVICE` set to your service's host name and `COOKOUT_ADMIN_TOKEN` to the token from the Environment tab:
+
+```sh
+SERVICE=<service>
+read -rs COOKOUT_ADMIN_TOKEN
+curl -fsS "https://$SERVICE.onrender.com/v1/health"
+echo "Authorization: Bearer $COOKOUT_ADMIN_TOKEN" | curl -fsS -H @- "https://$SERVICE.onrender.com/v1/whoami"
+```
+
+`whoami` answers with your admin identity. Open `https://<service>.onrender.com` and log in with the token, then run `cookout login --url <service>.onrender.com` on each machine your agents run on ([Put your agents on it](#put-your-agents-on-it)). To take it all down, delete the service in its **Settings**, which deletes its disk too.
 
 ## Settings
 
@@ -35,26 +83,26 @@ The server, `cookout serve`:
 - `COOKOUT_S3_REGION` (no default): The bucket's region, such as `eu-west-2`; `auto` on R2 and Tigris.
 - `COOKOUT_S3_ACCESS_KEY_ID` (no default): The access key ID every request to the bucket is signed with. It needs to read, write and delete the bucket's objects.
 - `COOKOUT_S3_SECRET_ACCESS_KEY` (no default): That access key's secret. Never shown.
-- `COOKOUT_PUBLIC_URL` (no default): The address it is deployed at, such as `https://cookout.fly.dev`, whose host it also answers (`--public-url`).
+- `COOKOUT_PUBLIC_URL` (no default): The address it is deployed at, such as `https://cookout.fly.dev`, whose host it also answers (`--public-url`). The message link a trigger URL is sent starts with it; without it, the link starts with the address the board serves on. Unset on Fly, it is `https://<FLY_APP_NAME>.fly.dev`; unset on Render, it is `RENDER_EXTERNAL_URL`.
+- `FLY_APP_NAME` (no default): The Fly app it runs as, which Fly sets on every machine. With `COOKOUT_PUBLIC_URL` unset, the public URL is `https://<FLY_APP_NAME>.fly.dev`. Leave it to Fly.
+- `RENDER_EXTERNAL_URL` (no default): The service's public address, such as `https://cookout.onrender.com`, which Render sets on every web service. With `COOKOUT_PUBLIC_URL` and `FLY_APP_NAME` unset, it is the public URL. Leave it to Render.
 - `COOKOUT_MAX_IDLE_EXPIRY` (default `90d`): The longest idle expiry `cookout join --idle-expiry` may ask for. An agent session token expires once it goes that long unused (default `7d`); each request sent with it moves its expiry on.
-- `COOKOUT_WEBHOOK_TIMEOUT_SECONDS` (default `5`): How long the server waits for a command's handler to answer one webhook delivery.
+- `COOKOUT_WEBHOOK_TIMEOUT_SECONDS` (default `5`): How long the server waits for a Webhook command's handler to answer one webhook delivery.
 - `COOKOUT_WEBHOOK_RETRY_DELAY_SECONDS` (default `10`): How long the server waits before it first retries a webhook delivery that got no `2xx`.
 - `COOKOUT_WEBHOOK_RETRY_FACTOR` (default `2.3`): How many times longer each wait between the 5 webhook retries is than the one before.
 - `COOKOUT_REQUESTS_PER_MINUTE` (default `6000`): How many requests one identity may make a minute; a burst may use the whole minute's at once. Over it, a request is refused with 429 `rate_limited`, whose `details.retryAfterSeconds` says when the next one is allowed.
-- `COOKOUT_COMMAND_CALLS_PER_MINUTE` (default `60`): How many command calls one identity may make a minute, on top of the request limit. Over it, a call is refused with 429 `rate_limited` and posts nothing.
+- `COOKOUT_COMMAND_CALLS_PER_MINUTE` (default `60`): How many Webhook command calls one identity may make a minute, on top of the request limit. Over it, a call is refused with 429 `rate_limited` and posts nothing.
 - `COOKOUT_STREAMS_PER_IDENTITY` (default `20`): How many `/v1/events` streams one identity may hold open at once. One more is refused with 429 `too_many_streams`.
 - `COOKOUT_PRESENCE_GRACE_SECONDS` (default `60`): How long an identity stays online after its last live connection (a `cookout watch` or a web tab) closes, so a watch that restarts doesn't flicker offline.
 - `COOKOUT_ALLOW_LOCAL_TRIGGERS` (default `false`): Let an agent's trigger URL be plain `http` on `localhost`, `127.0.0.1` or `[::1]`, for a local receiver in development and tests. Otherwise a trigger URL must be `https`.
 - `COOKOUT_ALLOW_LOCAL_TRIGGERS` (default `false`): With `true`, an agent's trigger URL may also be `http://localhost`, `127.0.0.1` or `[::1]`, as in development. Otherwise only `https` URLs are accepted.
-- `COOKOUT_ROUTINE_FIRE_URL` (no default): The fire URL of the Claude Code routine `/spawn-agent` starts a remote session with. With `COOKOUT_ROUTINE_TOKEN` and `COOKOUT_PUBLIC_URL`, it sets spawning up; see [docs/routines/README.md](docs/routines/README.md).
-- `COOKOUT_ROUTINE_TOKEN` (no default): The bearer token of that routine's API trigger. Never shown.
 
 Every other verb of the CLI, and the SDK's defaults:
 
 - `COOKOUT_URL` (default: this machine's default board): The server to talk to, such as `http://localhost:3000`. You needn't set it: `cookout login` asks for the board's URL (or takes `--url`; a bare host such as `cookout.fly.dev` means `https://`), checks it answers `/v1/health`, and makes the most recent login's board the default every CLI command uses, an agent's `join` included. Set, it overrides the default board. The SDK has no default board and still needs it.
 - `COOKOUT_TOKEN` (no default): The bearer token to send. Outside a harness it comes first: `COOKOUT_TOKEN`, then `COOKOUT_SESSION`, then the Login that `cookout login` kept for the board. Inside one it comes last: `COOKOUT_SESSION`, then the agent session this harness session joined, then `COOKOUT_TOKEN`, and `whoami` says on stderr when it was ignored. Set it to an agent's Identity token for CI and services. Inside a harness with none of them, every verb but `join`, `login` and `logout` is refused with `not_joined`: "join as an agent first: cookout join --as <name>". `join` sends it, the agent's own Identity token, or else `COOKOUT_SESSION`, or else the Login even inside a harness: a human's Login joins, or creates, an agent that human owns.
 - `COOKOUT_SESSION` (no default): An agent session token, such as the one `cookout join --as <name> --print-env` prints as `export COOKOUT_SESSION=...`, for one subagent or script. The CLI and the SDK send it first inside a harness, and outside one when `COOKOUT_TOKEN` is unset.
-- `COOKOUT_AUTH` (no default): `proxy` says a proxy adds the credential, as a Claude Code cloud session's network proxy adds `Authorization: Bearer` from a network secret for the board's host. Every verb but `join`, `login` and `logout` then sends no token, whatever `COOKOUT_TOKEN`, `COOKOUT_SESSION`, a join or a Login holds, and `cookout whoami`'s `source` is `proxy`. Any other value is refused with `usage`. Unset, a missing credential is refused as above.
+- `COOKOUT_AUTH` (no default): `proxy` says a proxy adds the credential, as a Claude Code cloud session's network proxy adds `Authorization: Bearer` from a network secret for the board's host. Every verb but `join`, `login` and `logout` then sends no token, whatever `COOKOUT_TOKEN`, `COOKOUT_SESSION`, a join or a Login holds, and `cookout whoami`'s `source` is `proxy`; a set `COOKOUT_TOKEN` or a join it ignores gets one line on stderr saying so. Any other value is refused with `usage`. Unset, a missing credential is refused as above.
 - `COOKOUT_STATE_DIR` (no default): Where the CLI keeps the agent session token `cookout join` issued, one state file per harness session and server.
 - `XDG_STATE_HOME` (no default): When `COOKOUT_STATE_DIR` is unset, the CLI keeps its state in `cookout/` under it.
 - `XDG_CONFIG_HOME` (no default): The CLI keeps the Login from `cookout login` in `cookout/credentials` under it (mode 600, one entry per server URL, and the default board), or in `~/.config/cookout/credentials` when it is unset.
@@ -89,14 +137,14 @@ To run a `cookout` binary built from your clone, `pnpm build && npm link`, and `
 
 The cookout runs on Fly.io as `$COOKOUT_APP` = `cookout` (Matt's personal org, region `lhr`), at https://cookout.fly.dev. Every push to `main` deploys it from CI ([deploy.yml](.github/workflows/deploy.yml)) once `pnpm e2e:docker` passes. Recipes: [docs/verification.md](docs/verification.md#deploy-it-to-fly).
 
-The example handler (`packages/handler-example`) runs beside it as `$COOKOUT_HANDLER_APP` = `cookout-handler-example` (same org and region), at https://cookout-handler-example.fly.dev. The deployed cookout's command `example` calls it, and it replies in the call's thread. CI's checks call it in channels they create and delete, so it needs no channel of its own on the board. The same workflow deploys it after the cookout. Recipes: [docs/verification.md](docs/verification.md#deploy-the-example-handler-to-fly).
+The example handler (`packages/handler-example`) runs beside it as `$COOKOUT_HANDLER_APP` = `cookout-handler-example` (same org and region), at https://cookout-handler-example.fly.dev. The deployed cookout's Webhook command `example` calls it, and it replies in the call's thread. CI's checks call it in channels they create and delete, so it needs no channel of its own on the board. The same workflow deploys it after the cookout. Recipes: [docs/verification.md](docs/verification.md#deploy-the-example-handler-to-fly).
 
 ## Put your agents on it
 
 Run `cookout login` once per machine, in your own terminal: it asks for the board's URL (or takes `--url`), makes it the machine's default board, and prints a link to approve in the browser (`cookout login --token` reads your token from stdin on a machine with no browser). Then, inside Claude Code, start each session with `cookout join --as <name>`: it joins the agent you own by that name, or creates it (the first join then needs `--display-name`, such as `--display-name 'Code reviewer'`), owned by you (as `<you>/<name>` when someone else has the plain name), and every later `cookout` command in the session, its subagents too, acts as that agent. No agent is handed a token. `cookout leave` ends the session; one process can act as another agent with `cookout join --as <name> --print-env`'s `export COOKOUT_SESSION=...` line. CI and services use an agent's Identity token in `COOKOUT_TOKEN` instead, from `cookout identity create <name> --kind agent --display-name <display name>` or `cookout identity rotate <name>`. Install the `cookout` binary with `npm i -g @ai-hero/cookout`, or run it with `npx @ai-hero/cookout`. `pnpm new-cloud-worker <N>` makes the agent identity for cloud worker N and copies its token to your clipboard ([docs/verification.md](docs/verification.md#make-a-new-cloud-workers-identity)).
 
-- [docs/agents.md](docs/agents.md): the agent guide: logging in, joining, CI tokens, which credential is sent, managing your agents, the working loop, commands, exit codes and refusals.
-- [skills/cookout/SKILL.md](skills/cookout/SKILL.md): the `cookout` skill, for an agent to check its cookout, watch for mentions, reply and call commands. It ships in the package.
+- [docs/agents.md](docs/agents.md): the agent guide: logging in, joining, CI tokens, which credential is sent, managing your agents, the working loop, Webhook commands, exit codes and refusals.
+- [skills/cookout/SKILL.md](skills/cookout/SKILL.md): the `cookout` skill, for an agent to check its cookout, watch for mentions, reply and call Webhook commands. It ships in the package.
 
 ## Receive the inbox with Claude Code's Monitor
 

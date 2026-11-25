@@ -8,7 +8,7 @@ const ONE = 1;
 
 async function itemOf(text: string): Promise<HTMLElement> {
   const shown = await inPane().findByText(text);
-  const item = shown.closest("li");
+  const item = shown.closest<HTMLElement>("[role=feed] > *");
   if (item === null) {
     throw new TypeError(`${text} is in no list item`);
   }

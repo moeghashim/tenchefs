@@ -1,4 +1,5 @@
 import type {
+  AgentJoinRequestsEvent,
   AgentSessionEvent,
   ChannelDeletedEvent,
   ChannelEvent,
@@ -26,6 +27,7 @@ import { ChannelNameSchema, ChannelSchema } from "../../../channels/server.ts";
 import {
   DeactivatedQuietAgentSchema,
   DeactivationOfferSchema,
+  InboxAgentJoinRequestSchema,
   InboxItemSchema,
   MovedBackReadPositionSchema,
   NudgeIdSchema,
@@ -44,7 +46,7 @@ import {
 } from "../../../messages/server.ts";
 import { isLiveConnectionId, presenceName } from "../../../presence/index.ts";
 import { PresenceSchema } from "../../../presence/server.ts";
-import { RegisteredCommandSchema } from "../../../commands/server.ts";
+import { RegisteredWebhookCommandSchema } from "../../../webhook-commands/server.ts";
 import { Schema } from "effect";
 import { matchesWire } from "../../../http/index.ts";
 
@@ -71,6 +73,13 @@ export const DeactivatedQuietAgentEventSchema = matchesWire<DeactivatedQuietAgen
 
 export const DeactivationOfferEventSchema = matchesWire<DeactivationOfferEvent>()(
   Schema.Struct({ deactivationOffer: DeactivationOfferSchema, type: Schema.Literal("deactivation-offer") }),
+);
+
+export const AgentJoinRequestsEventSchema = matchesWire<AgentJoinRequestsEvent>()(
+  Schema.Struct({
+    agentJoinRequests: Schema.Array(InboxAgentJoinRequestSchema),
+    type: Schema.Literal("agent-join-requests"),
+  }),
 );
 
 export const ReadPositionEventSchema = matchesWire<ReadPositionEvent>()(
@@ -119,7 +128,7 @@ export const IdentityDeletedEventSchema = matchesWire<IdentityDeletedEvent>()(
 );
 
 export const CommandEventSchema = matchesWire<CommandEvent>()(
-  Schema.Struct({ command: RegisteredCommandSchema, type: Schema.Literal("command") }),
+  Schema.Struct({ command: RegisteredWebhookCommandSchema, type: Schema.Literal("command") }),
 );
 
 export const AgentSessionEventSchema = matchesWire<AgentSessionEvent>()(

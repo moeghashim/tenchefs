@@ -13,6 +13,7 @@ interface Vouch {
 
 interface Listed {
   readonly branch: string;
+  readonly event: string;
   readonly runNumber: number;
 }
 
@@ -26,7 +27,8 @@ const NONE = 0;
 const GREEN = "success";
 const COMPLETED = "completed";
 const UNVOUCHED = "unvouched";
-const LIST = ["run", "list", "--workflow", "Check", "--event", "push", "--json", "databaseId,headBranch"];
+const PUSH = "push";
+const LIST = ["run", "list", "--workflow", "Check", "--json", "databaseId,headBranch,event"];
 
 function ghJson(options: Vouch, args: readonly string[]): unknown {
   const ran = run(options.cwd, ...options.gh, ...args);
@@ -38,11 +40,12 @@ function ghJson(options: Vouch, args: readonly string[]): unknown {
 
 function listedOf(value: unknown): readonly Listed[] {
   const branch = text(field(value, "headBranch"));
+  const event = text(field(value, "event"));
   const runNumber = field(value, "databaseId");
-  if (typeof branch !== "string" || typeof runNumber !== "number") {
+  if (typeof branch !== "string" || typeof event !== "string" || typeof runNumber !== "number") {
     return [];
   }
-  return [{ branch, runNumber }];
+  return [{ branch, event, runNumber }];
 }
 
 function headSha(options: Vouch): string {
@@ -52,7 +55,9 @@ function headSha(options: Vouch): string {
 
 function voucherOf(options: Vouch, sha: string): Listed | typeof UNVOUCHED {
   const runs = list(ghJson(options, [...LIST, "--commit", sha])) ?? [];
-  const found = runs.flatMap((value) => listedOf(value)).find(({ branch }) => branch.startsWith(options.branchPrefix));
+  const found = runs
+    .flatMap((value) => listedOf(value))
+    .find(({ branch, event }) => event === PUSH && branch.startsWith(options.branchPrefix));
   return found ?? UNVOUCHED;
 }
 

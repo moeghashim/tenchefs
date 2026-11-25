@@ -1,9 +1,9 @@
 import type { Identity, IdentityName } from "../../sdk/index.ts";
+import { KeyAnnouncements, ScheduleLists, SidebarKeys, SidebarView } from "../../views/index.tsx";
 import type { ReactNode } from "react";
 import type { Route } from "../../paths/index.ts";
-import { SidebarView } from "../../views/index.tsx";
 import type { Stores } from "./stores.ts";
-import { Workspace } from "../../design-system/index.tsx";
+import { Workspace } from "../../design-system/layout.tsx";
 import { WorkspaceBody } from "./workspace-body.tsx";
 import { useSyncExternalStore } from "react";
 
@@ -20,15 +20,33 @@ export function SignedInView(props: SignedInViewProps): ReactNode {
   const { sidebar } = useSyncExternalStore(layout.subscribe, layout.snapshot);
   const handleToggle = layout.toggleSidebar;
   return (
-    <Workspace onToggleSidebar={handleToggle} sidebarOpen={sidebar}>
-      <SidebarView
-        board={stores.board}
-        identity={props.identity}
-        layout={layout}
-        route={props.route}
-        unread={stores.unread}
-      />
-      <WorkspaceBody me={props.identity.name} profile={props.profile} route={props.route} stores={stores} />
-    </Workspace>
+    <ScheduleLists me={props.identity} scheduleList={stores.scheduleList} scheduling={stores.scheduling}>
+      <Workspace onToggleSidebar={handleToggle} sidebarOpen={sidebar}>
+        <SidebarView
+          creation={stores.channelCreation}
+          identity={props.identity}
+          keymap={stores.keymap}
+          layout={layout}
+          route={props.route}
+          scheduleList={stores.scheduleList}
+          unread={stores.unread}
+        />
+        <SidebarKeys
+          keymap={stores.keymap}
+          layout={layout}
+          me={props.identity.name}
+          scheduleList={stores.scheduleList}
+          unread={stores.unread}
+        />
+        <KeyAnnouncements keymap={stores.keymap} />
+        <WorkspaceBody
+          me={props.identity.name}
+          profile={props.profile}
+          route={props.route}
+          sidebarOpen={sidebar}
+          stores={stores}
+        />
+      </Workspace>
+    </ScheduleLists>
   );
 }

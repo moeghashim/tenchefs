@@ -1,15 +1,9 @@
-import { Alert } from "../../design-system/index.tsx";
-import type { Commands } from "../../board/index.ts";
+import { Alert } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
-import { useSyncExternalStore } from "react";
+import { useCommands } from "./use-board.ts";
 
-interface CommandsRefusalProps {
-  readonly commands: Commands;
-}
-
-export function CommandsRefusal(props: CommandsRefusalProps): ReactNode {
-  const { commands } = props;
-  const listed = useSyncExternalStore(commands.subscribe, commands.snapshot);
+export function CommandsRefusal(): ReactNode {
+  const listed = useCommands();
   if (listed.status !== "failed") {
     return null;
   }

@@ -1,4 +1,4 @@
-import { DateText, Muted } from "../../design-system/index.tsx";
+import { DateText, Muted } from "../../design-system/content.tsx";
 import type { Identity } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import { kindOf } from "./kind-of.ts";

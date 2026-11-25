@@ -1,4 +1,6 @@
 import type { Command, Identity, IdentityName } from "../../sdk/index.ts";
+import type { KeptText } from "./kept-text.ts";
+import { sameSnapshot } from "../../board/index.ts";
 
 const MOST_SUGGESTIONS = 8;
 const NOTHING = 0;
@@ -6,7 +8,7 @@ const AT_SIGN = 1;
 const ONE = 1;
 const STEPS = { down: ONE, up: -ONE } as const;
 
-const typedMention = /(?<![\w.@-])@[a-z0-9-]*$/iu;
+const typedMention = /(?<![\w.@-])@ ?[a-z0-9-]*$/iu;
 const typedCommand = /^\/[a-z0-9-]*$/u;
 
 function membersFirst(matches: readonly Identity[], members: readonly IdentityName[]): readonly Identity[] {
@@ -26,7 +28,7 @@ function suggestionsFor(sources: Sources, text: string, caret: number): readonly
     return [];
   }
   const [mention] = found;
-  const prefix = mention.slice(AT_SIGN).toLowerCase();
+  const prefix = mention.slice(AT_SIGN).trimStart().toLowerCase();
   const matches = sources
     .identities()
     .filter((identity) => identity.deactivated !== true && startsWithTyped(identity, prefix));
@@ -49,6 +51,7 @@ interface DraftSnapshot {
   readonly command: Command | null;
   readonly highlighted: number;
   readonly returned: boolean;
+  readonly dismissed: boolean;
   readonly focusRequests: number;
 }
 
@@ -62,6 +65,7 @@ const EMPTY = {
   caret: NOTHING,
   command: null,
   commands: [],
+  dismissed: false,
   focusRequests: NOTHING,
   highlighted: NOTHING,
   returned: false,
@@ -79,6 +83,7 @@ function written(sources: Sources, previous: DraftSnapshot, typed: Typed): Draft
     caret,
     command: previous.command,
     commands,
+    dismissed: false,
     focusRequests: previous.focusRequests,
     highlighted: NOTHING,
     returned: false,
@@ -131,7 +136,23 @@ function highlightMoved(snapshot: DraftSnapshot, direction: "down" | "up"): Draf
 }
 
 function dismissed(snapshot: DraftSnapshot): DraftSnapshot {
-  return { ...snapshot, commands: [], highlighted: NOTHING, suggestions: [] };
+  return { ...snapshot, commands: [], dismissed: true, highlighted: NOTHING, suggestions: [] };
+}
+
+function optionNames(snapshot: DraftSnapshot): readonly string[] {
+  return [
+    ...snapshot.commands.map((command) => command.name),
+    ...snapshot.suggestions.map((identity) => identity.name),
+  ];
+}
+
+function refreshed(sources: Sources, snapshot: DraftSnapshot): DraftSnapshot {
+  if (snapshot.dismissed) {
+    return snapshot;
+  }
+  const result = written(sources, snapshot, snapshot);
+  const kept = optionNames(result).indexOf(optionNames(snapshot)[snapshot.highlighted] ?? "");
+  return { ...result, highlighted: Math.max(NOTHING, kept), returned: snapshot.returned };
 }
 
 function unpicked(snapshot: DraftSnapshot): DraftSnapshot {
@@ -147,6 +168,7 @@ interface Changes {
   readonly dismissed: (snapshot: DraftSnapshot) => DraftSnapshot;
   readonly unpicked: (snapshot: DraftSnapshot) => DraftSnapshot;
   readonly repliedTo: (snapshot: DraftSnapshot, name: string | null) => DraftSnapshot;
+  readonly refreshed: (snapshot: DraftSnapshot) => DraftSnapshot;
 }
 
 function changesFor(sources: Sources): Changes {
@@ -156,10 +178,44 @@ function changesFor(sources: Sources): Changes {
     highlightMoved,
     mentioned: (snapshot, name) => mentioned(sources, snapshot, name),
     picked,
+    refreshed: (snapshot) => refreshed(sources, snapshot),
     repliedTo: (snapshot, name) => repliedTo(sources, snapshot, name),
     unpicked,
     written: (previous, typed) => written(sources, previous, typed),
   };
 }
 
-export { type DraftSnapshot, type Sources, EMPTY, changesFor };
+interface DraftChanges {
+  readonly current: () => DraftSnapshot;
+  readonly change: (update: (snapshot: DraftSnapshot) => DraftSnapshot) => void;
+}
+
+interface Keeping {
+  readonly kept: KeptText;
+  readonly notify: () => void;
+}
+
+function restored(text: string): DraftSnapshot {
+  return dismissed({ ...EMPTY, caret: text.length, text });
+}
+
+function draftChanges({ kept, notify }: Keeping): DraftChanges {
+  let current: DraftSnapshot = restored(kept.text());
+  return {
+    change: (update) => {
+      const next = update(current);
+      if (next.text !== current.text) {
+        kept.keep(next.text);
+      }
+      if (!sameSnapshot({ after: next, before: current })) {
+        current = next;
+        notify();
+      }
+    },
+    current: () => current,
+  };
+}
+
+export { type DraftSnapshot, type Sources, EMPTY, changesFor, draftChanges };
+export { type KeptText, keptTextIn } from "./kept-text.ts";
+export type { BrowserStorage } from "../../browser-storage/index.ts";

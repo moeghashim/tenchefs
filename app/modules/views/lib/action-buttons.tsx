@@ -1,5 +1,5 @@
 import { AgentButtons } from "./agent-buttons.tsx";
-import { ButtonRow } from "../../design-system/index.tsx";
+import { ButtonRow } from "../../design-system/controls.tsx";
 import type { Identity } from "../../sdk/index.ts";
 import type { IdentityActions } from "../../composer/index.ts";
 import type { ReactNode } from "react";

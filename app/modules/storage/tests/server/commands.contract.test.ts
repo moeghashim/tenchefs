@@ -1,11 +1,11 @@
 import { Array as Arr, Effect, pipe } from "effect";
 import {
-  commandFixture as command,
-  commandName,
+  webhookCommandFixture as command,
   handlerFixture as handler,
   identityFixture,
   openStore,
   storageLayers,
+  webhookCommandName,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { tokenHash } from "../../../identities/index.ts";
@@ -17,7 +17,7 @@ const unavailable = { _tag: "StorageUnavailable" };
 it.effect.each(storageLayers)("storage contract ($adapter): a new store has no commands", ({ layer }) =>
   Effect.gen(function* newStore() {
     const { storage } = yield* openStore(layer);
-    const commands = yield* storage.listCommands;
+    const commands = yield* storage.listWebhookCommands;
 
     expect(commands).toStrictEqual([]);
   }),
@@ -32,13 +32,13 @@ it.effect.each(storageLayers)(
       const alpha = command("alpha");
       const added = yield* Effect.forEach(
         [zed, alpha],
-        (stored) => storage.addCommand(stored, handler(stored.command.name)),
+        (stored) => storage.addWebhookCommand(stored, handler(stored.command.name)),
         ONE_AT_A_TIME,
       );
-      const commands = yield* storage.listCommands;
+      const commands = yield* storage.listWebhookCommands;
       const [found, missing] = yield* Effect.forEach(
         ["zed", "nowhere"],
-        (name) => storage.findCommand(commandName(name)),
+        (name) => storage.findWebhookCommand(webhookCommandName(name)),
         ONE_AT_A_TIME,
       );
 
@@ -58,8 +58,8 @@ it.effect.each(storageLayers)(
       const { storage } = yield* openStore(layer);
       const owned = identityFixture("owned", { owner: "matt" });
       yield* storage.createIdentity(owned, tokenHash("hash:owned"));
-      yield* storage.addCommand(command("fresh"), handler("fresh"));
-      yield* storage.addCommand(command("owned"), handler("owned"));
+      yield* storage.addWebhookCommand(command("fresh"), handler("fresh"));
+      yield* storage.addWebhookCommand(command("owned"), handler("owned"));
       const identities = yield* storage.listIdentities();
       const ownedToken = yield* storage.findIdentityByTokenHash(tokenHash("hash:owned"));
 
@@ -74,14 +74,14 @@ it.effect.each(storageLayers)(
     Effect.gen(function* refused() {
       const { storage } = yield* openStore(emptyLayer);
       yield* storage.createIdentity(identityFixture("ada", { kind: "human" }), tokenHash("hash:ada"));
-      yield* storage.addCommand(command("deploy"), handler("deploy"));
+      yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
       const results = yield* Effect.forEach(
         [command("deploy", { secret: "hmac_other" }), command("ada")],
-        (stored) => storage.addCommand(stored, handler(stored.command.name)),
+        (stored) => storage.addWebhookCommand(stored, handler(stored.command.name)),
         ONE_AT_A_TIME,
       );
-      const commands = yield* storage.listCommands;
-      const found = yield* storage.findCommand(commandName("deploy"));
+      const commands = yield* storage.listWebhookCommands;
+      const found = yield* storage.findWebhookCommand(webhookCommandName("deploy"));
       const identities = yield* storage.listIdentities();
 
       expect({ commands, results }).toStrictEqual({
@@ -98,11 +98,11 @@ it.effect.each(storageLayers)(
   ({ layer }) =>
     Effect.gen(function* replaceSecret() {
       const { storage } = yield* openStore(layer);
-      yield* storage.addCommand(command("deploy"), handler("deploy"));
+      yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
       const { secret } = command("deploy", { secret: "hmac_new" });
-      const replaced = yield* storage.replaceCommandSecret(commandName("deploy"), secret);
-      const missing = yield* storage.replaceCommandSecret(commandName("nowhere"), secret);
-      const found = yield* storage.findCommand(commandName("deploy"));
+      const replaced = yield* storage.replaceWebhookCommandSecret(webhookCommandName("deploy"), secret);
+      const missing = yield* storage.replaceWebhookCommandSecret(webhookCommandName("nowhere"), secret);
+      const found = yield* storage.findWebhookCommand(webhookCommandName("deploy"));
 
       expect({ found, replaced }).toStrictEqual({
         found: command("deploy", { secret: "hmac_new" }),
@@ -119,9 +119,9 @@ it.effect.each(storageLayers)(
       const { storage } = yield* openStore(layer);
       const results = yield* pipe(
         Arr.makeBy(AT_ONCE, () => command("grill")),
-        Effect.forEach((wanted) => storage.addCommand(wanted, handler("grill")), { concurrency: "unbounded" }),
+        Effect.forEach((wanted) => storage.addWebhookCommand(wanted, handler("grill")), { concurrency: "unbounded" }),
       );
-      const commands = yield* storage.listCommands;
+      const commands = yield* storage.listWebhookCommands;
 
       expect(Arr.filter(results, (result) => result === "added")).toStrictEqual(["added"]);
       expect(commands).toStrictEqual([command("grill").command]);
@@ -132,10 +132,12 @@ it.effect.each(storageLayers)("storage contract ($adapter): commands cannot be u
   Effect.gen(function* closedStore() {
     const { close, storage } = yield* openStore(layer);
     yield* close;
-    const listed = yield* Effect.flip(storage.listCommands);
-    const added = yield* Effect.flip(storage.addCommand(command("late"), handler("late")));
-    const found = yield* Effect.flip(storage.findCommand(commandName("late")));
-    const replaced = yield* Effect.flip(storage.replaceCommandSecret(commandName("late"), command("late").secret));
+    const listed = yield* Effect.flip(storage.listWebhookCommands);
+    const added = yield* Effect.flip(storage.addWebhookCommand(command("late"), handler("late")));
+    const found = yield* Effect.flip(storage.findWebhookCommand(webhookCommandName("late")));
+    const replaced = yield* Effect.flip(
+      storage.replaceWebhookCommandSecret(webhookCommandName("late"), command("late").secret),
+    );
 
     expect([listed, added, found, replaced]).toMatchObject([unavailable, unavailable, unavailable, unavailable]);
   }),

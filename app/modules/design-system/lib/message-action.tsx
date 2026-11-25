@@ -1,7 +1,9 @@
 import { HoverAction } from "./hover-action.tsx";
 import { HoverButton } from "./hover-button.tsx";
+import { MessageKeys } from "./message-keys-parts.ts";
 import type { ReactNode } from "react";
 import { ReplyIcon } from "./reply-icon.tsx";
+import { useContext } from "react";
 
 interface MessageActionParts {
   readonly actionHref: string | null;
@@ -11,9 +13,10 @@ interface MessageActionParts {
 
 export function MessageAction(parts: MessageActionParts): ReactNode {
   const { actionHref, onAction } = parts;
+  const { keys } = useContext(MessageKeys).reply;
   if (actionHref !== null) {
     return (
-      <HoverAction href={actionHref} name={parts.actionLabel}>
+      <HoverAction href={actionHref} keys={keys} name={parts.actionLabel}>
         <ReplyIcon />
       </HoverAction>
     );
@@ -21,7 +24,7 @@ export function MessageAction(parts: MessageActionParts): ReactNode {
   const handleAction = onAction;
   return (
     handleAction !== null && (
-      <HoverButton name={parts.actionLabel} onClick={handleAction}>
+      <HoverButton keys={keys} name={parts.actionLabel} onClick={handleAction}>
         <ReplyIcon />
       </HoverButton>
     )

@@ -56,6 +56,59 @@ function passOf(log: readonly string[], theme: Theme): readonly string[] {
   return log.slice(start, end + THROUGH_STOP).map((line) => line.replaceAll(theme, "<theme>"));
 }
 
+const STANDARD_SCREENS = [
+  "inbox",
+  "inbox-more",
+  "inbox-nudge",
+  "inbox-offer",
+  "inbox-deactivated",
+  "inbox-loading",
+  "inbox-row-menu",
+  "inbox-thread",
+  "inbox-narrow",
+  "inbox-channel",
+  "inbox-marked",
+  "channel",
+  "channel-hover",
+  "attachments",
+  "attachment-full",
+  "composer-files",
+  "composer-refusal",
+  "message-menu",
+  "channel-menu",
+  "person-menu",
+  "thread",
+  "thread-menu",
+  "receipt",
+  "identity-card",
+  "identity-card-person",
+  "identity-card-deactivated",
+  "identity-card-brought-in",
+  "identity-card-no-presence",
+  "people",
+  "profile",
+  "warning",
+  "wakes-on-mention",
+  "unreachable",
+  "admin-profile",
+  "admin-deactivated",
+  "confirm",
+  "settings",
+  "new-channel",
+  "schedule",
+  "narrow",
+  "closed-threads",
+  "closed-thread",
+  "sidebar-narrowest",
+  "sidebar-widest",
+  "collapsed",
+  "shortcut-list",
+  "mention-suggestions",
+  "thread-mention-suggestions",
+  "jump-box",
+  "reconnecting",
+];
+
 it("takes every screen in light on a fresh board, then every screen in dark on another", {
   timeout: 2000,
 }, async () => {
@@ -109,50 +162,7 @@ it("on each theme's board it moves the clock on for the days-later screens, afte
 
 it("lists the standard screens in the order they are taken", { timeout: 2000 }, () => {
   expect.hasAssertions();
-  expect(SCREENS.map((screen) => screen.name)).toStrictEqual([
-    "inbox",
-    "inbox-more",
-    "inbox-nudge",
-    "inbox-offer",
-    "inbox-deactivated",
-    "inbox-loading",
-    "inbox-row-menu",
-    "inbox-thread",
-    "inbox-narrow",
-    "inbox-channel",
-    "inbox-marked",
-    "channel",
-    "channel-hover",
-    "message-menu",
-    "channel-menu",
-    "person-menu",
-    "thread",
-    "thread-menu",
-    "receipt",
-    "identity-card",
-    "identity-card-person",
-    "identity-card-deactivated",
-    "identity-card-brought-in",
-    "identity-card-no-presence",
-    "people",
-    "profile",
-    "warning",
-    "wakes-on-mention",
-    "unreachable",
-    "admin-profile",
-    "admin-deactivated",
-    "confirm",
-    "settings",
-    "new-channel",
-    "schedule",
-    "narrow",
-    "closed-threads",
-    "closed-thread",
-    "sidebar-narrowest",
-    "sidebar-widest",
-    "collapsed",
-    "reconnecting",
-  ]);
+  expect(SCREENS.map((screen) => screen.name)).toStrictEqual(STANDARD_SCREENS);
 });
 
 it("a screen that fails to render is reported, and the others are still taken", { timeout: 2000 }, async () => {
@@ -187,7 +197,7 @@ it("with no flags it takes every screen into no named folder", { timeout: 2000 }
 it("an unknown screen or flag, or a flag with no value, is refused", { timeout: 2000 }, () => {
   expect.hasAssertions();
   expect(() => screenshotOptions(["--only", "nope"])).toThrow(
-    "Unknown screen nope: pick from inbox, inbox-more, inbox-nudge, inbox-offer, inbox-deactivated, inbox-loading, inbox-row-menu, inbox-thread, inbox-narrow, inbox-channel, inbox-marked, channel, channel-hover, message-menu, channel-menu, person-menu, thread, thread-menu, receipt, identity-card, identity-card-person, identity-card-deactivated, identity-card-brought-in, identity-card-no-presence, people, profile, warning, wakes-on-mention, unreachable, admin-profile, admin-deactivated, confirm, settings, new-channel, schedule, narrow, closed-threads, closed-thread, sidebar-narrowest, sidebar-widest, collapsed, reconnecting.",
+    `Unknown screen nope: pick from ${STANDARD_SCREENS.join(", ")}.`,
   );
   expect(() => screenshotOptions(["--theme", "dark"])).toThrow(
     "Unknown flag --theme: use --only <screen> or --out <dir>.",

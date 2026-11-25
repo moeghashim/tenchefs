@@ -11,7 +11,7 @@ const sessionExpiry = isoTime("2026-01-08T00:05:00.000Z");
 const codeHash = tokenHash("hash:code");
 const sessionHash = tokenHash("hash:session");
 const ada = identity("ada", { kind: "human" });
-const agent = identity("spawned-agent", { kind: "agent", owner: ada.name });
+const agent = identity("joining-agent", { kind: "agent", owner: ada.name });
 const WEEK = 604_800;
 
 const joinCode = { agent: agent.name, codeHash, createdAt: created, expiresAt };
@@ -42,7 +42,7 @@ it.effect.each(storageLayers)(
         { expiresAt: sessionExpiry, identity: agent.name, issuedAt: before, status: "redeemed" },
         { status: "gone" },
       ]);
-      expect(used).toMatchObject({ identity: { name: "spawned-agent" }, status: "active" });
+      expect(used).toMatchObject({ identity: { name: "joining-agent" }, status: "active" });
       expect(listed).toMatchObject({ value: { host: "cloud" } });
     }),
 );

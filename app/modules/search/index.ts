@@ -109,6 +109,28 @@ export function matchesQuery(matching: Matching): boolean {
   return matching.query.words.every((asked) => words.some((word) => word.startsWith(asked)));
 }
 
+/**
+ * How much of the text is the query's words: the share of its words that match a query word, from 0 to 1. The in-memory
+ * storage Layer ranks best match by it, so a short message mostly of a word comes before a long one that mentions it
+ * once. A query with no words scores every text 0.
+ * @param matching The text and the parsed query.
+ * @returns The share of the text's words that equal or start with a query word.
+ */
+export function matchingShare(matching: Matching): number {
+  const words = wordsOf(matching.text);
+  if (words.length === NO_WORDS) {
+    return NO_WORDS;
+  }
+  const matched = words.filter((word) => matching.query.words.some((asked) => word.startsWith(asked)));
+  return matched.length / words.length;
+}
+
+/** The orders search results come in: newest first, or best match first, ties newest first. */
+export const searchSorts = ["newest", "best"] as const;
+
+/** One of `searchSorts`. */
+export type SearchSort = (typeof searchSorts)[number];
+
 /** A run of a text: a word that matches a query word, or anything else. */
 export interface TextPiece {
   readonly text: string;

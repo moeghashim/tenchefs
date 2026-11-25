@@ -1,8 +1,7 @@
 import { Array as Arr, Effect, Option, String as Str } from "effect";
-import type { CookoutClient, CookoutEvent, EventStream, Identity } from "../../index.ts";
-import { TestCookout, answer, refusal, testCookout } from "../../../testing/server.ts";
+import { TestCookout, answer, refusal, testCookout, watchingAllChannels } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { Scope } from "effect";
+import type { Identity } from "../../index.ts";
 
 const BAD_REQUEST = 400;
 const FORBIDDEN = 403;
@@ -13,16 +12,6 @@ function displayNameOf(identities: readonly Identity[], name: string): string | 
   return Arr.findFirst(identities, (identity) => identity.name === name).pipe(
     Option.flatMapNullishOr(({ displayName }) => displayName),
     Option.getOrNull,
-  );
-}
-
-function watchingAllChannels(client: CookoutClient): Effect.Effect<AsyncIterator<CookoutEvent>, never, Scope.Scope> {
-  return Effect.map(
-    Effect.acquireRelease(
-      answer(() => client.watch({ allChannels: true })),
-      (events: EventStream) => answer(() => events.close()),
-    ),
-    (events) => events[Symbol.asyncIterator](),
   );
 }
 
@@ -150,7 +139,7 @@ it.effect("a display name change reaches every all-channels watcher at once as a
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const grace = yield* cookout.createIdentity("grace", { kind: "human" });
     yield* cookout.createIdentity("release-bot", { owner: "ada" });
-    const events = yield* watchingAllChannels(grace.client);
+    const events = yield* watchingAllChannels(grace);
     const { identity } = yield* answer(() => ada.client.setDisplayName("release-bot", "Release bot"));
     const event = yield* answer(() => events.next());
 

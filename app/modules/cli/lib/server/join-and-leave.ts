@@ -14,6 +14,7 @@ interface JoinFlags {
   readonly displayName: Option.Option<string>;
   readonly force: boolean;
   readonly idleExpiry: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
 interface JoinOptions extends Omit<JoinFlags, "as"> {
@@ -95,8 +96,9 @@ function naming(displayName: Option.Option<string>): Pick<JoinRequest, "displayN
   });
 }
 
-function joinRequest({ as, displayName, force, idleExpiry }: JoinFlags): JoinRequest {
-  const named = { as, ...naming(displayName) };
+function joinRequest({ as, displayName, force, idleExpiry, sessionUrl }: JoinFlags): JoinRequest {
+  const watched = Option.match(sessionUrl, { onNone: () => NOTHING, onSome: (url) => ({ sessionUrl: url }) });
+  const named = { as, ...naming(displayName), ...watched };
   const asked = Option.match(idleExpiry, {
     onNone: () => named,
     onSome: (expiry) => ({ ...named, idleExpiry: expiry }),
@@ -122,10 +124,13 @@ function isLoginMissing(failure: CallFailure): boolean {
 
 function issue(flags: JoinFlags): Effect.Effect<Issued, CallFailure, AgentSessionStateNeeds> {
   const byBrowser = Effect.flatMap(Effect.orDie(cookoutUrl), (url) =>
-    Effect.map(joinByBrowser({ as: flags.as, idleExpiry: flags.idleExpiry, url }), (issued) => ({
-      issued,
-      source: "agent-join-request" as const,
-    })),
+    Effect.map(
+      joinByBrowser({ as: flags.as, idleExpiry: flags.idleExpiry, sessionUrl: flags.sessionUrl, url }),
+      (issued) => ({
+        issued,
+        source: "agent-join-request" as const,
+      }),
+    ),
   );
   return issueWithCredential(flags).pipe(Effect.catchIf(isLoginMissing, Function.constant(byBrowser)));
 }
@@ -169,23 +174,27 @@ function joinIn(
   return issueAndKeep(joining, { file: file.value, url });
 }
 
-function byCode(code: string, idleExpiry: Option.Option<string>): Joining {
-  const redeemed = Effect.flatMap(Effect.orDie(cookoutUrl), (url) => joinByCode({ code, idleExpiry, url }));
+function byCode(code: string, { idleExpiry, sessionUrl }: Pick<JoinFlags, "idleExpiry" | "sessionUrl">): Joining {
+  const redeemed = Effect.flatMap(Effect.orDie(cookoutUrl), (url) => joinByCode({ code, idleExpiry, sessionUrl, url }));
   return {
     command: "cookout join --code <code>",
     issue: Effect.map(redeemed, (issued) => ({ issued, source: "join-code" as const })),
   };
 }
 
-function joiningOf({ as, code, ...flags }: JoinOptions): Effect.Effect<Joining, CallFailure> {
-  if (Option.isSome(code) && Option.isSome(flags.displayName)) {
+function joiningByCode(code: string, { as, ...flags }: Omit<JoinOptions, "code">): Effect.Effect<Joining, CallFailure> {
+  if (Option.isSome(flags.displayName)) {
     return Effect.fail(codeWithDisplayName);
   }
+  return Option.match(as, {
+    onNone: () => Effect.succeed(byCode(code, flags)),
+    onSome: () => Effect.fail(codeWithAs),
+  });
+}
+
+function joiningOf({ as, code, ...flags }: JoinOptions): Effect.Effect<Joining, CallFailure> {
   if (Option.isSome(code)) {
-    return Option.match(as, {
-      onNone: () => Effect.succeed(byCode(code.value, flags.idleExpiry)),
-      onSome: () => Effect.fail(codeWithAs),
-    });
+    return joiningByCode(code.value, { as, ...flags });
   }
   if (Option.isNone(as)) {
     return Effect.fail(asMissing);

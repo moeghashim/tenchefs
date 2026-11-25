@@ -28,11 +28,27 @@ const SearchCursorSchema = Schema.String.pipe(
   ),
 );
 
-const SearchQuerySchema = Schema.Struct({
+const FIRST_RESULT = 0;
+
+const OffsetSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(FIRST_RESULT));
+
+const OffsetCursorSchema = Schema.FiniteFromString.pipe(Schema.decodeTo(OffsetSchema));
+
+const NewestQuerySchema = Schema.Struct({
   cursor: Schema.optionalKey(SearchCursorSchema),
   limit: ListMessagesQuerySchema.fields.limit,
   query: Schema.String,
+  sort: Schema.optionalKey(Schema.Literal("newest")),
 }).pipe(Schema.encodeKeys({ query: searchQueryParam }));
+
+const BestQuerySchema = Schema.Struct({
+  cursor: Schema.optionalKey(OffsetCursorSchema),
+  limit: ListMessagesQuerySchema.fields.limit,
+  query: Schema.String,
+  sort: Schema.Literal("best"),
+}).pipe(Schema.encodeKeys({ query: searchQueryParam }));
+
+const SearchQuerySchema = Schema.Union([NewestQuerySchema, BestQuerySchema]);
 
 const SearchResultSchema = matchesWire<SearchResult>()(
   Schema.Struct({ message: MessageSchema, threadClosed: Schema.Boolean }),

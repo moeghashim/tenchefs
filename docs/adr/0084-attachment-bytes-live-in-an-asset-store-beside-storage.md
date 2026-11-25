@@ -2,6 +2,8 @@
 
 2026-11-24 (mattpocock/cookout#373, the first slice of #371).
 
+Superseded in part on 2026-11-24 by [ADR 0098](0098-a-message-may-have-attachments-and-no-text.md): the second release takes a post with attachments and no text (mattpocock/cookout#398).
+
 ## Decision
 
 - **Two seams.** `Storage` keeps each attachment's record (ID, name, content type, size, whether it is an image) with its message, on memory, SQLite and Postgres alike. `AssetStore` (`app/modules/storage/lib/server/asset-store.ts`) keeps the bytes: `put`, `read` as a stream, and `remove`. The memory store serves tests and `cookout dev`; the disk store serves `cookout serve`, in `COOKOUT_ASSETS_DIR`, or an `assets` folder beside `COOKOUT_DB` when that is empty. A later object store is a third `AssetStore`, with no change to `Storage`.

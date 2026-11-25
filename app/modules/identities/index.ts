@@ -1,24 +1,25 @@
 /**
- * Identities on the wire, shared by the server, the SDK and the web: the
- * `IdentityName`, `Owner`, `Token` and `TokenHash` brands, the two identity kinds and their
- * constructors, the identity as the server shows it, the routes, and the
- * error codes bearer auth, the admin check and identity creation answer with.
+ * Identities on the wire, shared by the server, the SDK and the web: the `IdentityName`, `Owner`, `Token` and
+ * `TokenHash` brands, the two identity kinds and their constructors, the identity as the server shows it (its avatar
+ * too), the routes, and the error codes bearer auth, the admin check and identity creation answer with.
  */
 import type { Described } from "./client.ts";
 import type { IsoTime } from "../time/index.ts";
+import type { WithAvatar } from "../avatars/index.ts";
+import { avatarErrorCodes } from "../avatars/index.ts";
 import { identityDeletionErrorCodes } from "./lib/deletion.ts";
 
 declare const brand: unique symbol;
 
 type Brand<Name extends string> = string & { readonly [brand]: Name };
 
-type IdentityFields = {
+type IdentityFields = WithAvatar<{
   readonly name: IdentityName;
   readonly displayName?: DisplayName;
   readonly admin: boolean;
   readonly createdAt: IsoTime;
   readonly deactivated?: true;
-};
+}>;
 
 /**
  * An identity's name: 1–64 lowercase letters, digits or `-`, so `@name` mentions parse cleanly, or two such parts
@@ -160,19 +161,18 @@ export interface DeactivateIdentityResponse {
 
 /**
  * The body of `POST /v1/identities`. Any human may create an agent it owns; only an admin may create a human, or an
- * agent owned by another human (403 `admin_only`). An agent may create nothing (403 `human_only`).
+ * agent owned by another human (403 `admin_only`). An agent creates only agents for its own owner, with no token.
  */
 export type CreateIdentityRequest = {
   /** A plain name, or `<owner>/<name>` for an agent whose owner is `<owner>` (400 `name_not_owned` otherwise). A human's name has no `/`. */
   readonly name: string;
   readonly kind: IdentityKind;
-  /**
-   * An agent's owner: the name of an existing human (400 `owner_not_human` otherwise). Left out, the caller owns the
-   * agent. A human with one is refused with 400.
-   */
+  /** An agent's owner, an existing human (400 `owner_not_human` otherwise); left out, the caller or its owner. */
   readonly owner?: string;
-  /** Trimmed, then 1–80 characters (400 otherwise). */
+  /** Trimmed, then 1–80 characters (400 otherwise). An agent's is required (400 `display_name_required`). */
   readonly displayName?: string;
+  /** An agent's description: trimmed, then 1–500 characters (400 otherwise, or on a human). */
+  readonly description?: string;
 };
 
 /** The body of `PUT /v1/identities/:name/display-name`: the new display name (trimmed, then 1–80 characters), or `null` to clear it. */
@@ -186,7 +186,7 @@ export { type IdentityMessageCountResponse, identityMessageCountPath, identityPa
 /** `GET /v1/whoami`: the identity behind the token. */
 export const whoamiPath = "/v1/whoami";
 
-/** `GET /v1/identities` (any identity) and `POST /v1/identities` (any human; see `CreateIdentityRequest`). */
+/** `GET /v1/identities` (any identity) and `POST /v1/identities` (see `CreateIdentityRequest`). */
 export const identitiesPath = "/v1/identities";
 
 /**
@@ -232,8 +232,8 @@ export const identityOwnerPath = "/v1/identities/:name/owner";
 export const identityDisplayNamePath = "/v1/identities/:name/display-name";
 
 /**
- * `POST /v1/session` (a human's bearer token): logs the web UI in, answering with the identity and a session
- * cookie. An agent is refused with 403 `human_only`. `DELETE /v1/session` clears the cookie.
+ * `POST /v1/session` (a human's bearer token): logs the web UI in, answering with the identity and a cookie holding
+ * a new Login credential (ADR 0103); an agent gets 403 `human_only`. `DELETE /v1/session` revokes it and clears it.
  */
 export const sessionPath = "/v1/session";
 
@@ -295,5 +295,6 @@ export const identityErrorCodes = [
   "name_not_owned",
   "not_deactivated",
   ...identityDeletionErrorCodes,
+  ...avatarErrorCodes,
   "login_request_not_found",
 ] as const;

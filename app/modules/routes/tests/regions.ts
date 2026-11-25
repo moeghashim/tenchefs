@@ -81,7 +81,7 @@ export function inTopBar(): Region {
 }
 
 export function inSearchResults(): Region {
-  return regionOf(() => screen.getByRole("list", { name: "Search results" }));
+  return regionOf(() => screen.getByRole("listbox", { name: "Search results" }));
 }
 
 export function inDialog(): Region {

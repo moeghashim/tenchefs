@@ -1,21 +1,23 @@
-import { Caller, issueToken } from "./auth.ts";
-import { DateTime, Effect, Predicate, Schema, String as Str } from "effect";
 import type {
+  AgentIdentity,
   HumanIdentity,
   Identity,
   IdentityKind,
   IdentityName,
+  IdentityResponse,
   IdentityWithTokenResponse,
   Owner,
   TokenHash,
 } from "../../index.ts";
-import { IdentityNameSchema, OwnerSchema, SentDisplayNameSchema } from "./wire.ts";
+import { DateTime, Effect, Predicate, Schema, String as Str } from "effect";
+import { IdentityNameSchema, OwnerSchema, SentDescriptionSchema, SentDisplayNameSchema } from "./wire.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
 import type { StorageUnavailable } from "../../../storage/server.ts";
 import { identityKinds } from "../../index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
+import { issueToken } from "./auth.ts";
 
 const humanHasNoOwner = Schema.makeFilter(
   (body: { readonly kind: IdentityKind; readonly owner?: Owner }) =>
@@ -27,12 +29,19 @@ const humanNameIsPlain = Schema.makeFilter(
     body.kind === "agent" || !Str.includes("/")(body.name) || { issue: "A human's name has no '/'.", path: ["name"] },
 );
 
+const humanHasNoDescription = Schema.makeFilter(
+  (body: { readonly kind: IdentityKind; readonly description?: string }) =>
+    body.kind === "agent" ||
+    Predicate.isUndefined(body.description) || { issue: "Only an agent has a description.", path: ["description"] },
+);
+
 const CreateIdentityRequestSchema = Schema.Struct({
+  description: Schema.optionalKey(SentDescriptionSchema),
   displayName: Schema.optionalKey(SentDisplayNameSchema),
   kind: Schema.Literals(identityKinds),
   name: IdentityNameSchema,
   owner: Schema.optionalKey(OwnerSchema),
-}).check(humanHasNoOwner, humanNameIsPlain);
+}).check(humanHasNoOwner, humanNameIsPlain, humanHasNoDescription);
 
 type CreateIdentityBody = typeof CreateIdentityRequestSchema.Type;
 
@@ -42,9 +51,15 @@ const BAD_REQUEST = 400;
 const CONFLICT = 409;
 const FORBIDDEN = 403;
 
-const agentCreatesNothing: Refusal = {
+const agentCreatesNoHuman: Refusal = {
   code: "human_only",
-  message: "Only a human can create an identity.",
+  message: "Only a human can create a human. An agent creates only agents, owned by its own owner.",
+  status: FORBIDDEN,
+};
+
+const agentCreatesForOthers: Refusal = {
+  code: "admin_only",
+  message: "An agent creates agents only for its own owner. Leave out --owner, or name its owner.",
   status: FORBIDDEN,
 };
 
@@ -53,6 +68,14 @@ const createsForOthers: Refusal = {
   message: "Only an admin can create a human, or an agent owned by someone else. Leave out --owner to own it yourself.",
   status: FORBIDDEN,
 };
+
+function displayNameRequired(name: IdentityName): Refusal {
+  return {
+    code: "display_name_required",
+    message: `${name} would be a new agent, and a new agent needs a display name: send displayName (--display-name in the CLI).`,
+    status: BAD_REQUEST,
+  };
+}
 
 function identityExists(name: string): Refusal {
   return { code: "identity_exists", message: `The name ${name} is taken.`, status: CONFLICT };
@@ -101,6 +124,32 @@ function withDisplayName(identity: Identity, { displayName }: CreateIdentityBody
   return { ...identity, displayName };
 }
 
+function withDescription(identity: Identity, { description }: CreateIdentityBody): Identity {
+  if (identity.kind === "human" || Predicate.isUndefined(description)) {
+    return identity;
+  }
+  return { ...identity, description };
+}
+
+function requested(identity: Identity, body: CreateIdentityBody): Identity {
+  return withDescription(withDisplayName(identity, body), body);
+}
+
+function agentBroughtInBy(
+  caller: AgentIdentity,
+  body: CreateIdentityBody,
+  createdAt: Identity["createdAt"],
+): Effect.Effect<Identity, Refusal> {
+  const { kind, name, owner = caller.owner } = body;
+  if (kind === "human") {
+    return Effect.fail(agentCreatesNoHuman);
+  }
+  if (owner !== caller.owner) {
+    return Effect.fail(agentCreatesForOthers);
+  }
+  return Effect.succeed({ admin: false, broughtInBy: caller.name, createdAt, kind, name, owner });
+}
+
 function requireMayCreate(caller: HumanIdentity, identity: Identity): Effect.Effect<void, Refusal> {
   if (caller.admin || (identity.kind === "agent" && identity.owner === caller.name)) {
     return Effect.void;
@@ -108,12 +157,12 @@ function requireMayCreate(caller: HumanIdentity, identity: Identity): Effect.Eff
   return Effect.fail(createsForOthers);
 }
 
-const humanCaller: Effect.Effect<HumanIdentity, Refusal, Caller> = Caller.pipe(
-  Effect.filterOrFail(
-    (caller): caller is HumanIdentity => caller.kind === "human",
-    () => agentCreatesNothing,
-  ),
-);
+function requireAgentNamed(identity: Identity): Effect.Effect<void, Refusal> {
+  if (identity.kind === "agent" && Predicate.isUndefined(identity.displayName)) {
+    return Effect.fail(displayNameRequired(identity.name));
+  }
+  return Effect.void;
+}
 
 function storedOrRefused(result: "created" | Refused, identity: Identity): Effect.Effect<void, Refusal> {
   if (result === "created") {
@@ -123,9 +172,14 @@ function storedOrRefused(result: "created" | Refused, identity: Identity): Effec
 }
 
 function storeNew(identity: Identity, hash: TokenHash): Effect.Effect<void, Refusal | StorageUnavailable, Storage> {
-  return Effect.flatMap(Storage, (storage) => storage.createIdentity(identity, hash)).pipe(
-    Effect.flatMap((result) => storedOrRefused(result, identity)),
-  );
+  return Effect.gen(function* storeNewIdentity() {
+    const storage = yield* Storage;
+    const result = yield* storage.createIdentity(identity, hash);
+    yield* storedOrRefused(result, identity);
+    if (identity.kind === "agent" && Predicate.isNotUndefined(identity.description)) {
+      yield* storage.setDescription(identity.name, identity.description);
+    }
+  });
 }
 
 function createIdentity(request: {
@@ -135,11 +189,28 @@ function createIdentity(request: {
   const { body, caller } = request;
   return Effect.gen(function* createRequestedIdentity() {
     const now = yield* DateTime.now;
-    const identity = withDisplayName(newIdentity(caller, body, isoTimeOf(now)), body);
+    const identity = requested(newIdentity(caller, body, isoTimeOf(now)), body);
     yield* requireMayCreate(caller, identity);
+    yield* requireAgentNamed(identity);
     const { token, hash } = yield* issueToken;
     yield* storeNew(identity, hash);
     return { identity, token };
+  });
+}
+
+function createAgentByAgent(request: {
+  readonly caller: AgentIdentity;
+  readonly body: CreateIdentityBody;
+}): Effect.Effect<IdentityResponse, Refusal | StorageUnavailable, Storage | Secrets> {
+  const { body, caller } = request;
+  return Effect.gen(function* createBroughtInAgent() {
+    const now = yield* DateTime.now;
+    const brought = yield* agentBroughtInBy(caller, body, isoTimeOf(now));
+    const identity = requested(brought, body);
+    yield* requireAgentNamed(identity);
+    const { hash } = yield* issueToken;
+    yield* storeNew(identity, hash);
+    return { identity };
   });
 }
 
@@ -152,4 +223,4 @@ function humanAdmin(name: IdentityName): Effect.Effect<Identity> {
   }));
 }
 
-export { CreateIdentityRequestSchema, createIdentity, humanAdmin, humanCaller, ownerNotHuman };
+export { CreateIdentityRequestSchema, createAgentByAgent, createIdentity, humanAdmin, ownerNotHuman };

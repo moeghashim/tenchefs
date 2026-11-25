@@ -1,7 +1,7 @@
 import type { ChannelActions } from "./use-channel-menu.ts";
 import { ChannelBadges } from "./channel-badges.tsx";
 import type { ChannelName } from "../../sdk/index.ts";
-import { NavLink } from "../../design-system/index.tsx";
+import { NavLink } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 import type { UnreadCounts } from "../../unread/index.ts";
 import { hasUnread } from "./unread-counts.ts";

@@ -1,11 +1,12 @@
-import { CardBody, Skeleton } from "../../design-system/index.tsx";
 import type { Message, ReadReceipt, Reply, TopLevelMessage } from "../../sdk/index.ts";
+import { CardBody } from "../../design-system/layout.tsx";
 import { ChannelConversationFailed } from "./channel-conversation-failed.tsx";
 import { ChannelPostStreams } from "./channel-post-streams.tsx";
 import type { MessageBeforeState } from "../../board/index.ts";
 import type { MessageMenu } from "../../unread/index.ts";
 import type { ReactNode } from "react";
 import type { Reply as ReplyAction } from "./use-message-menu.ts";
+import { Skeleton } from "../../design-system/content.tsx";
 
 interface ChannelConversationBodyProps {
   readonly state: MessageBeforeState;

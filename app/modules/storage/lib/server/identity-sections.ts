@@ -16,6 +16,7 @@ function memoryIdentitySections(state: MemoryState): MemoryIdentitySections {
   const { dropLoginCredentials, ...loginRequests } = memoryLoginRequests({
     findIdentity: identities.findIdentity,
     state,
+    tokenRevoked: identities.tokenRevoked,
   });
   const { dropPresence, ...presence } = memoryReach(state);
   const { dropOfflineAlerts, ...offlineAlerts } = memoryOfflineAlerts(state);

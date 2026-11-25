@@ -8,13 +8,14 @@ type SessionState =
   | { readonly status: "logging-in" }
   | { readonly status: "logged-in"; readonly identity: Identity };
 
-type SessionClient = Pick<CookoutClient, "whoami">;
+type SessionClient = Pick<CookoutClient, "whoami" | "logout">;
 
 interface SessionPart {
   readonly show: () => void;
   readonly hide: () => void;
   readonly back: () => void;
   readonly logIn: (token: string) => void;
+  readonly logOut: () => void;
   readonly shown: (identities: Identities) => SessionState;
 }
 
@@ -27,6 +28,7 @@ interface SessionPartOptions {
 interface Answers {
   readonly check: () => Promise<void>;
   readonly logIn: (token: string) => Promise<void>;
+  readonly logOut: () => Promise<void>;
 }
 
 interface Held {
@@ -45,6 +47,7 @@ const ONE = 1;
 const NOT_LOGGED_IN = "token_missing";
 const UNREACHABLE = "unreachable";
 const CHECKING: SessionState = { status: "checking" };
+const LOGGED_OUT: SessionState = { refusal: null, status: "logged-out" };
 
 function shownRefusal(refusal: Refusal): Refusal | null {
   if (refusal.code === NOT_LOGGED_IN) {
@@ -58,19 +61,24 @@ async function after(previous: Promise<void> | null, step: () => Promise<void>):
   await step();
 }
 
-function answersOf(held: Held, { client, url }: Omit<SessionPartOptions, "changed">): Answers {
-  return {
-    check: async () => {
-      try {
-        const { identity } = await client.whoami();
-        held.put({ identity, status: "logged-in" });
-      } catch (error: unknown) {
-        const refusal = refusalOf(error);
-        if (held.state().status !== "logged-in" || refusal.code !== UNREACHABLE) {
-          held.put({ refusal: shownRefusal(refusal), status: "logged-out" });
-        }
+function checkOf(held: Held, client: SessionClient): () => Promise<void> {
+  return async () => {
+    try {
+      const { identity } = await client.whoami();
+      held.put({ identity, status: "logged-in" });
+    } catch (error: unknown) {
+      const refusal = refusalOf(error);
+      if (held.state().status !== "logged-in" || refusal.code !== UNREACHABLE) {
+        held.put({ refusal: shownRefusal(refusal), status: "logged-out" });
       }
-    },
+    }
+  };
+}
+
+function answersOf(held: Held, { client, url }: Omit<SessionPartOptions, "changed">): Answers {
+  const check = checkOf(held, client);
+  return {
+    check,
     logIn: async (token) => {
       held.put({ status: "logging-in" });
       try {
@@ -78,6 +86,14 @@ function answersOf(held: Held, { client, url }: Omit<SessionPartOptions, "change
         held.put({ identity, status: "logged-in" });
       } catch (error: unknown) {
         held.put({ refusal: refusalOf(error), status: "logged-out" });
+      }
+    },
+    logOut: async () => {
+      try {
+        await client.logout();
+        held.put(LOGGED_OUT);
+      } catch {
+        await check();
       }
     },
   };
@@ -120,7 +136,7 @@ function createSessionPart(options: SessionPartOptions): SessionPart {
     },
     state: () => current,
   };
-  const { check, logIn } = answersOf(held, options);
+  const { check, logIn, logOut } = answersOf(held, options);
   return {
     back: () => {
       if (readers > NONE) {
@@ -134,6 +150,9 @@ function createSessionPart(options: SessionPartOptions): SessionPart {
       queue = after(queue ?? check(), async () => {
         await logIn(token);
       });
+    },
+    logOut: () => {
+      queue = after(queue, logOut);
     },
     show: () => {
       readers += ONE;

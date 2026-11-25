@@ -1,6 +1,7 @@
-import { Alert, LineForm } from "../../design-system/index.tsx";
 import { useCallback, useSyncExternalStore } from "react";
+import { Alert } from "../../design-system/content.tsx";
 import type { DisplayNameDraft } from "../../composer/index.ts";
+import { LineForm } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 
 interface DisplayNameFieldProps {

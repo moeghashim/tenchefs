@@ -39,7 +39,7 @@ async function posted(channel: string): Promise<Message> {
 }
 
 async function shownTime(): Promise<HTMLElement> {
-  const list = await screen.findByRole("list", { name: "Messages" });
+  const list = await screen.findByRole("feed", { name: "Messages" });
   const article = await within(list).findByRole("article");
   return within(article).getByText(SHOWN_TIME);
 }
@@ -100,7 +100,7 @@ it("a message's time ticks live from just now to 1 minute ago, and its hover sho
   expect([
     before,
     after.getAttribute("datetime"),
-    timeTooltipOf(() => within(screen.getByRole("list", { name: "Messages" })).getByRole("article")),
+    timeTooltipOf(() => within(screen.getByRole("feed", { name: "Messages" })).getByRole("article")),
   ]).toStrictEqual(["just now", message.createdAt, [expect.stringMatching(/\d{4} at \d\d:\d\d$/u)]]);
 
   unmount();

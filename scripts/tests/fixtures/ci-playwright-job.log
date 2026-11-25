@@ -1,0 +1,119 @@
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5144056Z        10.7s  app/modules/routes/tests/browser/identity-card.browser.test.ts
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5144828Z         9.2s  app/modules/routes/tests/browser/inbox-conversation.browser.test.ts
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5145672Z         8.6s  app/modules/routes/tests/browser/catch-up.browser.test.ts
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5146312Z         7.8s  app/modules/routes/tests/browser/home.browser.test.ts
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5146784Z      First error:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5148200Z          1) [chromium] › app/modules/routes/tests/browser/inbox-open.browser.test.ts:102:1 › an Inbox thread address without a message still opens, scrolled to the newest message 
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5149151Z        
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5149527Z            Error: expect(locator).toBeInViewport() failed
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5149896Z        
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5150627Z            Locator: getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last()
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5151353Z            Expected: in viewport
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5151655Z            Timeout: 10000ms
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5152011Z            Error: element(s) not found
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5152386Z        
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5152603Z            Call log:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5153353Z              - Expect "toBeInViewport" getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last() with timeout 10000ms
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5154568Z              - waiting for getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last()
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5155104Z        
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5155313Z        
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5156069Z              107 |   const newest = inConversation(page).getByRole("article").filter({ hasText: "Step 1 done" });
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5156676Z              108 |
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5156952Z            > 109 |   await expect(newest.last()).toBeInViewport();
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5157351Z                  |                               ^
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5157593Z              110 | });
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5157857Z              111 |
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5158125Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5158435Z      Running 44 tests using 2 workers, shard 1 of 3
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5158802Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5159917Z        ✓   2 [chromium] › app/modules/routes/tests/browser/approve.browser.test.ts:45:1 › a human opens a login request's approval link, checks the code, and approves it (5.6s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5162072Z        ✓   1 [chromium] › app/modules/routes/tests/browser/catch-up.browser.test.ts:60:1 › a message, a reply and an unread count from while the live link was down appear once it is back, with no reload (8.6s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5225940Z        ✓  41 [chromium] › app/modules/routes/tests/browser/keymap.browser.test.ts:76:1 › on a Mac, Ctrl+K in the reply box leaves the search box closed (3.8s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5227352Z        ✓  42 [chromium] › app/modules/routes/tests/browser/keymap.browser.test.ts:88:1 › off a Mac, Cmd+K leaves the search box closed (3.8s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5228610Z        ✓  43 [chromium] › app/modules/routes/tests/browser/keymap.browser.test.ts:98:1 › escape closes the profile panel (4.6s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5230110Z        ✓  44 [chromium] › app/modules/routes/tests/browser/keymap.browser.test.ts:110:1 › single-letter keys typed in the reply box type their letters and trigger nothing (3.7s)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5230979Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5231199Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5232252Z        1) [chromium] › app/modules/routes/tests/browser/inbox-open.browser.test.ts:102:1 › an Inbox thread address without a message still opens, scrolled to the newest message 
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5233150Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5233502Z          Error: expect(locator).toBeInViewport() failed
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5233896Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5234589Z          Locator: getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last()
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5235225Z          Expected: in viewport
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5235653Z          Timeout: 10000ms
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5236009Z          Error: element(s) not found
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5236319Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5236538Z          Call log:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5237332Z            - Expect "toBeInViewport" getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last() with timeout 10000ms
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5238587Z            - waiting for getByRole('complementary', { name: 'Conversation' }).getByRole('article').filter({ hasText: 'Step 1 done' }).last()
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5239369Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5239564Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5240069Z            107 |   const newest = inConversation(page).getByRole("article").filter({ hasText: "Step 1 done" });
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5240576Z            108 |
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5240914Z          > 109 |   await expect(newest.last()).toBeInViewport();
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5241301Z                |                               ^
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5241635Z            110 | });
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5241855Z            111 |
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5242463Z            112 | test("clicking a seen Inbox item in a Closed thread shows its thread, with its message in view", async ({ page }) => {
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5243541Z              at /home/runner/work/cookout/cookout/app/modules/routes/tests/browser/inbox-open.browser.test.ts:109:31
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5244191Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5244925Z          Error Context: test-results/inbox-open.browser-an-Inbo-fd2ed-olled-to-the-newest-message-chromium/error-context.md
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5245787Z      
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5246017Z        1 failed
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5247215Z          [chromium] › app/modules/routes/tests/browser/inbox-open.browser.test.ts:102:1 › an Inbox thread address without a message still opens, scrolled to the newest message 
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5248009Z        43 passed (1.8m)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5267489Z ##[warning]browser took 110.0s, over its 30s budget. A time budget warns and never fails the run (ADR 0030). Slowest files: app/modules/routes/tests/browser/inbox-open.browser.test.ts (33.1s), app/modules/routes/tests/browser/keymap.browser.test.ts (23.8s), app/modules/routes/tests/browser/inbox.browser.test.ts (22.4s).
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5274321Z RESULT: FAIL (browser)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5276673Z ##[error]Process completed with exit code 1.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5329183Z ##[group]Run actions/upload-artifact@v4
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5329442Z with:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5329625Z   name: test-timings-browser-1
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5329875Z   path: .timings/*.txt
+browser 1/3	UNKNOWN STEP	.timings/browser.json
+browser 1/3	UNKNOWN STEP	
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5330127Z   include-hidden-files: true
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5330353Z   if-no-files-found: ignore
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5330565Z   compression-level: 6
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5330754Z   overwrite: false
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5330923Z env:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5331134Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.5331392Z ##[endgroup]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.6653898Z (node:4968) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.6654591Z (Use `node --trace-deprecation ...` to show where the warning was created)
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.6738157Z With the provided path, there will be 2 files uploaded
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.6740917Z Artifact name is valid!
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.6741673Z Root directory input is valid!
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.9583544Z Beginning upload of artifact content to blob storage
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:54.9747132Z (node:4968) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.1295163Z Uploaded bytes 6825
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.1785511Z Finished uploading artifact content to blob storage!
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.1786948Z SHA256 digest of uploaded artifact zip is f2a91fbf611590c89e77e38fe99f8b86736db623673eb7c727ac7913491ed886
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.1787734Z Finalizing artifact upload
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5350572Z Artifact test-timings-browser-1.zip successfully finalized. Artifact ID 14979599934
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5351674Z Artifact test-timings-browser-1 has been successfully uploaded! Final size is 6825 bytes. Artifact ID is 14979599934
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5357367Z Artifact download URL: https://github.com/mattpocock/cookout/actions/runs/45521685602/artifacts/14979599934
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5539855Z Post job cleanup.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5543641Z ##[start-action display=Run actions/cache@v4;id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__actions_cache]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5546368Z ##[end-action id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__actions_cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5548220Z ##[start-action display=Run actions/setup-node@v4;id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__actions_setup-node]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5549923Z ##[end-action id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5551483Z ##[start-action display=Run pnpm/action-setup@v4;id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__pnpm_action-setup]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.5578379Z Post job cleanup.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.6755146Z Pruning is unnecessary.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.6840048Z ##[end-action id=__08c87e47-53d5-4b9a-aa22-382585d3efab.__pnpm_action-setup;outcome=success;conclusion=success;duration_ms=128]
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.6898273Z Post job cleanup.
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7606472Z [command]/usr/bin/git version
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7647422Z git version 2.56.1
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7679509Z Temporarily overriding HOME='/home/runner/work/_temp/ed037517-16aa-41c8-b334-02a332589e7a' before making global git config changes
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7681194Z Adding repository directory to the temporary git global config as a safe directory
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7686114Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cookout/cookout
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7746609Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.7766352Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8051676Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8077736Z http.https://github.com/.extraheader
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8089097Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8121278Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8413847Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8445065Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.8829088Z Cleaning up orphan processes
+browser 1/3	UNKNOWN STEP	2026-11-25T00:56:55.9123577Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4, pnpm/action-setup@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -84,6 +84,18 @@ export interface ScheduledMessage {
 }
 
 /**
+ * A Scheduled message as it now stands, sent the moment it is created, edited, paused (by hand or because its creator
+ * was Deactivated), resumed or deleted, and after each run, which may finish it (mattpocock/cookout#391). `deleted` is
+ * true only when it was just deleted: its posts then show "Schedule deleted". Sent on every live stream, so an open
+ * web UI's schedule list and its posts' markers stay current. It has no SSE `id`.
+ */
+export interface ScheduledMessageEvent {
+  readonly type: "scheduled-message";
+  readonly scheduledMessage: ScheduledMessage;
+  readonly deleted: boolean;
+}
+
+/**
  * The body of `POST /v1/scheduled-messages`: a channel, a text, exactly one of `cron` and `at`, and a time zone. An
  * `at` with no offset is read in `timeZone`.
  */

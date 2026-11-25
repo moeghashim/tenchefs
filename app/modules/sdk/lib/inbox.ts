@@ -7,11 +7,10 @@ import type {
   InboxHistoryResponse,
   InboxResponse,
   MarkUnreadResponse,
-  OfflineAlertCalls,
   ReadPositionsResponse,
   SubscriptionResponse,
 } from "../../inbox/index.ts";
-import type { DeactivationOfferCalls, NudgeCalls } from "../../inbox/client.ts";
+import type { DeactivationOfferCalls, NudgeCalls, OfflineAlertCalls } from "../../inbox/client.ts";
 import {
   ackAllPath,
   ackPath,

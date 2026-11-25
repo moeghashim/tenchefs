@@ -1,0 +1,34 @@
+# The cookout on Render: one web service in frankfurt, with the SQLite file on the 1 GB `cookout-data` disk at /data.
+# The README's "Deploy to Render" button creates it (README, "Deploy your own on Render").
+# Exactly one instance, always running: live events, Presence, one live connection per agent, the per-identity limits
+# and the nudge scheduler are all held in the process (ADRs 0033, 0056, 0057, 0066), so a second instance would split
+# them. A disk also allows only one instance, and rules out zero-downtime deploys.
+services:
+  - type: web
+    name: cookout
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # 0.5 CPU and 512 MB at $7/month: the new ID of the legacy `starter`. Free instances can't have a disk.
+    plan: 0.5c-512mb
+    region: frankfurt
+    numInstances: 1
+    # /v1/health is answered whatever the Host, so the check needs no Host header.
+    healthCheckPath: /v1/health
+    # A push to this repo doesn't redeploy every service the button made.
+    autoDeployTrigger: "off"
+    disk:
+      name: cookout-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # The image's port; Render's default is 10000.
+      - key: PORT
+        value: "8080"
+      # Render asks for it when the service is created.
+      - key: COOKOUT_ADMIN_NAME
+        sync: false
+      # A random 256-bit base64 value: 44 characters, over the server's 32. Read it on the service's Environment tab.
+      - key: COOKOUT_ADMIN_TOKEN
+        generateValue: true
+      # No COOKOUT_PUBLIC_URL: unset, it is the RENDER_EXTERNAL_URL Render sets, so a new service deploys this file
+      # unedited.

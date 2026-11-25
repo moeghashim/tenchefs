@@ -102,3 +102,16 @@ it.effect.each(storageLayers)(
       expect(listed).toStrictEqual(Option.none());
     }),
 );
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): an agent session token is listed with the session URL it was issued with",
+  ({ layer }) =>
+    Effect.gen(function* listsSessionUrl() {
+      const storage = yield* withAgents(layer);
+      const sessionUrl = "https://claude.ai/code/session_1";
+      yield* storage.issueAgentSession({ force: false, session: { ...session(FIRST), sessionUrl } });
+      const listed = yield* storage.findLiveAgentSession({ identity: AGENT, now: T0 });
+
+      expect(listed).toStrictEqual(Option.some({ expiresAt: T60, issuedAt: T0, sessionUrl }));
+    }),
+);

@@ -78,8 +78,12 @@ it.effect("a mention in a followed thread appears once with both reasons, and ow
     const cookout = yield* TestCookout;
     const { ann, bob } = yield* board(cookout);
     const parent = yield* post(ann, "parent");
-    yield* post(ann, "my own @ann note", parent);
-    const mention = yield* post(bob, "@ann over to you", parent);
+    const own = yield* post(ann, "my own @ann note", parent);
+    const {
+      message: { id: mention },
+    } = yield* answer(() =>
+      bob.client.createMessage({ channel: "grill", replyTo: parent, seen: own, text: "@ann over to you" }),
+    );
     const { items } = yield* answer(() => ann.client.inbox());
 
     expect(reasonsOf(items)).toStrictEqual([[mention, ["followed-thread", "mention"]]]);

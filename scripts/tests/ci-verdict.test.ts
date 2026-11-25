@@ -1,7 +1,7 @@
-import { COMPLETED, RUN, done, ended, ghOnPath, view } from "./lib/fake-gh.ts";
+import { COMPLETED, RUN, done, ended, ghOnPath, ranFor, view } from "./lib/fake-gh.ts";
 import { execFileSync, spawnSync } from "node:child_process";
 import { expect, it, onTestFinished } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { Responses } from "./lib/fake-gh.ts";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -33,11 +33,20 @@ interface Script {
   readonly script: string;
 }
 
-function lastLine({ args, cwd, gh, script }: Script): string {
+interface Ended {
+  readonly lastLine: string;
+  readonly status: number | null;
+}
+
+function ranScript({ args, cwd, gh, script }: Script): Ended {
   const bin = ghOnPath(gh);
   const merged = `PATH="$0:$PATH" node --import "$0/no-sleep.mjs" "$@" 2>&1`;
   const ran = spawnSync("sh", ["-c", merged, bin, path.resolve(script), ...args], { cwd, encoding: "utf8" });
-  return ran.stdout.trimEnd().split("\n").at(LAST) ?? "";
+  return { lastLine: ran.stdout.trimEnd().split("\n").at(LAST) ?? "", status: ran.status };
+}
+
+function lastLine(script: Script): string {
+  return ranScript(script).lastLine;
 }
 
 function git(cwd: string, ...args: readonly string[]): void {
@@ -74,14 +83,63 @@ it("ends ci:wait with a fail verdict naming the failed jobs", { timeout: 20_000 
   );
 });
 
-it("ends merge-ticket with a fail verdict naming the red ticket's jobs", { timeout: 20_000 }, () => {
+const CUT_OFF_EXIT = 3;
+const LIMIT_MINUTES = 5;
+const LIMITED_WORKFLOW = `jobs:\n  browser:\n    name: browser \${{ matrix.shard }}/3\n    timeout-minutes: 5\n`;
+
+function workflowDir(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "cut-off-"));
+  onTestFinished(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+  mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true });
+  writeFileSync(path.join(dir, ".github", "workflows", "check.yml"), LIMITED_WORKFLOW);
+  return dir;
+}
+
+it("ends ci:wait with its own exit code when a job was cut off at its time limit", { timeout: 20_000 }, () => {
   expect.hasAssertions();
 
-  const gh = { list: [RUN], log: [BUDGET_LOG, "e2e-docker\tpnpm e2e:docker\tboom"], view: [BUDGET_WARNED, RED] };
+  const job = ended({ conclusion: "cancelled", failedStep: "pnpm check", name: "browser 1/3" });
+  const cut = ranFor({ job, minutes: LIMIT_MINUTES });
+  const gh = { list: [RUN], view: [view({ jobs: [done("lint"), cut], status: COMPLETED })] };
+
+  expect(ranScript({ args: ["--sha", "abc"], cwd: workflowDir(), gh, script: "scripts/ci-wait.ts" })).toStrictEqual({
+    lastLine: "RESULT: FAIL (browser 1/3 cut off at its time limit)",
+    status: CUT_OFF_EXIT,
+  });
+});
+
+it("ends merge-ticket with a fail verdict naming v1's red jobs", { timeout: 20_000 }, () => {
+  expect.hasAssertions();
+
+  const gh = { list: [RUN], log: ["e2e-docker\tpnpm e2e:docker\tboom"], view: [RED] };
 
   expect(lastLine({ args: ["7"], cwd: ticketRepo(), gh, script: "scripts/merge-ticket.ts" })).toBe(
-    "RESULT: FAIL (ticket-7's Check run: e2e-docker)",
+    "RESULT: FAIL (v1's Check run: e2e-docker)",
   );
+});
+
+it("ends merge-ticket with ci:wait's exit code when a v1 job was cut off at its time limit", {
+  timeout: 20_000,
+}, () => {
+  expect.hasAssertions();
+
+  const cwd = ticketRepo();
+  mkdirSync(path.join(cwd, ".github", "workflows"), { recursive: true });
+  writeFileSync(path.join(cwd, ".github", "workflows", "check.yml"), LIMITED_WORKFLOW);
+  const job = ended({ conclusion: "cancelled", failedStep: "pnpm check", name: "browser 1/3" });
+  const cut = view({
+    headSha: "abc",
+    jobs: [done("static"), ranFor({ job, minutes: LIMIT_MINUTES })],
+    status: COMPLETED,
+  });
+  const gh = { list: [RUN], view: [cut] };
+
+  expect(ranScript({ args: ["7"], cwd, gh, script: "scripts/merge-ticket.ts" })).toStrictEqual({
+    lastLine: "RESULT: FAIL (v1's Check run: browser 1/3 cut off at its time limit)",
+    status: CUT_OFF_EXIT,
+  });
 });
 
 it("ends merge-ticket with a fail verdict on a bad ticket number", { timeout: 20_000 }, () => {

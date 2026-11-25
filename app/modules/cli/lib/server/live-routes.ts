@@ -7,4 +7,10 @@ const liveRoutes = [...eventRoutes, ...presenceRoutes, ...triggerRoutes] as cons
 export { liveRoutes };
 export { presenceLayer } from "../../../presence/server.ts";
 export { scheduledMessageRoutes, scheduledMessagesLayer } from "../../../scheduled-messages/server.ts";
-export { mentionTriggersLayer, triggerCallerLive } from "../../../triggers/server.ts";
+export {
+  BoardUrl,
+  boardUrlLayer,
+  mentionTriggersLayer,
+  triggerCallerLive,
+  triggerChangesLayer,
+} from "../../../triggers/server.ts";

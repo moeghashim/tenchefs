@@ -1,7 +1,7 @@
 import { LinkedMessage } from "./linked-message.ts";
 import type { MessageId } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
-import { ScrollArea } from "../../design-system/index.tsx";
+import { ScrollArea } from "../../design-system/layout.tsx";
 
 interface LinkedScrollProps {
   readonly count: number;

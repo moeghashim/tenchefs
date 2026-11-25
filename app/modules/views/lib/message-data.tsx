@@ -1,6 +1,7 @@
-import { CallChip, DataToggle, MessageBody } from "../../design-system/index.tsx";
+import { CallChip, DataToggle, MessageBody } from "../../design-system/messages.tsx";
 import type { JsonValue, Message } from "../../sdk/index.ts";
 import { MarkdownText } from "./markdown-text.tsx";
+import { MessageAttachments } from "./message-attachments.tsx";
 import type { ReactNode } from "react";
 
 const TEXT = { data: "Data" } as const;
@@ -46,6 +47,7 @@ export function MessageData(props: MessageDataProps): ReactNode {
       <MessageBody>
         <MarkdownText me={props.me} message={message} />
       </MessageBody>
+      <MessageAttachments linked message={message} />
       {data !== null && <DataToggle label={TEXT.data} value={data} />}
     </>
   );

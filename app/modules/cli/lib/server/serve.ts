@@ -11,11 +11,11 @@ import {
   Schema,
   String as Str,
 } from "effect";
+import { BoardUrl, boardUrlLayer, domainLayers, openRoutes, routes, triggerCallerLive } from "./route-list.ts";
 import { Command, Flag } from "effect/cli";
 import { CommandFailed, printLine, refused } from "./output.ts";
 import type { IdentityName, Token } from "../../../identities/index.ts";
 import type { ServeStorage, ServedStorage } from "./serve-stores.ts";
-import { SpawnSettings, domainLayers, openRoutes, routes, triggerCallerLive } from "./route-list.ts";
 import {
   adminName,
   adminNameRule,
@@ -40,15 +40,26 @@ export type ServeLayers = {
   readonly webFolder?: string;
 };
 
+const boardUrlServed = Layer.effectDiscard(
+  Effect.gen(function* tellBoardUrlTheServedAddress() {
+    const boardUrl = yield* BoardUrl;
+    const address = yield* serverUrl;
+    yield* boardUrl.served(address);
+  }),
+);
+
 export const cookoutServer = ({
   adminName: name = firstAdminName,
   adminToken: admin,
   ...serving
 }: Serving & { readonly adminToken: Token; readonly adminName?: IdentityName }) =>
-  httpServer(serving, { gated: routes, open: openRoutes }, requireTokenWithinLimit).pipe(
+  Layer.provideMerge(
+    boardUrlServed,
+    httpServer(serving, { gated: routes, open: openRoutes }, requireTokenWithinLimit),
+  ).pipe(
     Layer.provideMerge(adminTokenSet({ adminName: name, adminToken: admin })),
     Layer.provideMerge(domainLayers),
-    Layer.provideMerge(Layer.succeed(SpawnSettings, { adminName: name, publicUrl: serving.publicUrl ?? "" })),
+    Layer.provideMerge(boardUrlLayer(serving.publicUrl ?? "")),
   );
 
 function webFolderOf({ webFolder }: ServeLayers): Pick<Serving, "webFolder"> {

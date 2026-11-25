@@ -1,5 +1,5 @@
 import { questionOf, refusalOf } from "./identity-questions.ts";
-import { ConfirmDialog } from "../../design-system/index.tsx";
+import { ConfirmDialog } from "../../design-system/controls.tsx";
 import type { Identity } from "../../sdk/index.ts";
 import type { IdentityActions } from "../../composer/index.ts";
 import type { ReactNode } from "react";

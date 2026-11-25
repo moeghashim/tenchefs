@@ -32,6 +32,7 @@ it.effect("a mention POSTs the message's link and text to the trigger URL with t
 
     expect(calls).toStrictEqual([
       {
+        headers: [],
         text: `${PUBLIC_URL}/#/channels/grill/threads/${id}/messages/${id}\n\n@${AGENT} look`,
         token: triggerToken(TOKEN),
         url: URL_OF,
@@ -57,7 +58,7 @@ it.effect("the call goes through the HTTP client as a POST of JSON { text } with
     expect(made).toStrictEqual([
       {
         authorization: `Bearer ${TOKEN}`,
-        body: { text: `/#/channels/grill/threads/1/messages/1\n\n@${AGENT} look` },
+        body: { text: `${on.cookout.url}/#/channels/grill/threads/1/messages/1\n\n@${AGENT} look` },
         method: "POST",
         path: "/fire",
       },

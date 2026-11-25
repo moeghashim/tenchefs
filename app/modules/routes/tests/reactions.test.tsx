@@ -27,7 +27,7 @@ async function talkIn(channel: string): Promise<Talk> {
 }
 
 function messageArticle(): HTMLElement {
-  return within(screen.getByRole("list", { name: "Messages" })).getByRole("article");
+  return within(screen.getByRole("feed", { name: "Messages" })).getByRole("article");
 }
 
 function chipsShown(): readonly ChipShown[] {
@@ -210,7 +210,7 @@ it("a thread's parent and replies take reactions too, and a key pressed on a mes
   const parent = await screen.findByRole("article", { name: "Parent message" });
   fireEvent.keyDown(parent, { key: "-" });
   await within(parent).findByRole("button", { name: "👎 1", pressed: true });
-  const reply = within(await screen.findByRole("list", { name: "Replies" })).getByRole("article");
+  const reply = within(await screen.findByRole("feed", { name: "Replies" })).getByRole("article");
   fireEvent.keyDown(within(reply).getByRole("button", { name: "React with 👍" }), { key: "-" });
   fireEvent.keyDown(reply, { key: "+" });
   await within(reply).findByRole("button", { name: "👍 1", pressed: true });

@@ -1,5 +1,6 @@
-import type { DeactivatedQuietAgent, DeactivationOffer, Nudge } from "../../sdk/index.ts";
-import type { DeactivatedQuietAgents, DeactivationOffers, Nudges } from "../../unread/index.ts";
+import type { AgentJoinRequests, DeactivatedQuietAgents, DeactivationOffers, Nudges } from "../../unread/index.ts";
+import type { DeactivatedQuietAgent, DeactivationOffer, InboxAgentJoinRequest, Nudge } from "../../sdk/index.ts";
+import { AgentJoinRequestRow } from "./agent-join-request-row.tsx";
 import type { Identities } from "../../composer/index.ts";
 import { OpenOfferRow } from "./open-offer-row.tsx";
 import type { ReactNode } from "react";
@@ -11,6 +12,7 @@ interface NoticeActions {
   readonly deactivationOffers: Pick<DeactivationOffers, "keep">;
   readonly deactivatedQuietAgents: Pick<DeactivatedQuietAgents, "hold" | "markRead" | "release">;
   readonly identities: Pick<Identities, "actions">;
+  readonly agentJoinRequests: AgentJoinRequests;
 }
 
 interface ForYouNoticesProps {
@@ -18,6 +20,7 @@ interface ForYouNoticesProps {
   readonly offers: readonly DeactivationOffer[];
   readonly deactivated: readonly DeactivatedQuietAgent[];
   readonly held: readonly DeactivatedQuietAgent[];
+  readonly joinRequests: readonly InboxAgentJoinRequest[];
   readonly actions: NoticeActions;
 }
 
@@ -29,6 +32,13 @@ export function ForYouNotices(props: ForYouNoticesProps): ReactNode {
   const { actions } = props;
   return (
     <>
+      {props.joinRequests.map((request) => (
+        <AgentJoinRequestRow
+          key={`join request ${request.userCode}`}
+          request={request}
+          requests={actions.agentJoinRequests}
+        />
+      ))}
       {newestFirst([...props.deactivated, ...props.held]).map((entry) => (
         <UnreadDeactivatedQuietAgentRow
           entries={actions.deactivatedQuietAgents}

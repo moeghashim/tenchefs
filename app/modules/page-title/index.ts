@@ -5,14 +5,15 @@
  * cookout", "@ada · cookout"), led by how many unread messages are *For you*
  * when there are any ("(3) Inbox · cookout"): those that mention whoever is
  * logged in or reply to their own message, as the sidebar's strong badges
- * count them, a closed thread's included as the Inbox includes them. Logged out, every route is titled for the login view, and
- * nothing is counted.
+ * count them, a closed thread's included as the Inbox includes them, with the unread notices beside them. It holds no
+ * state of its own: the count and the logged-in identity are the board store's selectors (`inboxForYou`, the one the
+ * sidebar's Inbox badge reads, and `loggedInName`), so the title and the sidebar never differ (#309). Logged out,
+ * every route is titled for the login view, and nothing is counted or loaded.
  */
-import type { Unread, UnreadState } from "../unread/index.ts";
-import { useEffect, useSyncExternalStore } from "react";
+import type { BoardState, BoardStore } from "../board/index.ts";
+import { inboxForYou, loggedInName } from "../board/index.ts";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type { Route } from "../paths/index.ts";
-import type { Session } from "../board/index.ts";
-import { countsOf } from "../unread/index.ts";
 
 const APP = "cookout";
 const NONE = 0;
@@ -29,14 +30,7 @@ const FIXED: Readonly<Record<Exclude<Route["name"], "channel" | "profile" | "thr
 
 const LOGGED_OUT = "Log in";
 
-const NOTHING_LOADED: UnreadState = { status: "loading" };
-
-type SessionState = ReturnType<Session["snapshot"]>;
-
-interface Followed {
-  readonly subscribe: (listener: () => void) => () => void;
-  readonly snapshot: () => UnreadState;
-}
+type Subscribe = (listener: () => void) => () => void;
 
 function routeName(route: Route): string {
   if (route.name === "channel") {
@@ -51,25 +45,11 @@ function routeName(route: Route): string {
   return FIXED[route.name];
 }
 
-function meOf(session: SessionState): string | null {
-  if (session.status !== "logged-in") {
-    return null;
-  }
-  return session.identity.name;
-}
-
 function pageName(me: string | null, route: Route): string {
   if (me === null) {
     return LOGGED_OUT;
   }
   return routeName(route);
-}
-
-function forYouCount(me: string | null, state: UnreadState): number {
-  if (me === null || state.status !== "loaded") {
-    return NONE;
-  }
-  return countsOf({ items: state.items, me }).forYou;
 }
 
 function titleOf(name: string, forYou: number): string {
@@ -89,34 +69,35 @@ function followNothing(listener: () => void): () => void {
   };
 }
 
-function nothingLoaded(): UnreadState {
-  return NOTHING_LOADED;
-}
-
-function followed(me: string | null, unread: Unread): Followed {
+function forYouOf(me: string | null, state: BoardState): number {
   if (me === null) {
-    return { snapshot: nothingLoaded, subscribe: followNothing };
+    return NONE;
   }
-  return unread;
+  return inboxForYou({ me, state });
 }
 
-/** What sets the title: the route drawn, the session, and the unread store, read only while logged in. */
+/** What sets the title: the route drawn, and the board store, whose Inbox is shown only while logged in. */
 export interface PageTitleOptions {
   readonly route: Route;
-  readonly session: Pick<Session, "snapshot" | "subscribe">;
-  readonly unread: Unread;
+  readonly board: Pick<BoardStore, "snapshot" | "subscribeShowing">;
 }
 
 /**
  * Sets the page's title for the route drawn, led by the For you count of whoever is logged in.
- * @param options The route, the session, and the unread store.
+ * @param options The route and the board store.
  */
 export function usePageTitle(options: PageTitleOptions): void {
-  const session = useSyncExternalStore(options.session.subscribe, options.session.snapshot);
-  const me = meOf(session);
-  const store = followed(me, options.unread);
-  const state = useSyncExternalStore(store.subscribe, store.snapshot);
-  const title = titleOf(pageName(me, options.route), forYouCount(me, state));
+  const { board } = options;
+  const followSession = useMemo(() => board.subscribeShowing("session"), [board]);
+  const me = useSyncExternalStore(followSession, () => loggedInName(board.snapshot()));
+  const followInbox: Subscribe = useMemo(() => {
+    if (me === null) {
+      return followNothing;
+    }
+    return board.subscribeShowing("inbox");
+  }, [board, me]);
+  const forYou = useSyncExternalStore(followInbox, () => forYouOf(me, board.snapshot()));
+  const title = titleOf(pageName(me, options.route), forYou);
   useEffect(() => {
     globalThis.document.title = title;
   }, [title]);

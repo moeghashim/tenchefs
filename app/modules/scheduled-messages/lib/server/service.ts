@@ -2,6 +2,7 @@ import { Array as Arr, Context, Effect, Predicate } from "effect";
 import type { Changes, ScheduledOn } from "./changes.ts";
 import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
 import { channelKnown, createdBy } from "./create.ts";
+import type { Announcing } from "./announced.ts";
 import type { Identity } from "../../../identities/index.ts";
 import type { NewScheduledMessageRequest } from "./create.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -11,7 +12,7 @@ import { shownWith } from "./shown.ts";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
-interface ScheduledMessagesService extends Changes {
+interface ScheduledMessagesService extends Changes, Pick<Announcing, "changed"> {
   readonly create: (caller: Identity, asked: NewScheduledMessageRequest) => Fails<ScheduledMessage>;
   readonly list: (channel: string | undefined) => Fails<readonly ScheduledMessage[]>;
 }
@@ -39,9 +40,10 @@ function listWith(storage: Storage["Service"]): ScheduledMessagesService["list"]
 function scheduledMessagesOn(on: ScheduledOn): ScheduledMessagesService {
   return {
     ...changesOn(on),
+    changed: on.announcing.changed,
     create: (caller, asked) =>
       Effect.flatMap(createdBy({ asked, caller, storage: on.storage }), (created) =>
-        Effect.andThen(on.wake, shownWith(on.storage)(created)),
+        Effect.andThen(on.wake, on.announcing.shownAndAnnounced(created, false)),
       ),
     list: listWith(on.storage),
   };

@@ -203,3 +203,35 @@ it.each<Responses & { readonly name: string }>([
     `v1's latest Check run is red: e2e-docker (failure).\n${URL}${E2E_STEPS}`,
   );
 });
+
+it("reads the merge queue's run when asked for merge_group runs", { timeout: 10_000 }, () => {
+  expect.hasAssertions();
+
+  const gh = fake({
+    event: "merge_group",
+    list: [RUN],
+    view: [view({ jobs: [done("lint"), done("checked")], status: COMPLETED })],
+  });
+
+  const { step } = gh.gate(["--branch", "gh-readonly-queue/v1/pr-9-abc"]);
+
+  expect([step, gh.calls()]).toStrictEqual([
+    { kind: "done" },
+    [
+      "run list --workflow Check --event merge_group --limit 1 --json databaseId --branch gh-readonly-queue/v1/pr-9-abc",
+      "run view 42 --json status,conclusion,url,jobs",
+    ],
+  ]);
+});
+
+it("says it waits for a merge_group run, not a push run, while the queue's run hasn't started", {
+  timeout: 10_000,
+}, () => {
+  expect.hasAssertions();
+
+  const gh = fake({ event: "merge_group", list: [[]], view: [] });
+
+  expect(reasonOf(gh.gate(["--branch", "gh-readonly-queue/v1/pr-9-abc"]).step)).toBe(
+    "v1 has no Check merge_group run: run list --workflow Check --event merge_group --limit 1 --json databaseId --branch gh-readonly-queue/v1/pr-9-abc",
+  );
+});

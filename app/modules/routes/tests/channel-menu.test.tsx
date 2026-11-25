@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inPane, inSidebar } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { Unread } from "../../unread/index.ts";
+import { boardStoreFor } from "./defaults.ts";
 import { createUnread } from "../../unread/index.ts";
 import { openAt } from "./render.tsx";
 import { subscribedReader } from "./inbox-reader.ts";
@@ -22,7 +23,13 @@ async function menuItems(name: string): Promise<Shown> {
   const shown = await screen.findByRole("menu", { name });
   const items: (readonly [string, boolean, boolean])[] = [];
   for (const item of within(shown).getAllByRole("menuitem")) {
-    items.push([item.textContent, item.querySelector(ICON_FIRST) !== null, "disabled" in item.dataset]);
+    let label = "";
+    for (const node of item.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        label += node.textContent ?? "";
+      }
+    }
+    items.push([label, item.querySelector(ICON_FIRST) !== null, "disabled" in item.dataset]);
   }
   return items;
 }
@@ -70,6 +77,7 @@ it("right-clicking a sidebar channel opens its actions menu, every item with an 
   await expect(menuItems("#web-channel-menu-right actions")).resolves.toStrictEqual([
     ["Mark all as read", true, true],
     ["Unsubscribe", true, false],
+    ["Scheduled messages", true, false],
   ]);
 
   close();
@@ -86,6 +94,7 @@ it("a sidebar channel's More actions button opens the same menu", { timeout: 500
   await expect(menuItems("More actions")).resolves.toStrictEqual([
     ["Mark all as read", true, true],
     ["Unsubscribe", true, false],
+    ["Scheduled messages", true, false],
   ]);
 
   close();
@@ -96,7 +105,7 @@ const KEYS = [
   ["Shift+F10", "F10", true],
 ] as const;
 
-const BOTH_ITEMS = 2;
+const EVERY_ITEM = 3;
 
 async function chooseFor(channel: string, name: string): Promise<void> {
   fireEvent.contextMenu(await channelLink(channel));
@@ -124,7 +133,7 @@ it.each(KEYS)(
     const close = openAt({ client: reader, hash: "#/inbox" });
     fireEvent.keyDown(await channelLink(channel), { key, shiftKey });
 
-    await expect(menuItems(`#${channel} actions`)).resolves.toHaveLength(BOTH_ITEMS);
+    await expect(menuItems(`#${channel} actions`)).resolves.toHaveLength(EVERY_ITEM);
 
     close();
   },
@@ -168,7 +177,7 @@ function loadedTexts(unread: Unread): readonly string[] {
 
 async function otherTabOf(reader: CookoutClient): Promise<OtherTab> {
   const { live, stream } = watched(reader);
-  const unread = createUnread({ client: reader, live });
+  const unread = createUnread({ boardStore: boardStoreFor({ client: reader, live }) });
   const stop = unread.subscribe(vi.fn<() => void>());
   await waitFor(() => loadedTexts(unread));
   const events = await stream;

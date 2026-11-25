@@ -21,7 +21,14 @@ export type {
   SetTriggerRequest,
   Trigger,
   TriggerFailure,
+  TriggerHeader,
   TriggerResponse,
   TriggerResult,
 } from "../../triggers/index.ts";
-export type { Description, DescriptionCalls, UpdateIdentityRequest } from "../../identities/client.ts";
+export type {
+  AgentCreationCalls,
+  CreateAgentForOwnerRequest,
+  Description,
+  DescriptionCalls,
+  UpdateIdentityRequest,
+} from "../../identities/client.ts";

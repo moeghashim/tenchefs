@@ -1,11 +1,11 @@
-import { adminClient, clientWith, newIdentity, revocableView } from "./identities.ts";
+import { adminClient, agentShown, clientWith, newIdentity, revocableView } from "./identities.ts";
 import { callWith, callWithFields, channelWithCommand, noProperties, openChannel, pretty } from "./commands.ts";
 import { expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import { alertSaying } from "./alerts.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { messagesIn } from "./messages.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 
 const LOW = 1;
 const HIGH = 2;
@@ -39,7 +39,7 @@ it("a command call and its result reply show their data in the thread", { timeou
   });
   const close = openAt({ client: adminClient(), hash: `#/channels/web-command-shows/threads/${String(threadId)}` });
 
-  const reply = await within(await screen.findByRole("list", { name: "Replies" })).findByRole("listitem");
+  const reply = await within(await screen.findByRole("feed", { name: "Replies" })).findByRole("article");
   const parent = screen.getByRole("article", { name: "Parent message" });
 
   expect([
@@ -49,7 +49,7 @@ it("a command call and its result reply show their data in the thread", { timeou
   ]).toStrictEqual([
     JSON.stringify({ branch: "main" }),
     pretty({ status: "done" }),
-    [`web-show-callagentShipped main.▸ data▾ data${pretty({ status: "done" })}`],
+    [`${agentShown("web-show-call")}agentShipped main.▸ data▾ data${pretty({ status: "done" })}`],
   ]);
 
   close();
@@ -207,7 +207,7 @@ it("a call to a server that can't be reached says so, with no schema errors", { 
   expect.hasAssertions();
 
   await channelWithCommand({ channel: "web-command-unreachable", command: { name: "web-call-unreachable" } });
-  const nowhereClient = createCookoutClient({ env: {}, token: "cookout_any", url: "http://127.0.0.1:1" });
+  const nowhereClient = unreachableClient({ token: "cookout_any" });
   const close = await openChannel({
     channel: "web-command-unreachable",
     client: {

@@ -1,10 +1,11 @@
 import type { ChannelPages, PagesOptions } from "./channel-pages.ts";
-import type { CookoutClient, CookoutEvent, MessageId, TopLevelMessage } from "../../sdk/index.ts";
+import type { CookoutClient, CookoutEvent, InboxItem, MessageId, TopLevelMessage } from "../../sdk/index.ts";
 import type { Held, Queues } from "./messages-held.ts";
 import type { ThreadPlace, Threads } from "./threads-part.ts";
 import { createHeld, createQueues, readersOf } from "./messages-held.ts";
-import { withEntry, withFresh } from "./messages-table.ts";
+import { messagesOfItems, withEntry, withFresh, withSearched } from "./messages-table.ts";
 import type { MessagesHeld } from "./messages-table.ts";
+import type { SearchAnswer } from "../../search/web.ts";
 import type { ThreadsClient } from "./thread-reads.ts";
 import { createChannelPages } from "./channel-pages.ts";
 import { createThreads } from "./threads-part.ts";
@@ -23,6 +24,13 @@ interface MessagesPart {
   readonly showBefore: (place: ThreadPlace) => () => void;
   readonly apply: (event: CookoutEvent) => void;
   readonly back: () => void;
+  readonly keepItems: <Value>(keeping: KeepingItems<Value>) => Promise<Value>;
+  readonly keepResults: (asked: Promise<SearchAnswer>) => Promise<SearchAnswer>;
+}
+
+interface KeepingItems<Value> {
+  readonly asked: Promise<Value>;
+  readonly items: (value: Value) => readonly InboxItem[];
 }
 
 interface MessagesOptions {
@@ -116,6 +124,32 @@ function createMessagesPart({ changed, client, pageSize }: MessagesOptions): Mes
       pages.back();
       threads.back();
       before.back();
+    },
+    keepItems: async ({ asked, items }) => {
+      const value = await held.readInto({
+        change: (current, read) =>
+          withFresh({ fresh: { messages: messagesOfItems(items(read)), receipts: [] }, held: current }),
+        request: async () => {
+          const read = await asked;
+          return read;
+        },
+      });
+      return value;
+    },
+    keepResults: async (asked) => {
+      const answer = await held.readInto({
+        change: (current, read: SearchAnswer) => {
+          if ("refusal" in read) {
+            return current;
+          }
+          return withSearched({ held: current, results: read.page.results });
+        },
+        request: async () => {
+          const read = await asked;
+          return read;
+        },
+      });
+      return answer;
     },
     pages,
     showBefore: before.show,

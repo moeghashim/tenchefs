@@ -1,4 +1,6 @@
+import type { Answering, ClientMethod } from "./answering.ts";
 import type { CookoutClient, MessageId } from "../../sdk/index.ts";
+import { answeredUntil, answering } from "./answering.ts";
 import { chose, pressed } from "./menus.ts";
 import { expect, it, onTestFinished, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -14,6 +16,7 @@ const NONE = 0;
 type Shown = readonly (readonly [string, boolean])[];
 
 interface OpenThread {
+  readonly answered: Answering["answered"];
   readonly reader: CookoutClient;
   readonly parent: MessageId;
   readonly hash: string;
@@ -25,10 +28,12 @@ async function openThread(channel: string): Promise<OpenThread> {
   const { message } = await poster.createMessage({ channel, text: "Deploy?" });
   await poster.createMessage({ channel, replyTo: message.id, text: "Noon works." });
   const hash = `#/channels/${channel}/threads/${String(message.id)}`;
-  const close = openAt({ client: reader, hash });
+  const { answered, client } = answering(reader);
+  const close = openAt({ client, hash });
+  await answered("getThread");
   await inThread().findByText("Noon works.");
   await inThread().findEnabledButton("Close thread");
-  return { close, hash, parent: message.id, reader };
+  return { answered, close, hash, parent: message.id, reader };
 }
 
 function header(): HTMLElement {
@@ -55,6 +60,17 @@ async function menuItems(name: string): Promise<Shown> {
 async function chooseFromHeader(name: string): Promise<void> {
   fireEvent.contextMenu(within(header()).getByRole("heading", { name: "Thread" }));
   await chose(name);
+}
+
+interface Choosing {
+  readonly answered: Answering["answered"];
+  readonly item: string;
+  readonly method: ClientMethod;
+}
+
+async function chosenAndAnswered({ answered, item, method }: Choosing): Promise<void> {
+  await chooseFromHeader(item);
+  await answered(method);
 }
 
 async function closedByOf(reader: CookoutClient, parent: MessageId): Promise<string | null> {
@@ -130,11 +146,11 @@ it.each(KEYS)(
 it("close in a thread header's menu closes the thread, and Reopen there reopens it", { timeout: 10_000 }, async () => {
   expect.hasAssertions();
 
-  const { close, parent, reader } = await openThread("web-thread-menu-close");
-  await chooseFromHeader("Close");
+  const { answered, close, parent, reader } = await openThread("web-thread-menu-close");
+  await chosenAndAnswered({ answered, item: "Close", method: "closeThread" });
   await inThread().findEnabledButton("Reopen thread");
   const closedBy = await closedByOf(reader, parent);
-  await chooseFromHeader("Reopen");
+  await chosenAndAnswered({ answered, item: "Reopen", method: "reopenThread" });
   await inThread().findEnabledButton("Close thread");
 
   expect([closedBy, await closedByOf(reader, parent)]).toStrictEqual([expect.stringMatching(/-reader$/u), null]);
@@ -147,12 +163,16 @@ it("mark unread in a thread header's menu marks the thread's parent unread, back
 }, async () => {
   expect.hasAssertions();
 
-  const { close, reader } = await openThread("web-thread-menu-unread");
-  await vi.waitUntil(async () => {
-    const { items } = await reader.inbox();
-    return items.length === NONE;
+  const { answered, close, reader } = await openThread("web-thread-menu-unread");
+  await answeredUntil({
+    answered,
+    done: async () => {
+      const { items } = await reader.inbox();
+      return items.length === NONE;
+    },
+    method: "ack",
   });
-  await chooseFromHeader("Mark unread");
+  await chosenAndAnswered({ answered, item: "Mark unread", method: "markUnread" });
 
   await waitFor(async () => {
     const { items } = await reader.inbox();

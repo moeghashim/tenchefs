@@ -1,7 +1,7 @@
 import { adminClient, newIdentity } from "./identities.ts";
 import { fireEvent, screen, within } from "@testing-library/react";
 import type { CookoutClient } from "../../sdk/index.ts";
-import type { JsonSchema } from "../../commands/index.ts";
+import type { JsonSchema } from "../../webhook-commands/index.ts";
 import { openAt } from "./render.tsx";
 
 const branchSchema = { properties: { branch: { type: "string" } }, required: ["branch"], type: "object" } as const;
@@ -65,9 +65,9 @@ function type(text: string): void {
 
 async function suggestedFor(text: string): Promise<readonly (string | null)[]> {
   type(text);
-  const list = await screen.findByRole("list", { name: "Command suggestions" });
+  const list = await screen.findByRole("listbox", { name: "Command suggestions" });
   const shown: (string | null)[] = [];
-  for (const item of within(list).getAllByRole("listitem")) {
+  for (const item of within(list).getAllByRole("option")) {
     shown.push(item.textContent);
   }
   return shown;
@@ -79,8 +79,8 @@ function promptFor(command: string): HTMLElement {
 
 async function pick(command: string): Promise<HTMLElement> {
   type(`/${command}`);
-  const list = await screen.findByRole("list", { name: "Command suggestions" });
-  fireEvent.click(within(list).getByRole("button", { name: new RegExp(`^/${command}`, "u") }));
+  const list = await screen.findByRole("listbox", { name: "Command suggestions" });
+  fireEvent.mouseDown(within(list).getByRole("option", { name: new RegExp(`^/${command}`, "u") }));
   return promptFor(command);
 }
 

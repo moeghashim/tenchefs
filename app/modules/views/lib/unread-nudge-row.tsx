@@ -1,8 +1,9 @@
-import { ButtonRow, RowButton } from "../../design-system/index.tsx";
+import { ButtonRow } from "../../design-system/controls.tsx";
 import type { Nudge } from "../../sdk/index.ts";
 import { NudgeRow } from "./nudge-row.tsx";
 import type { Nudges } from "../../unread/index.ts";
 import type { ReactNode } from "react";
+import { RowButton } from "../../design-system/feed.tsx";
 import { useCallback } from "react";
 
 const TEXT = { close: "Close", markRead: "Mark read" } as const;

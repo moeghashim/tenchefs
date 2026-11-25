@@ -1,4 +1,5 @@
-import { CardBody, ConversationPanel, Muted } from "../../design-system/index.tsx";
+import { CardBody, ConversationPanel } from "../../design-system/layout.tsx";
+import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { hrefOf } from "../../paths/index.ts";
 
@@ -6,7 +7,6 @@ const TEXT = {
   back: "Back to the inbox",
   conversation: "Conversation",
   nothing: "Nothing here",
-  open: "Open thread",
 } as const;
 
 export function ConversationMissing(): ReactNode {
@@ -18,8 +18,7 @@ export function ConversationMissing(): ReactNode {
       edge={null}
       label={TEXT.conversation}
       message={null}
-      openHref={null}
-      openLabel={TEXT.open}
+      open={null}
     >
       <CardBody>
         <Muted>{TEXT.nothing}</Muted>

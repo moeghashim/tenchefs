@@ -100,6 +100,8 @@ function codeIn(prompt: string): string {
 const noLogin = Effect.gen(function* boxWithNoLogin() {
   const cookout = yield* TestCookout;
   const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+  yield* cookout.createIdentity("triage-agent", { owner: "ada" });
+  yield* cookout.createIdentity("scout", { owner: "ada" });
   const env = {
     CLAUDECODE: "1",
     CLAUDE_CODE_SESSION_ID: "s1",
@@ -125,7 +127,7 @@ it.effect("inside Claude Code with no Login, join prints a link and code, and jo
     expect(joined).toMatchObject({
       exitCode: 0,
       stdoutJson: {
-        created: true,
+        created: false,
         expiresAt: "2026-01-08T00:00:00.000Z",
         identity: "triage-agent",
         source: "agent-join-request",
@@ -162,6 +164,19 @@ it.effect("with no Login, join --print-env prints the export once approved, and 
     expect(printed.stdout).toMatch(/^export COOKOUT_SESSION=cookout_/u);
     expect(expired).toMatchObject({ exitCode: EXIT_FAILURE });
     expect(expired.stderr).toContain('"code":"agent_join_request_expired"');
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
+it.effect("with no Login, join for an agent nobody has created is refused at once, and asks no one to approve", () =>
+  Effect.gen(function* joinUnknownAgent() {
+    const { ada, cookout, env } = yield* noLogin;
+    const refused = yield* runCookout({ args: ["join", "--as", "newcomer"], env });
+    yield* cookout.createIdentity("newcomer", { owner: "ada" });
+    const { agentJoinRequests } = yield* answer(() => ada.client.inbox());
+
+    expect(refused).toMatchObject({ exitCode: EXIT_FAILURE, stderrJson: { error: { code: "agent_not_found" } } });
+    expect(refused.stderr).not.toContain("approve-join");
+    expect(agentJoinRequests).toStrictEqual([]);
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 

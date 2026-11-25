@@ -1,23 +1,11 @@
-import type { CookoutClient, CookoutEvent, EventStream } from "../../index.ts";
 import { Effect, String as Str } from "effect";
-import { TestCookout, answer, refusal, testCookout } from "../../../testing/server.ts";
+import { TestCookout, answer, refusal, testCookout, watchingAllChannels } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { Scope } from "effect";
 
 const BAD_REQUEST = 400;
 const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 const LONGEST = 500;
-
-function watchingAllChannels(client: CookoutClient): Effect.Effect<AsyncIterator<CookoutEvent>, never, Scope.Scope> {
-  return Effect.map(
-    Effect.acquireRelease(
-      answer(() => client.watch({ allChannels: true })),
-      (events: EventStream) => answer(() => events.close()),
-    ),
-    (events) => events[Symbol.asyncIterator](),
-  );
-}
 
 it.effect("an agent's owner describes it, and every caller on the board reads it from list and get", () =>
   Effect.gen(function* ownerDescribes() {
@@ -127,7 +115,7 @@ it.effect("a description change reaches every all-channels watcher at once as an
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const grace = yield* cookout.createIdentity("grace", { kind: "human" });
     yield* cookout.createIdentity("todo-bot", { owner: "ada" });
-    const events = yield* watchingAllChannels(grace.client);
+    const events = yield* watchingAllChannels(grace);
     const { identity } = yield* answer(() => ada.client.setDescription("todo-bot", "Ada's to-dos"));
     const event = yield* answer(() => events.next());
 

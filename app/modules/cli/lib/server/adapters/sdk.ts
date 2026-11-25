@@ -7,7 +7,7 @@ import { boardUrlOrEmpty, loginFor } from "../logins.ts";
 import { cookoutAuth, cookoutSession, cookoutToken, harnessEnvironment } from "../../../../config/server.ts";
 import { harnessIn, harnessSessionIn } from "../../../../config/index.ts";
 import { loginMissing, notJoined, unknownAuth } from "./call-failure.ts";
-import { throughProxy, toFailure, toFailureAt } from "./http.ts";
+import { noteIgnoredForProxy, throughProxy, toFailure, toFailureAt } from "./http.ts";
 import type { CookoutClient } from "../../../../sdk/index.ts";
 import { agentSessionStateFile } from "../agent-session-state.ts";
 import { baseUrlOf } from "../../../../http/client.ts";
@@ -168,9 +168,27 @@ function variablesOr(env: CliEnvironment, stored: (url: string) => Found): Found
   return tokenOr(env, () => sessionOr(env, () => stored(env.url)));
 }
 
+function joinedIdentity(env: CliEnvironment): Found<Option.Option<string>> {
+  if (env.url === "") {
+    return Effect.succeedNone;
+  }
+  return Effect.map(joinedCredential(harnessSessionIn(env.markers), env.url), (found) =>
+    Option.map(
+      Option.flatMap(found, ({ joined }) => joined),
+      ({ state }) => state.identity,
+    ),
+  );
+}
+
+function proxyCredential(env: CliEnvironment): Found {
+  return Effect.flatMap(joinedIdentity(env), (joinedAs) =>
+    Effect.as(noteIgnoredForProxy({ joinedAs, token: env.token }), given("proxy", "")),
+  );
+}
+
 function credentialFor(env: CliEnvironment): Found {
   if (env.auth === "proxy") {
-    return Effect.succeed(given("proxy", ""));
+    return proxyCredential(env);
   }
   if (env.auth !== "") {
     return Effect.fail(unknownAuth);

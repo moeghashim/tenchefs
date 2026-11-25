@@ -1,9 +1,10 @@
-import { adminClient, newIdentity } from "./identities.ts";
+import { adminClient, agentShown, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inPane, inProfile, inSidebar } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
 import { openAt } from "./render.tsx";
+import { testAgentDisplayName } from "../../testing/index.ts";
 
 const DATE_LENGTH = 10;
 const START = 0;
@@ -34,8 +35,16 @@ function filterBy(text: string): void {
   fireEvent.change(screen.getByRole("textbox", { name: "Filter by name" }), { target: { value: text } });
 }
 
-function chip(label: string): HTMLElement {
-  return inPane().getByRole("button", { name: (name) => name.startsWith(`${label} `) });
+function kind(label: string): HTMLElement {
+  return inPane().getByRole("radio", { name: (name) => name.startsWith(`${label} `) });
+}
+
+function kindText(label: string): string {
+  const shown = kind(label).closest("label");
+  if (shown === null) {
+    return "";
+  }
+  return shown.textContent;
 }
 
 async function openFiltered(client: CookoutClient, hash: string, filter: string): Promise<() => void> {
@@ -91,9 +100,9 @@ it("#/people lists every identity, with its kind, owner and tags, and you marked
     `${String(everyone)} identities`,
     [
       "web-people-list-bossadminHuman",
-      "web-people-list-botagentAgent · owned by web-people-list-human",
+      `${agentShown("web-people-list-bot")}agentAgent · owned by web-people-list-human`,
       "web-people-list-human(you)Human",
-      "web-people-list-loneragentAgent · owned by admin",
+      `${agentShown("web-people-list-loner")}agentAgent · owned by admin`,
     ],
     "page",
   ]);
@@ -101,26 +110,26 @@ it("#/people lists every identity, with its kind, owner and tags, and you marked
   close();
 });
 
-it("the chips narrow the list to humans or agents, and count what the name filter leaves", {
+it("the kind filter narrows the list to humans or agents, and count what the name filter leaves", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
 
   const close = await openFiltered(await crewOf("web-people-chips"), "#/people", "web-people-chips");
-  const counts = [chip("All").textContent, chip("Humans").textContent, chip("Agents").textContent];
-  fireEvent.click(chip("Agents"));
-  const agents = [...rowTexts(), chip("All").getAttribute("aria-pressed"), chip("Agents").getAttribute("aria-pressed")];
-  fireEvent.click(chip("Humans"));
+  const counts = [kindText("All"), kindText("Humans"), kindText("Agents")];
+  fireEvent.click(kind("Agents"));
+  const agents = [...rowTexts(), kind("All").matches(":checked"), kind("Agents").matches(":checked")];
+  fireEvent.click(kind("Humans"));
   const humans = rowTexts();
   filterBy("web-people-chips-nobody");
 
   expect([counts, agents, humans, screen.getByText("Nobody matches.").textContent]).toStrictEqual([
     ["All 4", "Humans 2", "Agents 2"],
     [
-      "web-people-chips-botagentAgent · owned by web-people-chips-human",
-      "web-people-chips-loneragentAgent · owned by admin",
-      "false",
-      "true",
+      `${agentShown("web-people-chips-bot")}agentAgent · owned by web-people-chips-human`,
+      `${agentShown("web-people-chips-loner")}agentAgent · owned by admin`,
+      false,
+      true,
     ],
     ["web-people-chips-bossadminHuman", "web-people-chips-human(you)Human"],
     "Nobody matches.",
@@ -135,7 +144,8 @@ it("following a row opens its profile beside the list, highlighted, and closing 
   expect.hasAssertions();
 
   const close = await openFiltered(await crewOf("web-people-open"), "#/people", "web-people-open");
-  fireEvent.click(within(identityList()).getByRole("link", { name: /web-people-open-bot/u }));
+  const bot = new RegExp(testAgentDisplayName("web-people-open-bot"), "u");
+  fireEvent.click(within(identityList()).getByRole("link", { name: bot }));
   const panel = await profile();
   const opened = [
     globalThis.location.hash,
@@ -143,7 +153,7 @@ it("following a row opens its profile beside the list, highlighted, and closing 
     within(panel).getByText(/^Agent · owned by/u).textContent,
     within(panel).getByText(/^joined/u).textContent,
     within(identityList())
-      .getByRole("link", { name: /web-people-open-bot/u })
+      .getByRole("link", { name: new RegExp(testAgentDisplayName("web-people-open-bot"), "u") })
       .getAttribute("aria-current"),
   ];
   fireEvent.click(within(panel).getByRole("link", { name: "Close profile" }));
@@ -154,7 +164,7 @@ it("following a row opens its profile beside the list, highlighted, and closing 
   expect([opened, globalThis.location.hash]).toStrictEqual([
     [
       "#/people/web-people-open-bot",
-      "web-people-open-botagent",
+      `${agentShown("web-people-open-bot")}agent`,
       "Agent · owned by web-people-open-human",
       await joinedOf("web-people-open-bot"),
       "page",

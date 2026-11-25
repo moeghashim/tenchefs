@@ -1,13 +1,13 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import type { Screen, Shot, Theme, ThemePass } from "./lib/screenshots.ts";
+import { attachScreenFiles, setScreenPresences } from "./lib/screen-triggers.ts";
 import { field, list, parseJson, text } from "./lib/json.ts";
+import { hillsPng, moveClockForward } from "../app/modules/testing/index.ts";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { screenshotOptions, takeScreenshots, withOlderHistory } from "./lib/screenshots.ts";
 import type { DevCookout } from "./lib/dev-cookout.ts";
 import { chromium } from "@playwright/test";
-import { moveClockForward } from "../app/modules/testing/index.ts";
 import path from "node:path";
-import { setScreenPresences } from "./lib/screen-triggers.ts";
 import { spawnSync } from "node:child_process";
 import { startDevCookout } from "./lib/dev-cookout.ts";
 import { tmpdir } from "node:os";
@@ -145,6 +145,7 @@ async function interact(page: Page, shot: Shot): Promise<void> {
     await scope.getByRole("button", { exact: true, name: shot.screen.click }).click({ timeout: RENDER_MS });
   }
   await chooseAndFill(page, shot.screen);
+  await attachScreenFiles({ image: hillsPng(), page, screen: shot.screen, timeout: RENDER_MS });
 }
 
 async function render(page: Page, shot: Shot): Promise<void> {
@@ -243,6 +244,7 @@ async function prepared(server: DevCookout): Promise<Board> {
     adminToken,
     dropped: DROPPED_AGENT,
     droppedToken: board.dropped,
+    image: hillsPng(),
     ownerToken: board.owner,
     url,
   });

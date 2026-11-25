@@ -1,5 +1,6 @@
 import type { Command } from "./merge-steps.ts";
 import type { Job } from "./check-run.ts";
+import { failingTestsBlock } from "./failing-tests.ts";
 import { run } from "./merge-steps.ts";
 
 interface Failure {
@@ -36,7 +37,7 @@ function described(failure: Failure): string {
   if (logged === "") {
     return heading;
   }
-  return `${heading}\n${logged.split("\n").slice(LOG_LINES).join("\n")}`;
+  return `${heading}${failingTestsBlock(logged)}\n${logged.split("\n").slice(LOG_LINES).join("\n")}`;
 }
 
 function failuresOf(options: Logs & { readonly jobs: readonly Job[]; readonly runNumber: number }): readonly Failure[] {

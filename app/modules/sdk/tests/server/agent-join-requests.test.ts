@@ -12,11 +12,11 @@ import { TestClock } from "effect/testing";
 import { token } from "../../../identities/index.ts";
 
 const NOT_FOUND = 404;
-const FORBIDDEN = 403;
 const BAD_REQUEST = 400;
 const CONFLICT = 409;
 const LIFETIME_MINUTES = 10;
 const THREE = 3;
+const FOUR = 4;
 const asked = { as: "triage-agent", host: "build-box" };
 
 interface Started {
@@ -29,6 +29,7 @@ function startedFor(request: StartAgentJoinRequest): Effect.Effect<Started, neve
   return Effect.gen(function* startForAda() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    yield* cookout.createIdentity("triage-agent", { owner: "ada" });
     const started = yield* answer(() => cookout.clientFor().startAgentJoin(request));
     return { ada, cookout, started };
   });
@@ -60,7 +61,7 @@ function notFoundThrice(): readonly object[] {
   return Array.from({ length: THREE }, () => ({ code: "agent_join_request_not_found", status: NOT_FOUND }));
 }
 
-it.effect("an agent join request is pending until a human approves it, then joins an agent they own", () =>
+it.effect("an agent join request is pending until a human approves it, then joins the agent they own", () =>
   Effect.gen(function* approveFlow() {
     const on = yield* startedFor({ ...asked, idleExpiry: "30d" });
     const pending = yield* collected(on);
@@ -76,13 +77,13 @@ it.effect("an agent join request is pending until a human approves it, then join
     expect(shown.agentJoinRequest).toStrictEqual({
       ...asked,
       approved: false,
-      creates: true,
+      creates: false,
       expiresAt: on.started.expiresAt,
       idleExpiry: "30d",
       joins: "triage-agent",
       userCode: on.started.userCode,
     });
-    expect(session).toMatchObject({ created: true, expiresAt: "2026-01-31T00:00:00.000Z", identity: "triage-agent" });
+    expect(session).toMatchObject({ created: false, expiresAt: "2026-01-31T00:00:00.000Z", identity: "triage-agent" });
     expect(actingAs).toMatchObject({ kind: "agent", name: "triage-agent", owner: "ada" });
   }).pipe(Effect.provide(testCookout())),
 );
@@ -95,7 +96,7 @@ it.effect("the collected answer holds only the agent session token, never a huma
     const session = sessionOf(response);
 
     const { agentSessionToken } = session;
-    const onlyTheSession = { agentSessionToken, created: true, expiresAt: "2026-01-08T00:00:00.000Z" };
+    const onlyTheSession = { agentSessionToken, created: false, expiresAt: "2026-01-08T00:00:00.000Z" };
 
     expect(response).toStrictEqual({
       agentSession: { ...onlyTheSession, identity: "triage-agent", issuedAt: "2026-01-01T00:00:00.000Z" },
@@ -105,34 +106,40 @@ it.effect("the collected answer holds only the agent session token, never a huma
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("approving joins the approver's own agent, or <approver>/<name> when the name is someone else's", () =>
-  Effect.gen(function* resolution() {
-    const on = yield* startedFor(asked);
-    yield* on.cookout.createIdentity("grace", { kind: "human" });
-    yield* on.cookout.createIdentity("triage-agent", { owner: "grace" });
-    const namespaced = yield* approvedSession(on);
-    const again = yield* answer(() => on.cookout.clientFor().startAgentJoin(asked));
-    yield* answer(() => on.cookout.clientFor(namespaced.agentSessionToken).leave());
-    const owned = yield* approvedSession({ ...on, started: again });
+it.effect("an agent join request for a name no active agent has is refused at once, and nothing is stored", () =>
+  Effect.gen(function* refusedNames() {
+    const cookout = yield* TestCookout;
+    const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    yield* cookout.createIdentity("grace", { kind: "human" });
+    yield* cookout.createIdentity("retired-agent", { owner: "ada" });
+    yield* answer(() => ada.client.deactivateIdentity("retired-agent"));
+    const refused = yield* Effect.forEach(
+      ["triage-agent", "grace", "grace/bot", "retired-agent"],
+      (as) => refusal(() => cookout.clientFor().startAgentJoin({ ...asked, as })),
+      { concurrency: 1 },
+    );
+    yield* cookout.createIdentity("triage-agent", { owner: "ada" });
+    const { agentJoinRequests } = yield* answer(() => ada.client.inbox());
 
-    expect([namespaced, owned]).toMatchObject([
-      { created: true, identity: "ada/triage-agent" },
-      { created: false, identity: "ada/triage-agent" },
-    ]);
+    expect(refused).toMatchObject(Array.from({ length: FOUR }, () => ({ code: "agent_not_found", status: NOT_FOUND })));
+    expect(agentJoinRequests).toStrictEqual([]);
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("an agent join request for a human's name, or another human's namespace, is refused", () =>
-  Effect.gen(function* refusedNames() {
-    const on = yield* startedFor({ ...asked, as: "grace" });
-    yield* on.cookout.createIdentity("grace", { kind: "human" });
-    const human = yield* refusal(() => on.ada.client.approveAgentJoin(on.started.userCode));
-    const other = yield* answer(() => on.cookout.clientFor().startAgentJoin({ ...asked, as: "grace/bot" }));
-    const notOwned = yield* refusal(() => on.ada.client.getAgentJoinRequest(other.userCode));
+it.effect("approving joins the approver's own agent, or <approver>/<name> when the name is someone else's", () =>
+  Effect.gen(function* resolution() {
+    const cookout = yield* TestCookout;
+    const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    yield* cookout.createIdentity("grace", { kind: "human" });
+    yield* cookout.createIdentity("triage-agent", { owner: "grace" });
+    const started = yield* answer(() => cookout.clientFor().startAgentJoin(asked));
+    const missing = yield* refusal(() => ada.client.approveAgentJoin(started.userCode));
+    yield* cookout.createIdentity("ada/triage-agent", { owner: "ada" });
+    const namespaced = yield* approvedSession({ ada, cookout, started });
 
-    expect([human, notOwned]).toMatchObject([
-      { code: "identity_kind", status: FORBIDDEN },
-      { code: "not_owner", status: FORBIDDEN },
+    expect([missing, namespaced]).toMatchObject([
+      { code: "agent_not_found", status: NOT_FOUND },
+      { created: false, identity: "ada/triage-agent" },
     ]);
   }).pipe(Effect.provide(testCookout())),
 );
@@ -149,7 +156,7 @@ it.effect("the approver may lower the idle expiry asked for, but never raise it"
       details: { maxIdleExpiry: "30d" },
       status: BAD_REQUEST,
     });
-    expect(approved.agentJoinRequest).toMatchObject({ approved: true, creates: true, idleExpiry: "7d" });
+    expect(approved.agentJoinRequest).toMatchObject({ approved: true, creates: false, idleExpiry: "7d" });
     expect(session.expiresAt).toBe("2026-01-08T00:00:00.000Z");
   }).pipe(Effect.provide(testCookout())),
 );
@@ -158,6 +165,7 @@ it.effect("an agent join request can't ask past the board's ceiling, and without
   Effect.gen(function* ceiling() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    yield* cookout.createIdentity("triage-agent", { owner: "ada" });
     const tooLong = yield* refusal(() => cookout.clientFor().startAgentJoin({ ...asked, idleExpiry: "2d" }));
     const started = yield* answer(() => cookout.clientFor().startAgentJoin(asked));
     const shown = yield* answer(() => ada.client.getAgentJoinRequest(started.userCode));

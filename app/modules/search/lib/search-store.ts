@@ -1,5 +1,5 @@
-import type { Refusal, SearchRequest } from "../../sdk/index.ts";
-import type { SearchResponse, SearchResult } from "../index.ts";
+import type { MessageId, Refusal, SearchRequest } from "../../sdk/index.ts";
+import type { SearchResponse, SearchSort } from "../index.ts";
 import { isEmptyQuery, parseQuery } from "../index.ts";
 
 type SearchAnswer = { readonly page: SearchResponse } | { readonly refusal: Refusal };
@@ -12,16 +12,20 @@ type Found =
   | { readonly status: "refused"; readonly message: string }
   | {
       readonly status: "found";
-      readonly results: readonly SearchResult[];
+      readonly ids: readonly MessageId[];
       readonly cursor: string | null;
       readonly loadingMore: boolean;
     };
 
 interface SearchState {
   readonly query: string;
+  readonly caret: number;
+  readonly suggestion: number;
+  readonly dismissed: boolean;
+  readonly sort: SearchSort;
   readonly open: boolean;
   readonly found: Found;
-  readonly highlighted: number | null;
+  readonly highlighted: number;
 }
 
 type Direction = "down" | "up";
@@ -29,11 +33,14 @@ type Direction = "down" | "up";
 interface Search {
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () => SearchState;
-  readonly edit: (query: string) => void;
+  readonly edit: (query: string, caret?: number) => void;
+  readonly sortBy: (sort: SearchSort) => void;
   readonly open: () => void;
   readonly close: () => void;
   readonly loadMore: () => void;
-  readonly move: (direction: Direction) => void;
+  readonly move: (direction: Direction, ahead?: number) => void;
+  readonly moveSuggestion: (direction: Direction, count: number) => void;
+  readonly dismissSuggestions: () => void;
 }
 
 interface SearchOptions {
@@ -51,6 +58,7 @@ const STEPS: Readonly<Record<Direction, number>> = { down: ONE, up: -ONE };
 
 interface Asked {
   readonly query: string;
+  readonly sort: SearchSort;
   readonly cursor: string | null;
   readonly limit: number | null;
 }
@@ -58,16 +66,17 @@ interface Asked {
 function requestOf(asked: Asked): SearchRequest {
   return {
     query: asked.query,
+    sort: asked.sort,
     ...(asked.cursor !== null && { cursor: asked.cursor }),
     ...(asked.limit !== null && { limit: asked.limit }),
   };
 }
 
-function resultsOf(found: Found): readonly SearchResult[] {
+function idsOf(found: Found): readonly MessageId[] {
   if (found.status !== "found") {
     return [];
   }
-  return found.results;
+  return found.ids;
 }
 
 function cursorOf(page: SearchResponse): string | null {
@@ -77,29 +86,22 @@ function cursorOf(page: SearchResponse): string | null {
   return page.cursor;
 }
 
-function foundAfter(earlier: readonly SearchResult[], answer: SearchAnswer): Found {
+function foundAfter(earlier: readonly MessageId[], answer: SearchAnswer): Found {
   if ("refusal" in answer) {
     return { message: answer.refusal.message, status: "refused" };
   }
   const { page } = answer;
-  return { cursor: cursorOf(page), loadingMore: false, results: [...earlier, ...page.results], status: "found" };
+  const ids = [...earlier, ...page.results.map((result) => result.message.id)];
+  return { cursor: cursorOf(page), ids, loadingMore: false, status: "found" };
 }
 
-function startOf(direction: Direction, count: number): number {
-  if (direction === "down") {
-    return FIRST;
-  }
-  return count - ONE;
+function movedTo(at: number, direction: Direction, count: number): number {
+  return Math.max(Math.min(at + STEPS[direction], count - ONE), FIRST);
 }
 
-function movedTo(at: number | null, direction: Direction, count: number): number | null {
-  if (count === FIRST) {
-    return null;
-  }
-  if (at === null) {
-    return startOf(direction, count);
-  }
-  return Math.min(Math.max(at + STEPS[direction], FIRST), count - ONE);
+function wrappedTo(at: number, direction: Direction, count: number): number {
+  const total = Math.max(count, ONE);
+  return (at + STEPS[direction] + total) % total;
 }
 
 function foundWhileEditing(query: string): Found {
@@ -115,12 +117,36 @@ interface Held {
   readonly subscribe: Search["subscribe"];
 }
 
+const searchKeys: readonly (keyof SearchState)[] = [
+  "caret",
+  "dismissed",
+  "found",
+  "highlighted",
+  "open",
+  "query",
+  "sort",
+  "suggestion",
+];
+
 function heldState(): Held {
   const listeners = new Set<() => void>();
-  let state: SearchState = { found: IDLE, highlighted: null, open: false, query: "" };
+  let state: SearchState = {
+    caret: FIRST,
+    dismissed: false,
+    found: IDLE,
+    highlighted: FIRST,
+    open: false,
+    query: "",
+    sort: "newest",
+    suggestion: FIRST,
+  };
   return {
     set: (next) => {
-      state = { ...state, ...next };
+      const changed: SearchState = { ...state, ...next };
+      if (searchKeys.every((key) => Object.is(changed[key], state[key]))) {
+        return;
+      }
+      state = changed;
       for (const listener of listeners) {
         listener();
       }
@@ -151,10 +177,10 @@ function asking(held: Held, options: SearchOptions): Asking {
   async function ask(cursor: string | null): Promise<void> {
     latest += ONE;
     const mine = latest;
-    const { found, query } = held.state();
-    const answer = await options.search(requestOf({ cursor, limit: options.limit ?? null, query }));
+    const { found, query, sort } = held.state();
+    const answer = await options.search(requestOf({ cursor, limit: options.limit ?? null, query, sort }));
     if (mine === latest) {
-      held.set({ found: foundAfter(resultsOf(found), answer) });
+      held.set({ found: foundAfter(idsOf(found), answer) });
     }
   }
   return {
@@ -178,42 +204,83 @@ function loaderOf(held: Held, asker: Asking): () => void {
   };
 }
 
-function createSearch(options: SearchOptions): Search {
-  const held = heldState();
-  const asker = asking(held, options);
-  const loadMore = loaderOf(held, asker);
+interface FirstPage {
+  readonly stop: () => void;
+  readonly later: () => void;
+  readonly now: () => void;
+}
+
+function firstPageOf(asker: Asking, pause: number): FirstPage {
   let waiting: ReturnType<typeof globalThis.setTimeout> | null = null;
-  function firstPage(): void {
+  function now(): void {
     asker.ask(null);
   }
   return {
-    close: () => {
-      held.set({ highlighted: null, open: false });
+    later: () => {
+      waiting = globalThis.setTimeout(now, pause);
     },
-    edit: (query) => {
+    now,
+    stop: () => {
       if (waiting !== null) {
         globalThis.clearTimeout(waiting);
       }
       asker.drop();
+    },
+  };
+}
+
+function sorterOf(held: Held, firstPage: FirstPage): Search["sortBy"] {
+  return (sort) => {
+    const { query, sort: sorted } = held.state();
+    if (sort === sorted) {
+      return;
+    }
+    firstPage.stop();
+    const found = foundWhileEditing(query);
+    held.set({ found, highlighted: FIRST, sort });
+    if (found === SEARCHING) {
+      firstPage.now();
+    }
+  };
+}
+
+function createSearch(options: SearchOptions): Search {
+  const held = heldState();
+  const asker = asking(held, options);
+  const loadMore = loaderOf(held, asker);
+  const firstPage = firstPageOf(asker, options.pause ?? PAUSE_MS);
+  return {
+    close: () => {
+      held.set({ highlighted: FIRST, open: false });
+    },
+    dismissSuggestions: () => {
+      held.set({ dismissed: true, suggestion: FIRST });
+    },
+    edit: (query, caret = query.length) => {
+      firstPage.stop();
       const found = foundWhileEditing(query);
-      held.set({ found, highlighted: null, open: true, query });
+      held.set({ caret, dismissed: false, found, highlighted: FIRST, open: true, query, suggestion: FIRST });
       if (found === SEARCHING) {
-        waiting = globalThis.setTimeout(firstPage, options.pause ?? PAUSE_MS);
+        firstPage.later();
       }
     },
     loadMore,
-    move: (direction) => {
-      const count = resultsOf(held.state().found).length;
+    move: (direction, ahead = FIRST) => {
+      const count = ahead + idsOf(held.state().found).length;
       const highlighted = movedTo(held.state().highlighted, direction, count);
       held.set({ highlighted });
-      if (highlighted === count - ONE) {
+      if (highlighted > ahead - ONE && highlighted === count - ONE) {
         loadMore();
       }
+    },
+    moveSuggestion: (direction, count) => {
+      held.set({ suggestion: wrappedTo(held.state().suggestion, direction, count) });
     },
     open: () => {
       held.set({ open: true });
     },
     snapshot: held.state,
+    sortBy: sorterOf(held, firstPage),
     subscribe: held.subscribe,
   };
 }

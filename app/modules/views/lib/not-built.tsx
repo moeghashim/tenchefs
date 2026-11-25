@@ -1,4 +1,5 @@
-import { Card, CardHeader, Heading, Muted } from "../../design-system/index.tsx";
+import { Card, CardHeader } from "../../design-system/layout.tsx";
+import { Heading, Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 
 interface NotBuiltProps {

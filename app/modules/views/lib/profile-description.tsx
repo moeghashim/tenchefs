@@ -1,7 +1,7 @@
 import type { Identity, IdentityName } from "../../sdk/index.ts";
 import type { Composer } from "../../composer/index.ts";
 import { DescriptionField } from "./description-field.tsx";
-import { MutedLines } from "../../design-system/index.tsx";
+import { MutedLines } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 

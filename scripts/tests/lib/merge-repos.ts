@@ -1,8 +1,10 @@
-import type { MergeOptions, MergeRules, Merged } from "../../lib/merge-ticket.ts";
+import { DONE, stop } from "../../lib/merge-steps.ts";
+import type { Landing, PullRequest } from "../../lib/merge-pull-request.ts";
+import type { MergeOptions, Merged } from "../../lib/merge-ticket.ts";
+import type { Step, Stopped } from "../../lib/merge-steps.ts";
 import { continueMerge, mergeTicket } from "../../lib/merge-ticket.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { DONE } from "../../lib/merge-steps.ts";
-import type { Step } from "../../lib/merge-steps.ts";
+import type { MergeRules } from "../../lib/merge-resolve.ts";
 import { execFileSync } from "node:child_process";
 import { onTestFinished } from "vitest";
 import path from "node:path";
@@ -17,16 +19,34 @@ interface Repos {
 
 interface Overrides {
   readonly check?: readonly string[];
-  readonly ci?: (branch: string, sha: string, rerunRed: boolean) => Step;
+  readonly ci?: (branch: string, sha: string) => Step;
   readonly install?: readonly string[];
+  readonly approved?: string;
+  readonly log?: (line: string) => void;
   readonly migrationsBase?: string;
+  readonly pullRequest?: (landing: Landing) => PullRequest | Stopped;
   readonly rules?: MergeRules;
 }
 
 const TICKET = 7;
+const INDENT = 2;
+const START = 0;
+const SHORT = 12;
 const BRANCH = `ticket-${TICKET}`;
 const ATTEMPTS = 3;
+const PR = { number: 9, url: "https://github.com/o/r/pull/9" } as const;
 const FLOOR = { base: ["90", "95"], merged: ["91", "94"], ticket: ["92", "94"], v1: ["91", "95"] } as const;
+
+const OXLINT_CONFIG = {
+  categories: { correctness: "error" },
+  ignorePatterns: ["coverage/**"],
+  overrides: [{ files: ["scripts/**"], rules: { "node/no-sync": "off" } }],
+  plugins: ["eslint", "unicorn"],
+  rules: { "func-style": ["error", "declaration"], "no-console": "error", "no-debugger": "warn" },
+} as const;
+const OPT_OUTS =
+  "# Lint opt-outs\n\n## Off in some files\n\n- `node/no-sync`, in `scripts/`: a script uses the sync APIs.\n";
+const DEPENDENCY_CRUISER = 'module.exports = {\n  forbidden: [{ name: "no-circular", severity: "error" }],\n};\n';
 
 const rules: MergeRules = {
   adrs: "docs/adr",
@@ -60,6 +80,10 @@ function migrations(...entries: readonly string[]): string {
   return `const migrations = [\n${listed}];\n`;
 }
 
+function oxlint(config: unknown): string {
+  return `${JSON.stringify(config, null, INDENT)}\n`;
+}
+
 function floor([branches, lines]: readonly [string, string]): string {
   return `export default {\n  thresholds: {\n    branches: ${branches},\n    lines: ${lines},\n  },\n};\n`;
 }
@@ -85,6 +109,7 @@ function temporaryRoot(): string {
 function bareOrigin(root: string): string {
   const origin = path.join(root, "origin.git");
   git(root, "init", "-q", "--bare", "-b", "v1", origin);
+  git(origin, "config", "receive.denyNonFastForwards", "true");
   return origin;
 }
 
@@ -101,7 +126,10 @@ function repos(): Repos {
   const base = { "floor.ts": floor(FLOOR.base), "gen/out.txt": generated("a"), "migrations.ts": migrations("a") };
   commit(work, "base", {
     ...base,
+    ".dependency-cruiser.cjs": DEPENDENCY_CRUISER,
+    ".oxlintrc.json": oxlint(OXLINT_CONFIG),
     "docs/adr/0001-base.md": "# Base\n",
+    "docs/lint-opt-outs.md": OPT_OUTS,
     "notes.txt": "base\n",
     "pnpm-lock.yaml": "base\n",
     "src/a.txt": "a\n",
@@ -110,6 +138,35 @@ function repos(): Repos {
   git(other, "pull", "-q", "origin", "v1");
   git(work, "checkout", "-q", "-b", BRANCH);
   return { origin, other, root, work };
+}
+
+function attemptOf(sha: string): string {
+  return `merge-ticket-${TICKET}-${sha.slice(START, SHORT)}`;
+}
+
+function pushedBranch(origin: string): string {
+  return git(origin, "branch", "--list", "--format=%(refname:short)")
+    .split("\n")
+    .filter((branch) => branch !== "v1")
+    .join("\n");
+}
+
+function fakePullRequests(): {
+  readonly landings: readonly Landing[];
+  readonly pullRequest: (landing: Landing) => PullRequest;
+} {
+  const landings: Landing[] = [];
+  return {
+    landings,
+    pullRequest: (landing): PullRequest => {
+      landings.push(landing);
+      return PR;
+    },
+  };
+}
+
+function redCi(): Step {
+  return stop(`merge-ticket-${TICKET}'s latest Check run is red: browser 1/3 (failure).`);
 }
 
 function optionsFor(work: string, overrides: Overrides): MergeOptions {
@@ -124,6 +181,7 @@ function optionsFor(work: string, overrides: Overrides): MergeOptions {
       logged.push(line);
     },
     migrationsBase: "origin/v1",
+    pullRequest: (): PullRequest => PR,
     rules,
     ticket: TICKET,
     title: "Add the c table",
@@ -171,5 +229,35 @@ function repo(dir: string): Repo {
   };
 }
 
+function resolvedByHand(): Repos {
+  const repositories = repos();
+  const { other, work } = repositories;
+  repo(other).push({ "notes.txt": "v1\n" });
+  repo(work).commit("the ticket", { "notes.txt": "ticket\n" });
+  repo(work).merge({});
+  repo(work).resolveByHand("both\n");
+  return repositories;
+}
+
 export type { Overrides, Repos };
-export { ATTEMPTS, BRANCH, FLOOR, TICKET, floor, generated, git, migrations, repo, repos };
+export {
+  ATTEMPTS,
+  BRANCH,
+  DEPENDENCY_CRUISER,
+  FLOOR,
+  OPT_OUTS,
+  OXLINT_CONFIG,
+  TICKET,
+  attemptOf,
+  fakePullRequests,
+  floor,
+  generated,
+  git,
+  migrations,
+  oxlint,
+  pushedBranch,
+  redCi,
+  repo,
+  repos,
+  resolvedByHand,
+};

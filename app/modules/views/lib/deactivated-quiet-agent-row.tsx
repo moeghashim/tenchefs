@@ -1,5 +1,5 @@
 import type { DeactivatedQuietAgent } from "../../sdk/index.ts";
-import { FeedNoticeRow } from "../../design-system/index.tsx";
+import { FeedNoticeRow } from "../../design-system/feed.tsx";
 import type { ReactNode } from "react";
 import { useAuthor } from "./use-author.ts";
 import { useTimeAgo } from "./use-time-ago.ts";

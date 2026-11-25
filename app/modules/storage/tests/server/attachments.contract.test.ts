@@ -12,6 +12,8 @@ import { isAttachmentId } from "../../../attachments/index.ts";
 
 const PHOTO_SIZE = 3;
 const NOTES_SIZE = 5;
+const PHOTO_WIDTH = 640;
+const PHOTO_HEIGHT = 480;
 
 function attachmentId(raw: string): AttachmentId {
   return Option.getOrThrow(Option.liftPredicate(raw, isAttachmentId));
@@ -21,10 +23,12 @@ const MISSING = attachmentId("missing");
 
 const photo: Attachment = {
   contentType: "image/png",
+  height: PHOTO_HEIGHT,
   id: attachmentId("photo-id"),
   image: true,
   name: "photo.png",
   size: PHOTO_SIZE,
+  width: PHOTO_WIDTH,
 };
 
 const notes: Attachment = {
@@ -38,7 +42,7 @@ const notes: Attachment = {
 const kept: Attachment = { ...notes, id: attachmentId("kept-id"), name: "kept.txt" };
 
 it.effect.each(storageLayers)(
-  "storage contract ($adapter): a message keeps its attachments in order wherever it is read, and each is found by ID",
+  "storage contract ($adapter): a message keeps its attachments, and an image its size, in order wherever it is read, and each is found by ID",
   ({ layer }) =>
     Effect.gen(function* attachmentsKept() {
       const { storage } = yield* openStore(layer);

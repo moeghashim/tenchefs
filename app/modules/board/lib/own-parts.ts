@@ -2,6 +2,7 @@ import type { BoardCalls, CallsClient } from "./board-calls.ts";
 import type { ChannelName, CookoutEvent } from "../../sdk/index.ts";
 import type { ChannelsClient, ChannelsState, CommandsClient, CommandsState } from "./listed-slices.ts";
 import type { MessagesClient, MessagesPart } from "./messages-part.ts";
+import type { Schedules, SchedulesClient } from "./schedules-slice.ts";
 import type { SubscriptionChange, SubscriptionsState } from "./subscriptions-slice.ts";
 import { channelsSlice, commandsSlice } from "./listed-slices.ts";
 import { hrefOf, locationOf } from "../../paths/index.ts";
@@ -9,13 +10,15 @@ import type { Part } from "./slice.ts";
 import { createBoardCalls } from "./board-calls.ts";
 import { createMessagesPart } from "./messages-part.ts";
 import { createPart } from "./slice.ts";
+import { schedulesSlice } from "./schedules-slice.ts";
 import { subscriptionsSlice } from "./subscriptions-slice.ts";
 
-type OwnClient = CallsClient & ChannelsClient & CommandsClient & MessagesClient;
+type OwnClient = CallsClient & ChannelsClient & CommandsClient & MessagesClient & SchedulesClient;
 
 interface OwnParts {
   readonly channels: Part<ChannelsState>;
   readonly commands: Part<CommandsState>;
+  readonly schedules: Part<Schedules>;
   readonly subscriptions: Part<SubscriptionsState, SubscriptionChange>;
   readonly messages: MessagesPart;
   readonly calls: BoardCalls;
@@ -51,6 +54,7 @@ function isMissing(state: ChannelsState, event: CookoutEvent): boolean {
 interface Listed {
   readonly channels: Part<ChannelsState>;
   readonly commands: Part<CommandsState>;
+  readonly schedules: Part<Schedules>;
   readonly subscriptions: Part<SubscriptionsState, SubscriptionChange>;
 }
 
@@ -58,13 +62,14 @@ function listedParts({ changed, client }: OwnOptions): Listed {
   return {
     channels: createPart({ changed, client, slice: channelsSlice }),
     commands: createPart({ changed, client, slice: commandsSlice }),
+    schedules: createPart({ changed, client, slice: schedulesSlice }),
     subscriptions: createPart({ changed, client, slice: subscriptionsSlice }),
   };
 }
 
 function createOwnParts(options: OwnOptions): OwnParts {
   const { changed } = options;
-  const { channels, commands, subscriptions } = listedParts(options);
+  const { channels, commands, schedules, subscriptions } = listedParts(options);
   const messages = createMessagesPart(options);
   let notice: ChannelName | null = null;
   function apply(event: CookoutEvent): void {
@@ -73,7 +78,7 @@ function createOwnParts(options: OwnOptions): OwnParts {
       changed();
     }
     const missing = isMissing(channels.state(), event);
-    for (const part of [channels, commands, subscriptions, messages]) {
+    for (const part of [channels, commands, schedules, subscriptions, messages]) {
       part.apply(event);
     }
     if (missing) {
@@ -83,7 +88,7 @@ function createOwnParts(options: OwnOptions): OwnParts {
   return {
     apply,
     back: () => {
-      for (const part of [channels, commands, subscriptions, messages]) {
+      for (const part of [channels, commands, schedules, subscriptions, messages]) {
         part.back();
       }
     },
@@ -91,6 +96,7 @@ function createOwnParts(options: OwnOptions): OwnParts {
       changed,
       client: options.client,
       heard: apply,
+      keepResults: messages.keepResults,
       subscriptionChanged: subscriptions.apply,
     }),
     channels,
@@ -101,8 +107,10 @@ function createOwnParts(options: OwnOptions): OwnParts {
     },
     messages,
     notice: () => notice,
+    schedules,
     subscriptions,
   };
 }
 
+export type { Schedules } from "./schedules-slice.ts";
 export { type OwnClient, type OwnParts, createOwnParts };

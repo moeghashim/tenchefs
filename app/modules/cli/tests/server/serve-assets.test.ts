@@ -5,8 +5,8 @@ import type { CookoutClient } from "../../../sdk/index.ts";
 import { NodeServices } from "@effect/platform-node";
 import type { Scope } from "effect";
 import type { Secrets } from "../../../secrets/server.ts";
-import { createCookoutClient } from "../../../sdk/index.ts";
 import { secretsLive } from "../../../secrets/server.ts";
+import { testClient } from "../../../testing/index.ts";
 
 const BYTES = 3;
 
@@ -22,7 +22,7 @@ function servingWithAssetsIn(
 ): Effect.Effect<ServingAdmin, never, NodeServices.NodeServices | Secrets | Scope.Scope> {
   return Effect.gen(function* serveWithAssets() {
     const server = yield* startServe({ database: yield* freshDatabasePath, env: { COOKOUT_ASSETS_DIR: folder } });
-    const admin = createCookoutClient({ env: {}, token: server.adminToken, url: server.url });
+    const admin = testClient({ env: {}, token: server.adminToken, url: server.url });
     yield* answer(() => admin.createChannel({ name: "grill" }));
     const serving: ServingAdmin = { admin, stop: server.stop };
     return serving;

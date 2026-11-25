@@ -14,6 +14,7 @@ import type {
 } from "./lib/deactivation-offers.ts";
 import type { Message, MessageId, Reaction, TopLevelMessage } from "../messages/index.ts";
 import type { OfflineAlert, OfflineAlertId } from "../presence/index.ts";
+import type { InboxAgentJoinRequest } from "./lib/agent-join-requests.ts";
 import type { IsoTime } from "../time/index.ts";
 
 declare const brand: unique symbol;
@@ -128,6 +129,10 @@ export interface InboxResponse {
   readonly nudges: readonly Nudge[];
   readonly deactivationOffers: readonly DeactivationOffer[];
   readonly deactivatedQuietAgents: readonly DeactivatedQuietAgent[];
+  /**
+   * The pending Agent join requests for agents the caller owns or brought in, oldest first; none is in the history. One whose agent is already joined in another session has `liveSessionExpiresAt`, and approving it replaces that session only with `force`; any can be dismissed with `denyAgentJoin`.
+   */
+  readonly agentJoinRequests: readonly InboxAgentJoinRequest[];
 }
 
 /** An item in the inbox history: `read` says the identity's read position for its scope is at or after it. */
@@ -239,15 +244,6 @@ export const inboxPath = "/v1/inbox";
 /** `GET /v1/inbox/history?before=<id>&limit=<n>`: a page of the caller's inbox history, read and unread. */
 export const inboxHistoryPath = "/v1/inbox/history";
 
-/** The SDK's call on an offline alert. */
-export interface OfflineAlertCalls {
-  /**
-   * `POST /v1/inbox/alerts/:id/read`: marks the caller's offline alert read, so it leaves the inbox and stays in its
-   * history. An alert the caller has none of is 404 `offline_alert_not_found`.
-   */
-  readonly markOfflineAlertRead: (id: OfflineAlertId) => Promise<OfflineAlertResponse>;
-}
-
 /** `POST /v1/inbox/alerts/:id/read`: marks the caller's offline alert `id` read (404 `offline_alert_not_found` otherwise). */
 export const offlineAlertReadPath = "/v1/inbox/alerts/:id/read";
 
@@ -298,3 +294,6 @@ export {
   isDeactivationOfferId,
   quietAgentDays,
 } from "./lib/deactivation-offers.ts";
+
+/** A pending Agent join request in the Inbox of whoever may approve it (mattpocock/cookout#442). */
+export type { InboxAgentJoinRequest } from "./lib/agent-join-requests.ts";

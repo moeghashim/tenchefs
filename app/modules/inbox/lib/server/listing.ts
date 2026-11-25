@@ -20,12 +20,12 @@ import {
   withHistoryReactions,
   withReactionItems,
 } from "./reaction-items.ts";
-import type { Channel } from "../../../channels/index.ts";
 import type { DeactivationOffers } from "./deactivation-offers.ts";
 import type { Identity } from "../../../identities/index.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import type { OfflineAlerts } from "./offline-alerts.ts";
 import type { Refusal } from "../../../http/index.ts";
+import { agentJoinRequestsOn } from "./agent-join-requests.ts";
 import { echoed } from "../../../http/index.ts";
 import { pageSize } from "../../../messages/index.ts";
 import { unread } from "./offline-alerts.ts";
@@ -33,6 +33,10 @@ import { unread } from "./offline-alerts.ts";
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
 type Store = Storage["Service"];
+
+type Channel = InboxItem["channel"];
+
+type JoinRequestCalls = ReturnType<typeof agentJoinRequestsOn>;
 
 type StoredItem = Omit<InboxItem, "channel">;
 
@@ -67,6 +71,7 @@ interface ListingCalls {
   readonly reactionItemFor: (caller: Identity, id: MessageId) => Fails<readonly InboxItem[]>;
   readonly reactionItems: (caller: Identity) => Fails<readonly InboxItem[]>;
   readonly markNudgeRead: (caller: Identity, asked: string) => Fails<NudgeResponse>;
+  readonly agentJoinRequestsAfterChange: JoinRequestCalls["agentJoinRequestsAfterChange"];
 }
 
 const NOT_FOUND = 404;
@@ -184,8 +189,8 @@ function unreadNudges({ caller, storage }: Asking): Fails<readonly Nudge[]> {
   );
 }
 
-function inboxOf(asking: Listing & Asking): Fails<InboxResponse> {
-  const { caller, deactivationOffers: offers, offlineAlerts, storage } = asking;
+function inboxOf(asking: Listing & Asking & Pick<JoinRequestCalls, "agentJoinRequests">): Fails<InboxResponse> {
+  const { agentJoinRequests: pendingFor, caller, deactivationOffers: offers, offlineAlerts, storage } = asking;
   return Effect.gen(function* inboxWithAlertsAndNudges() {
     const stored = yield* storage.listInbox(caller.name);
     const withReactions = yield* withReactionItems({ author: caller.name, items: stored, storage });
@@ -194,7 +199,8 @@ function inboxOf(asking: Listing & Asking): Fails<InboxResponse> {
     const nudges = yield* unreadNudges(asking);
     const deactivationOffers = yield* offers.list(caller, "open");
     const deactivatedQuietAgents = yield* offers.listDeactivatedQuietAgents(caller, "unread");
-    return { alerts: unread(alerts), deactivatedQuietAgents, deactivationOffers, items, nudges };
+    const agentJoinRequests = yield* pendingFor(caller);
+    return { agentJoinRequests, alerts: unread(alerts), deactivatedQuietAgents, deactivationOffers, items, nudges };
   });
 }
 
@@ -219,9 +225,11 @@ function markNudgeRead({ caller, storage }: Asking, asked: string): Fails<NudgeR
 
 function listingOn(listing: Listing): ListingCalls {
   const { storage } = listing;
+  const { agentJoinRequests, agentJoinRequestsAfterChange } = agentJoinRequestsOn(storage);
   return {
+    agentJoinRequestsAfterChange,
     history: (caller, query) => historyOf({ ...listing, caller }, query),
-    inbox: (caller) => inboxOf({ ...listing, caller }),
+    inbox: (caller) => inboxOf({ ...listing, agentJoinRequests, caller }),
     itemFor: (caller, id) =>
       Effect.flatMap(storage.findInboxItem(caller.name, id), (stored) =>
         withChannels(storage, Arr.fromNullishOr(stored)),

@@ -1,7 +1,8 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { ChannelActions } from "./use-channel-menu.ts";
 import type { ReactNode } from "react";
 import type { SubscriptionsState } from "../../board/index.ts";
+import { useSubscriptions } from "./use-board.ts";
 import { useSyncExternalStore } from "react";
 
 interface ChannelMenuRefusalProps {
@@ -17,9 +18,9 @@ function subscriptionRefusal(state: SubscriptionsState): string | null {
 }
 
 export function ChannelMenuRefusal(props: ChannelMenuRefusalProps): ReactNode {
-  const { subscriptions, unread } = props.actions;
+  const { unread } = props.actions;
   const marked = useSyncExternalStore(unread.markChannel.subscribe, unread.markChannel.refusal);
-  const subscribed = useSyncExternalStore(subscriptions.subscribe, subscriptions.snapshot);
+  const subscribed = useSubscriptions();
   const refusal = subscriptionRefusal(subscribed);
   return (
     <>

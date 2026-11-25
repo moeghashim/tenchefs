@@ -117,6 +117,10 @@ function followersOf(message: Message): readonly IdentityName[] {
   return Arr.dedupe([message.author.name, ...message.mentions]);
 }
 
+function mentionsOwnAuthor(message: Message): boolean {
+  return Predicate.isNotUndefined(message.scheduledMessage) && message.mentions.includes(message.author.name);
+}
+
 function reasonsIn(reasons: readonly InboxReason[]): readonly InboxReason[] {
   return Arr.sort(Arr.dedupe(reasons), Order.String);
 }
@@ -131,6 +135,7 @@ export {
   type StoredHistoryPage,
   type StoredInboxItem,
   followersOf,
+  mentionsOwnAuthor,
   movedBackTo,
   movedTo,
   newestPerScope,

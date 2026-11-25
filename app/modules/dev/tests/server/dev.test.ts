@@ -8,13 +8,13 @@ import {
   runDev,
   startDev,
   startFakeRoutine,
+  startProbedDev,
 } from "../../../testing/server.ts";
 import { clockForwardPath, relayCutPath, relayRestorePath } from "../../../http/index.ts";
 import { expect, it } from "@effect/vitest";
+import { moveClockForward, testClient } from "../../../testing/index.ts";
 import type { CookoutClient } from "../../../sdk/index.ts";
 import type { DevProcess } from "../../../testing/server.ts";
-import { createCookoutClient } from "../../../sdk/index.ts";
-import { moveClockForward } from "../../../testing/index.ts";
 
 interface Fetched {
   readonly status: number;
@@ -67,6 +67,14 @@ function fetchedText(url: string): Effect.Effect<Fetched> {
   }).pipe(Effect.provide(FetchHttpClient.layer), Effect.orDie);
 }
 
+function policyOf(url: string): Effect.Effect<string | undefined> {
+  return HttpClient.execute(HttpClientRequest.get(url)).pipe(
+    Effect.map((response) => response.headers["content-security-policy"]),
+    Effect.provide(FetchHttpClient.layer),
+    Effect.orDie,
+  );
+}
+
 function postedFrom(origin: string, url: string): Effect.Effect<string> {
   return HttpClient.execute(HttpClientRequest.post(url).pipe(HttpClientRequest.setHeader("origin", origin))).pipe(
     Effect.flatMap((response) => response.text),
@@ -86,9 +94,7 @@ function postedJson(url: string): Effect.Effect<unknown> {
 it.effect("pnpm dev serves a fresh board and a webhook fake, and removes its database when it stops", () =>
   Effect.gen(function* devServesAndCleansUp() {
     const dev = yield* startDev;
-    const { identity } = yield* answer(() =>
-      createCookoutClient({ env: {}, token: dev.adminToken, url: dev.url }).whoami(),
-    );
+    const { identity } = yield* answer(() => testClient({ env: {}, token: dev.adminToken, url: dev.url }).whoami());
     const fakeStatus = yield* postedStatus(dev.webhookFakeUrl, "/command");
     const keptWhileRunning = yield* databaseExists(dev.database);
     yield* dev.stop;
@@ -109,7 +115,29 @@ it.effect("pnpm dev serves the web UI from the Vite dev server, which passes /v1
 
     expect([page.status, health.status]).toStrictEqual([OK, OK]);
     expect(page.text).toContain('src="/app/web.tsx"');
+    expect(page.text).not.toContain("/app/modules/probe/web.ts");
     expect(health.text).toContain('"status":"ok"');
+  }).pipe(Effect.provide(commandLineServices)),
+);
+
+it.effect("pnpm dev's web UI carries the live board's CSP, the one every cookout response carries", () =>
+  Effect.gen(function* devServesTheLiveCsp() {
+    const dev = yield* startDev;
+    const page = yield* policyOf(dev.webUrl);
+    const script = yield* policyOf(`${dev.webUrl}/app/web.tsx`);
+    const live = yield* policyOf(`${dev.url}/v1/health`);
+
+    expect(live).toContain("default-src 'none'");
+    expect([page, script]).toStrictEqual([live, live]);
+  }).pipe(Effect.provide(commandLineServices)),
+);
+
+it.effect("pnpm dev start --probe puts the browser tests' probe on the web UI's page ahead of the app", () =>
+  Effect.gen(function* devServesTheProbe() {
+    const dev = yield* startProbedDev;
+    const page = yield* fetchedText(dev.webUrl);
+
+    expect(page.text).toMatch(/src="\/app\/modules\/probe\/web\.ts"[\s\S]*src="\/app\/web\.tsx"/u);
   }).pipe(Effect.provide(commandLineServices)),
 );
 
@@ -223,10 +251,10 @@ it.effect("the dev program's fake routine answers a fire as a routine does, nami
 
 function threadStartedOn(dev: DevProcess): Effect.Effect<CookoutClient> {
   return Effect.gen(function* startThread() {
-    const admin = createCookoutClient({ env: {}, token: dev.adminToken, url: dev.url });
+    const admin = testClient({ env: {}, token: dev.adminToken, url: dev.url });
     yield* answer(() => admin.createChannel({ name: "release" }));
     const { token } = yield* answer(() => admin.createIdentity({ kind: "human", name: "ada" }));
-    const ada = createCookoutClient({ env: {}, token, url: dev.url });
+    const ada = testClient({ env: {}, token, url: dev.url });
     yield* answer(() => ada.createMessage({ channel: "release", text: "Who owns the release notes?" }));
     return ada;
   });

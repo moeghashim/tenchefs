@@ -3,10 +3,10 @@ import type { AgentSessionResponse, ListAgentSessionsResponse, RevokeAgentSessio
 import { Context, DateTime, Duration, Effect, Option } from "effect";
 import type { Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { Join, On } from "./join.ts";
+import type { JoinRequestChanges, JoinRequests } from "./join-requests.ts";
 import type { PubSub, Scope } from "effect";
 import { agentSessionExpired, agentSessionRevoked } from "../../index.ts";
 import type { JoinCodes } from "./join-codes.ts";
-import type { JoinRequests } from "./join-requests.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { TokensEnded } from "../../../identities/server.ts";
 import { isoTimeOf } from "../../../time/server.ts";
@@ -18,6 +18,7 @@ type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
 interface Ends {
   readonly endTokens: (ended: TokensEnded) => Effect.Effect<void>;
+  readonly joinRequestChanges: JoinRequestChanges;
 }
 
 const AGENT_SESSIONS = { kind: "agent sessions" } as const;
@@ -32,6 +33,7 @@ interface AgentSessionsService extends JoinRequests, JoinCodes {
     by: IdentityName,
   ) => Effect.Effect<RevokeAgentSessionResponse, StorageUnavailable>;
   readonly sessionChanged: Effect.Effect<PubSub.Subscription<Identity>, never, Scope.Scope>;
+  readonly joinRequestChanged: Effect.Effect<PubSub.Subscription<IdentityName>, never, Scope.Scope>;
 }
 
 class AgentSessions extends Context.Service<AgentSessions, AgentSessionsService>()(
@@ -107,7 +109,7 @@ function forcedJoiner(on: On & Ends): AgentSessionsService["join"] {
     );
 }
 
-function agentSessionsOn(on: On & Ends): Omit<AgentSessionsService, "sessionChanged"> {
+function agentSessionsOn(on: On & Ends): Omit<AgentSessionsService, "sessionChanged" | "joinRequestChanged"> {
   return {
     join: forcedJoiner(on),
     leave: (agent, hash) =>

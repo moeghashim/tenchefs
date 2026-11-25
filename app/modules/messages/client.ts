@@ -4,8 +4,8 @@
  * Also the body of posting a message (#342).
  */
 import type { JsonValue, ListOpenThreadsResponse, MessageId, TopLevelMessageResponse } from "./index.ts";
+import type { SearchResponse, SearchSort } from "../search/index.ts";
 import type { AttachmentId } from "../attachments/index.ts";
-import type { SearchResponse } from "../search/index.ts";
 
 /** An attachment's bytes, as `GET /v1/assets/:id` serves them. */
 export interface AttachmentBytes {
@@ -79,6 +79,11 @@ export interface SearchRequest {
    * `from:@name`, `in:#channel`, `before:YYYY-MM-DD` and `after:YYYY-MM-DD` filters narrow it, `@` and `#` optional.
    */
   readonly query: string;
+  /**
+   * `newest` (the default) lists results newest first; `best` lists first the results made most of the query's words,
+   * ties newest first. Pass the same sort with each page's `cursor`.
+   */
+  readonly sort?: SearchSort;
   /** Only results after this point: pass the previous page's `cursor` to read on. */
   readonly cursor?: string;
   /** 1–200 results. Default 50. */
@@ -88,10 +93,11 @@ export interface SearchRequest {
 /** Searching messages. */
 export interface SearchCalls {
   /**
-   * `GET /v1/search?q=<query>`: a page of the messages and replies in every channel whose text matches the query,
-   * newest first, Closed threads included, each with whether its thread is Closed. Pass the answer's `cursor` to read
+   * `GET /v1/search?q=<query>&sort=newest|best`: a page of the messages and replies in every channel whose text
+   * matches the query, newest first or best match first, Closed threads included, each with whether its thread is Closed. Pass the answer's `cursor` to read
    * the next page. A query with neither words nor filters is 400 `empty_query`; a filter naming no identity, no channel
-   * or no real day is 400 `unknown_identity`, `unknown_channel` or `invalid_date`; a command token is 403
+   * or no real day is 400 `unknown_identity`, `unknown_channel` or `invalid_date`; an unknown sort, or a cursor from
+   * the other sort, is 400 `invalid_request`; a command token is 403
    * `outside_command_thread`.
    */
   readonly search: (request: SearchRequest) => Promise<SearchResponse>;
@@ -107,7 +113,7 @@ export interface PostMessageRequest {
   readonly close?: true;
   /**
    * With `replyTo`: the caller has read the thread up to this message, later than `replyTo`. `replyTo` alone says it
-   * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else warns `thread_moved`.
+   * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else is refused `thread_moved`.
    */
   readonly seen?: number;
 }

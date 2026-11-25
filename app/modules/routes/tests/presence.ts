@@ -3,6 +3,7 @@ import { screen, within } from "@testing-library/react";
 import { newIdentity } from "./identities.ts";
 import { onTestFinished } from "vitest";
 import { openAt } from "./render.tsx";
+import { testAgentDisplayName } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 
 interface Watcher {
@@ -45,20 +46,23 @@ async function dotWithin(region: (looking: Looking) => Promise<HTMLElement>, loo
 }
 
 async function articleWith({ at }: Looking): Promise<HTMLElement> {
-  const messages = await screen.findByRole("list", { name: "Messages" });
+  const messages = await screen.findByRole("feed", { name: "Messages" });
   const shown = await within(messages).findByText(at);
   return shown.closest("article") ?? messages;
 }
 
 async function rowNamed({ label, who }: Looking): Promise<HTMLElement> {
   const rows = await screen.findByRole("list", { name: "Identities" });
-  const row = await within(rows).findByRole("link", { name: `${who}, ${label}` });
+  const row = await within(rows).findByRole("link", {
+    name: (shown) => [who, testAgentDisplayName(who)].some((each) => shown === `${each}, ${label}`),
+  });
   return row;
 }
 
-async function suggestionNamed({ label, who }: Looking): Promise<HTMLElement> {
-  const list = await screen.findByRole("list", { name: "Mention suggestions" });
-  return within(list).getByRole("button", { name: `${who}, ${label}` });
+async function suggestionNamed({ at, label, who }: Looking): Promise<HTMLElement> {
+  const list = await screen.findByRole("listbox", { name: "Mention suggestions" });
+  const named = new Set([`${who}, ${label}`, `${testAgentDisplayName(at)}, ${who}, ${label}`]);
+  return within(list).getByRole("option", { name: (shown) => named.has(shown) });
 }
 
 async function openProfile(): Promise<HTMLElement> {

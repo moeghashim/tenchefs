@@ -5,8 +5,7 @@ import {
   callId,
   channelFixture as channel,
   channelName,
-  commandFixture as command,
-  commandName,
+  webhookCommandFixture as command,
   fixtureTime,
   handlerFixture as handler,
   identityFixture as identity,
@@ -15,6 +14,7 @@ import {
   newMessageFixture as newMessage,
   openStore,
   storageLayers,
+  webhookCommandName,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { Message } from "../../../messages/index.ts";
@@ -24,7 +24,7 @@ import { tokenHash } from "../../../identities/index.ts";
 const HASH_LENGTH = 64;
 const hashA = tokenHash(Str.repeat(HASH_LENGTH)("a"));
 const hashB = tokenHash(Str.repeat(HASH_LENGTH)("b"));
-const commandHash = tokenHash(Str.repeat(HASH_LENGTH)("c"));
+const webhookCommandHash = tokenHash(Str.repeat(HASH_LENGTH)("c"));
 const startedAt = isoTime("2026-01-01T00:00:00.000Z");
 const expiresAt = isoTime("2026-01-02T00:00:00.000Z");
 const ANN = { author: { name: "ann" } } as const;
@@ -43,7 +43,7 @@ function setUp(storage: Storage["Service"]): Effect.Effect<void, StorageUnavaila
     [
       storage.createIdentity(identity("ann"), hashA),
       storage.createIdentity(identity("bob"), hashB),
-      storage.addCommand(command("deploy"), handler("deploy")),
+      storage.addWebhookCommand(command("deploy"), handler("deploy")),
       storage.createChannel(channel("grill", { description: "Grill it" })),
       storage.createChannel(channel("lounge")),
       storage.subscribeChannel(nameOf("bob"), channelName("grill")),
@@ -54,17 +54,17 @@ function setUp(storage: Storage["Service"]): Effect.Effect<void, StorageUnavaila
 }
 
 function callDeploy(storage: Storage["Service"]): Effect.Effect<unknown, StorageUnavailable> {
-  return storage.appendCommandCall({
+  return storage.appendWebhookCommandCall({
     delivery: {
       attempts: 0,
       callId: callId("call_1"),
-      command: commandName("deploy"),
+      command: webhookCommandName("deploy"),
       data: { branch: "main" },
       nextAttemptAt: startedAt,
       outcome: "pending",
     },
     message: newMessage("grill", "/deploy", { ...ANN, data: { command: "deploy", data: { branch: "main" } } }),
-    token: { expiresAt, handler: nameOf("deploy"), hash: commandHash },
+    token: { expiresAt, handler: nameOf("deploy"), hash: webhookCommandHash },
   });
 }
 
@@ -92,7 +92,7 @@ it.effect.each(storageLayers)(
       const after = yield* Effect.all(
         {
           channels: storage.listChannels(),
-          grantGone: Effect.map(storage.findCommandToken(commandHash), Predicate.isUndefined),
+          grantGone: Effect.map(storage.findWebhookCommandToken(webhookCommandHash), Predicate.isUndefined),
           inbox: storage.listInbox(nameOf("bob")),
           latest: storage.latestMessageId,
           pending: storage.listPendingDeliveries,

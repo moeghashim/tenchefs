@@ -1,4 +1,4 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { useReactionRefusal } from "./use-reactions.ts";
 

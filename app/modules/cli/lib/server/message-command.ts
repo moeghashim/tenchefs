@@ -1,10 +1,11 @@
 import { Argument, Command, Flag } from "effect/cli";
-import { Effect, Option, Predicate, Schema } from "effect";
-import type { ListMessagesQuery, MessageId, MessageResponse } from "../../../messages/index.ts";
-import { answer, answered, printWarning, refused } from "./output.ts";
+import type { ListMessagesQuery, MessageId } from "../../../messages/index.ts";
+import { Option, Schema } from "effect";
+import { answer, answered, refused } from "./output.ts";
 import { attachFlag, postAttaching } from "./attachments.ts";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
 import type { CommandFailed } from "./output.ts";
+import type { Effect } from "effect";
 import type { PostMessageRequest } from "../../../messages/client.ts";
 import { isMessageId } from "../../../messages/index.ts";
 
@@ -59,22 +60,15 @@ function postRequest({ channel, close, data, replyTo, seen, text }: PostFlags): 
   return withClose({ channel, text, ...withData, ...withReplyTo, ...withSeen }, close);
 }
 
-function warnIfMoved({ warning }: MessageResponse): Effect.Effect<void> {
-  if (Predicate.isUndefined(warning)) {
-    return Effect.void;
-  }
-  return printWarning(warning.message);
-}
-
 function posted(flags: PostFlags): Effect.Effect<void, CommandFailed, AgentSessionStateNeeds> {
   const posting = postAttaching({ files: flags.attach, request: postRequest(flags) });
-  return answered(Effect.tap(posting, warnIfMoved));
+  return answered(posting);
 }
 
 const channelArgument = Argument.String("channel").pipe(Argument.withDescription("The channel's name."));
 const textArgument = Argument.String("text").pipe(
   Argument.withDefault(""),
-  Argument.withDescription("The message, up to 40,000 characters."),
+  Argument.withDescription("The message, up to 40,000 characters. Only a message with --attach may leave it out."),
 );
 const jsonData = Flag.String("data").pipe(Flag.withSchema(Schema.fromJsonString(Schema.Json)));
 const dataFlag = jsonData.pipe(Flag.optional, Flag.withDescription("Any JSON value, for commands and agents to read."));
@@ -87,7 +81,7 @@ const replyToFlag = Flag.Int("reply-to").pipe(
 const seenFlag = Flag.Int("seen").pipe(
   Flag.optional,
   Flag.withDescription(
-    "With --reply-to: you have read the thread up to this later message. Newer replies by others warn thread_moved.",
+    "With --reply-to: you have read the thread up to this later message. Newer replies by others get it refused with thread_moved.",
   ),
 );
 const closeFlag = Flag.Boolean("close").pipe(

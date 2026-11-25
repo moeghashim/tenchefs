@@ -1,13 +1,13 @@
 import type { ChannelName, InboxItem, MessageId } from "../../sdk/index.ts";
 import type { Newest, Reader, ReaderSources, Reading, Unread } from "../../unread/index.ts";
-import type { Board } from "../../board/index.ts";
+import type { BoardStore } from "../../board/index.ts";
 import { channelPostsOf } from "./channel-posts.ts";
+import { useBoardStore } from "./use-board.ts";
 import { useSyncExternalStore } from "react";
 
 const FIRST = 0;
 
 interface ChannelReading {
-  readonly board: Board;
   readonly unread: Unread;
   readonly reading: Reading;
   readonly channel: ChannelName;
@@ -18,10 +18,14 @@ function firstOf(items: readonly InboxItem[]): MessageId | null {
   return items.map((item) => item.message.id).at(FIRST) ?? null;
 }
 
-function readerSources({ board, channel, me, unread }: Omit<ChannelReading, "reading">): ReaderSources {
+interface Sources extends Omit<ChannelReading, "reading"> {
+  readonly store: BoardStore;
+}
+
+function readerSources({ channel, me, store, unread }: Sources): ReaderSources {
   const selection = unread.selection({ channel, thread: null });
   return {
-    ack: board.ack,
+    ack: store.calls.ack,
     firstUnread: () => firstOf(selection.snapshot().items),
     markUnread: unread.markUnread,
     newest: (): Newest | null => {
@@ -50,7 +54,8 @@ function readerSources({ board, channel, me, unread }: Omit<ChannelReading, "rea
 }
 
 function useChannelReader({ reading, ...sources }: ChannelReading): Reader {
-  const reader = reading.reader(sources.channel, readerSources(sources));
+  const store = useBoardStore();
+  const reader = reading.reader(sources.channel, readerSources({ ...sources, store }));
   useSyncExternalStore(reader.subscribe, reader.snapshot);
   return reader;
 }

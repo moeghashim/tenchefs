@@ -1,13 +1,13 @@
-import type { AgentIdentity, HumanIdentity, IdentityName } from "../../../identities/index.ts";
-import type { AgentSessionResponse, JoinCodeResponse, RedeemJoinCodeRequest } from "../../index.ts";
+import type { AgentIdentity, DisplayName, HumanIdentity, IdentityName } from "../../../identities/index.ts";
 import { DateTime, Effect, Predicate } from "effect";
 import type { JoinCodeRedemption, StorageUnavailable } from "../../../storage/server.ts";
+import type { JoinCodeResponse, RedeemJoinCodeRequest, RedeemJoinCodeResponse } from "../../join-codes.ts";
 import { agentSessionLive, identityDeactivated } from "./refusals.ts";
 import type { Description } from "../../../identities/client.ts";
 import type { On } from "./join.ts";
 import type { Refusal } from "../../../http/index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
-import { joinCodeLifetimeMinutes } from "../../index.ts";
+import { joinCodeLifetimeMinutes } from "../../join-codes.ts";
 import { termsAsked } from "./join-request-terms.ts";
 import { token } from "../../../identities/index.ts";
 
@@ -17,11 +17,12 @@ interface NewAgent {
   readonly caller: HumanIdentity;
   readonly name: IdentityName;
   readonly description?: Description;
+  readonly displayName?: DisplayName;
 }
 
 interface JoinCodes {
   readonly createJoinCode: (agent: NewAgent) => Fails<JoinCodeResponse>;
-  readonly redeemJoinCode: (request: RedeemJoinCodeRequest) => Fails<AgentSessionResponse>;
+  readonly redeemJoinCode: (request: RedeemJoinCodeRequest) => Fails<RedeemJoinCodeResponse>;
 }
 
 const BAD_REQUEST = 400;
@@ -36,6 +37,14 @@ const joinCodeNotFound: Refusal = {
   status: NOT_FOUND,
 };
 
+function displayNameRequired(name: IdentityName): Refusal {
+  return {
+    code: "display_name_required",
+    message: `${name} would be a new agent, and a new agent needs a display name: send displayName.`,
+    status: BAD_REQUEST,
+  };
+}
+
 function createRefusal(result: "name_taken" | "name_not_owned" | "owner_not_human", name: IdentityName): Refusal {
   if (result === "name_taken") {
     return { code: "identity_exists", message: `The name ${name} is taken.`, status: CONFLICT };
@@ -47,22 +56,35 @@ function createRefusal(result: "name_taken" | "name_not_owned" | "owner_not_huma
   };
 }
 
-function withHost<Redeem extends object>(
-  redeem: Redeem,
-  host: string | undefined,
-): Redeem & { readonly host?: string } {
-  if (Predicate.isUndefined(host)) {
-    return redeem;
+type JoinedFrom = Pick<RedeemJoinCodeRequest, "host" | "sessionUrl">;
+
+function withSessionUrl<Fields extends object>(
+  fields: Fields,
+  sessionUrl: string | undefined,
+): Fields & Pick<JoinedFrom, "sessionUrl"> {
+  if (Predicate.isUndefined(sessionUrl)) {
+    return fields;
   }
-  return { ...redeem, host };
+  return { ...fields, sessionUrl };
 }
 
-function newAgentOf({ caller, description, name }: NewAgent, createdAt: AgentIdentity["createdAt"]): AgentIdentity {
-  const agent: AgentIdentity = { admin: false, createdAt, kind: "agent", name, owner: caller.name };
-  if (Predicate.isUndefined(description)) {
-    return agent;
+function withJoinedFrom<Redeem extends object>(redeem: Redeem, { host, sessionUrl }: JoinedFrom): Redeem & JoinedFrom {
+  if (Predicate.isUndefined(host)) {
+    return withSessionUrl(redeem, sessionUrl);
   }
-  return { ...agent, description };
+  return withSessionUrl({ ...redeem, host }, sessionUrl);
+}
+
+function newAgentOf(asked: NewAgent, createdAt: AgentIdentity["createdAt"]): Effect.Effect<AgentIdentity, Refusal> {
+  const { caller, description, displayName, name } = asked;
+  if (Predicate.isUndefined(displayName)) {
+    return Effect.fail(displayNameRequired(name));
+  }
+  const agent: AgentIdentity = { admin: false, createdAt, displayName, kind: "agent", name, owner: caller.name };
+  if (Predicate.isUndefined(description)) {
+    return Effect.succeed(agent);
+  }
+  return Effect.succeed({ ...agent, description });
 }
 
 function agentCreator({ publishIdentity, secrets, storage }: On) {
@@ -87,7 +109,7 @@ function creator(on: On): JoinCodes["createJoinCode"] {
     Effect.gen(function* createAgentWithJoinCode() {
       const now = yield* DateTime.now;
       const createdAt = isoTimeOf(now);
-      const agent = newAgentOf(asked, createdAt);
+      const agent = yield* newAgentOf(asked, createdAt);
       yield* createAgent(agent);
       const joinCode = yield* secrets.newToken;
       const codeHash = yield* secrets.hashToken(joinCode);
@@ -99,8 +121,8 @@ function creator(on: On): JoinCodes["createJoinCode"] {
 
 function answerOf(
   redemption: JoinCodeRedemption,
-  agentSessionToken: AgentSessionResponse["agentSessionToken"],
-): Effect.Effect<AgentSessionResponse, Refusal> {
+  agentSessionToken: RedeemJoinCodeResponse["agentSessionToken"],
+): Effect.Effect<RedeemJoinCodeResponse, Refusal> {
   if (redemption.status === "gone") {
     return Effect.fail(joinCodeNotFound);
   }
@@ -110,21 +132,25 @@ function answerOf(
   if (redemption.status === "live") {
     return Effect.fail(agentSessionLive(redemption));
   }
-  const { expiresAt, identity, issuedAt } = redemption;
-  return Effect.succeed({ agentSessionToken, created: false, expiresAt, identity, issuedAt });
+  const { expiresAt, identity, issuedAt, sessionUrl } = redemption;
+  return Effect.succeed(
+    withSessionUrl({ agentSessionToken, created: false, expiresAt, identity, issuedAt }, sessionUrl),
+  );
 }
 
 function redeemer(on: On): JoinCodes["redeemJoinCode"] {
   const asked = termsAsked(on);
   const { publishSession, secrets, storage } = on;
-  return ({ host, idleExpiry, joinCode }) =>
+  return ({ idleExpiry, joinCode, ...joinedFrom }) =>
     Effect.gen(function* redeemJoinCode() {
       const { idleSeconds } = yield* asked(idleExpiry);
       const codeHash = yield* secrets.hashToken(token(joinCode));
       const agentSessionToken = yield* secrets.newToken;
       const sessionHash = yield* secrets.hashToken(agentSessionToken);
       const now = yield* Effect.map(DateTime.now, isoTimeOf);
-      const redemption = yield* storage.redeemJoinCode(withHost({ codeHash, idleSeconds, now, sessionHash }, host));
+      const redemption = yield* storage.redeemJoinCode(
+        withJoinedFrom({ codeHash, idleSeconds, now, sessionHash }, joinedFrom),
+      );
       const answer = yield* answerOf(redemption, agentSessionToken);
       return yield* Effect.as(publishSession(answer.identity), answer);
     });

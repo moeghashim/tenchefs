@@ -1,6 +1,6 @@
 import type { IsoTime } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
-import { RunList } from "../../design-system/index.tsx";
+import { RunList } from "../../design-system/controls.tsx";
 import { runTimeIn } from "../../format/index.ts";
 import { useMemo } from "react";
 

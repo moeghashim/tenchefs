@@ -1,5 +1,6 @@
-import { Button, Notice } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { ChannelName } from "../../sdk/index.ts";
+import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { ScheduledMessage } from "../../scheduled-messages/index.ts";
 import type { Scheduling } from "../../board/index.ts";

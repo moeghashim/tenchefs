@@ -1,5 +1,6 @@
-import { FooterLink, IdentityLink } from "../../design-system/index.tsx";
+import { FooterLink } from "../../design-system/layout.tsx";
 import type { Identity } from "../../sdk/index.ts";
+import { IdentityLink } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { Route } from "../../paths/index.ts";
 import { hrefOf } from "../../paths/index.ts";

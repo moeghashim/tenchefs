@@ -3,9 +3,9 @@ import { alertSaying, alertsShown } from "./alerts.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 
 async function subscribedNames(client: CookoutClient): Promise<readonly string[]> {
   const { channels } = await client.listSubscribedChannels();
@@ -111,7 +111,7 @@ it("a refused subscription's alert stays with its channel", { timeout: 5000 }, a
 it("subscriptions that can't be loaded say why in the channel's pane", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const client = createCookoutClient({ env: {}, token: "cookout_any", url: "http://127.0.0.1:1" });
+  const client = unreachableClient({ token: "cookout_any" });
   const close = openAt({ client, hash: "#/channels/web-subscriptions-unloaded", session: sessionOf(adminClient()) });
 
   await expect(alertSaying("Couldn't load your subscriptions")).resolves.toHaveProperty(

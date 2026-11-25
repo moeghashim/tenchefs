@@ -1,5 +1,5 @@
 import type { ClientConnection } from "./request.ts";
-import type { OfflineAlertCalls } from "../../inbox/index.ts";
+import type { OfflineAlertCalls } from "../../inbox/client.ts";
 import { isOfflineAlertResponse } from "./generated/validators.js";
 import { offlineAlertReadPath } from "../../inbox/index.ts";
 import { send } from "./request.ts";

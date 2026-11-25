@@ -35,8 +35,16 @@ const NONE = 0;
 const MAX_BUFFER = 268_435_456;
 const CONFLICT_START = "<<<<<<< ours";
 
+function mergedBase(options: MigrationOptions): string {
+  const merged = git(options, "merge-base", "HEAD", options.migrationsBase);
+  if (!merged.ok) {
+    return options.migrationsBase;
+  }
+  return merged.output;
+}
+
 function insertedMigrations(options: MigrationOptions, file: string): readonly string[] {
-  const base = git(options, "show", `${options.migrationsBase}:${file}`);
+  const base = git(options, "show", `${mergedBase(options)}:${file}`);
   if (!base.ok) {
     return [];
   }

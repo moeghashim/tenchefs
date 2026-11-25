@@ -28,12 +28,12 @@ function scrollingIntoView(): void {
 }
 
 async function typed(query: string): Promise<void> {
-  fireEvent.input(await screen.findByRole("searchbox", { name: "Search" }), { target: { value: query } });
+  fireEvent.input(await screen.findByRole("combobox", { name: "Search" }), { target: { value: query } });
 }
 
 function rowsNow(): readonly Row[] {
   const rows: Row[] = [];
-  for (const item of within(screen.getByRole("list", RESULTS)).getAllByRole("listitem")) {
+  for (const item of within(screen.getByRole("listbox", RESULTS)).getAllByRole("option")) {
     const marked: string[] = [];
     for (const mark of item.querySelectorAll("mark")) {
       marked.push(mark.textContent);
@@ -55,8 +55,8 @@ async function rowsShown(count: number): Promise<readonly Row[]> {
 }
 
 async function clickedResult(text: Readonly<RegExp>): Promise<void> {
-  const link = await vi.waitFor(() => within(screen.getByRole("list", RESULTS)).getByRole("link", { name: text }));
-  fireEvent.click(link);
+  const link = await vi.waitFor(() => within(screen.getByRole("listbox", RESULTS)).getByRole("option", { name: text }));
+  fireEvent.mouseDown(link);
 }
 
 async function highlightedIn(text: string): Promise<string | null> {
@@ -84,11 +84,11 @@ it("typing a word shows the matching messages newest first, with channel, author
   await expect(rowsShown(PAGE)).resolves.toStrictEqual([
     {
       marked: ["yakwords"],
-      text: "Messageweb-search-rows-adaposted in#web-search-rowsjust nowSecond yakwords",
+      text: "web-search-rows-adaposted in #web-search-rows · just nowSecond yakwords",
     },
     {
       marked: ["Yakwords", "yakwordsy"],
-      text: "Messageweb-search-rows-adaposted in#web-search-rowsClosedjust nowYakwords first yakwordsy",
+      text: "web-search-rows-adaposted in #web-search-rows · Closed · just nowYakwords first yakwordsy",
     },
   ]);
 
@@ -107,7 +107,7 @@ async function openedOnThread(channel: string): Promise<Thread> {
   return { close: openAt({ client: posted.reader, hash: "#/inbox" }), parent, reply: message.id };
 }
 
-it("clicking a top-level result opens its thread beside its channel and closes the list", {
+it("pressing a top-level result opens its thread beside its channel and closes the list", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
@@ -117,7 +117,7 @@ it("clicking a top-level result opens its thread beside its channel and closes t
   await clickedResult(/Okapiopen deploy/u);
 
   await expect(inThread().findByText("Okapiopen deploy? web-search-top")).resolves.toBeDefined();
-  expect([globalThis.location.hash, screen.queryByRole("list", RESULTS)]).toStrictEqual([
+  expect([globalThis.location.hash, screen.queryByRole("listbox", RESULTS)]).toStrictEqual([
     `#/channels/web-search-top/threads/${String(opened.parent)}`,
     null,
   ]);
@@ -125,7 +125,7 @@ it("clicking a top-level result opens its thread beside its channel and closes t
   opened.close();
 });
 
-it("clicking a reply's result opens its thread on that reply, highlighted", { timeout: 5000 }, async () => {
+it("pressing a reply's result opens its thread on that reply, highlighted", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const opened = await openedOnThread("web-search-reply");
@@ -166,13 +166,43 @@ it("scrolling to the end of a long list loads the next page", { timeout: 5000 },
   const close = openAt({ client: posted.reader, hash: "#/inbox", searchLimit: PAGE });
   await typed("tapirpage");
   await rowsShown(PAGE);
-  fireEvent.scroll(screen.getByRole("list", RESULTS));
+  fireEvent.scroll(screen.getByRole("listbox", RESULTS));
 
   await expect(rowsShown(PAGE + ONE)).resolves.toStrictEqual([
-    { marked: ["Tapirpage"], text: "Messageweb-search-pages-adaposted in#web-search-pagesjust nowTapirpage 3" },
-    { marked: ["Tapirpage"], text: "Messageweb-search-pages-adaposted in#web-search-pagesjust nowTapirpage 2" },
-    { marked: ["Tapirpage"], text: "Messageweb-search-pages-adaposted in#web-search-pagesjust nowTapirpage 1" },
+    { marked: ["Tapirpage"], text: "web-search-pages-adaposted in #web-search-pages · just nowTapirpage 3" },
+    { marked: ["Tapirpage"], text: "web-search-pages-adaposted in #web-search-pages · just nowTapirpage 2" },
+    { marked: ["Tapirpage"], text: "web-search-pages-adaposted in #web-search-pages · just nowTapirpage 1" },
   ]);
+
+  close();
+});
+
+const NEWEST = [["zebrasort"], ["Zebrasort", "zebrasort", "zebrasort"]] as const;
+const BEST = NEWEST.toReversed();
+
+async function sortedTo(name: string, marked: readonly (readonly string[])[]): Promise<boolean> {
+  fireEvent.click(screen.getByRole("radio", { name }));
+  await vi.waitFor(() => {
+    expect(rowsNow().map((row) => row.marked)).toStrictEqual(marked);
+  });
+  return screen.getByRole("radio", { name }).matches(":checked");
+}
+
+it("switching to Best match reorders the results, and back to Newest restores them", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const posted = await postedIn({
+    channel: "web-search-sort",
+    closed: [],
+    texts: ["Zebrasort zebrasort zebrasort", "Lunch is at noon and the coffee is fixed, then zebrasort"],
+  });
+  const close = openAt({ client: posted.reader, hash: "#/inbox" });
+  await typed("zebrasort");
+  const before = await rowsShown(NEWEST.length);
+  const best = await sortedTo("Best match", BEST);
+
+  await expect(sortedTo("Newest", NEWEST)).resolves.toBe(true);
+  expect([before.map((row) => row.marked), best]).toStrictEqual([NEWEST, true]);
 
   close();
 });

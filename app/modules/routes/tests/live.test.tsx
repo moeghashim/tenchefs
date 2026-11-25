@@ -1,5 +1,5 @@
 import type { CookoutClient, EventStream, Message } from "../../sdk/index.ts";
-import { adminClient, newIdentity } from "./identities.ts";
+import { adminClient, agentShown, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import { clockStoppedAt } from "./clock.ts";
@@ -55,8 +55,8 @@ it("a message posted by another identity appears in the open channel without a r
   await screen.findByText("1 reply");
 
   await expect(shownIn("Messages")).resolves.toStrictEqual([
-    "web-live-channel-posteragentDeploy at noon?1 replyLast reply just now →",
-    "web-live-channel-posteragentOr at one?",
+    `${agentShown("web-live-channel-poster")}agentDeploy at noon?1 replyLast reply just now →`,
+    `${agentShown("web-live-channel-poster")}agentOr at one?`,
   ]);
 
   await close();
@@ -77,7 +77,7 @@ it("a reply posted by another identity appears in the open thread without a relo
   const panel = screen.getByRole("complementary", { name: "Thread" });
 
   expect([await shownIn("Replies"), within(panel).queryByText("Not in this thread")]).toStrictEqual([
-    ["web-live-thread-posteragentNoon works"],
+    [`${agentShown("web-live-thread-poster")}agentNoon works`],
     null,
   ]);
 
@@ -98,6 +98,7 @@ it("a reply that arrives in the open thread counts as read", { timeout: 5000 }, 
 
   await waitFor(async () => {
     await expect(reader.inbox()).resolves.toStrictEqual({
+      agentJoinRequests: [],
       alerts: [],
       deactivatedQuietAgents: [],
       deactivationOffers: [],

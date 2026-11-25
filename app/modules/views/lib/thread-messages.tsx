@@ -2,7 +2,7 @@ import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import { LinkedScroll } from "./linked-scroll.tsx";
 import type { MessageId } from "../../sdk/index.ts";
 import type { MessageMenu } from "../../unread/index.ts";
-import { Notice } from "../../design-system/index.tsx";
+import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
 import { ThreadBody } from "./thread-body.tsx";

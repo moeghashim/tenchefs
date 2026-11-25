@@ -1,12 +1,14 @@
 import type { CookoutClient, InboxResponse, Message } from "../../sdk/index.ts";
 import { adminClient, clientWith, newIdentity, refusalNoticed, revocableView } from "./identities.ts";
+import { answeredUntil, answering } from "./answering.ts";
 import { expect, it, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { messagesIn, parentShown } from "./messages.ts";
+import type { Answering } from "./answering.ts";
 import { alertsShown } from "./alerts.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { inThread } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 
 const NONE = 0;
 
@@ -109,7 +111,7 @@ it("posting a reply shows it in the thread", { timeout: 5000 }, async () => {
   await shownReplies();
 
   sendReply("My reply");
-  await within(screen.getByRole("list", { name: "Replies" })).findByText("My reply");
+  await within(screen.getByRole("feed", { name: "Replies" })).findByText("My reply");
 
   const { replies } = await adminClient().getThread(parent.id);
 
@@ -157,8 +159,9 @@ it("a refused ack says the thread couldn't be marked read", { timeout: 5000 }, a
 
   const parent = await threadIn("web-thread-ack-refused");
   const agent = await newIdentity({ kind: "agent", name: "web-thread-left" });
-  const client = await ackingWithALeftSession(agent.token, "web-thread-left");
+  const { client, refused } = refusalNoticed(await ackingWithALeftSession(agent.token, "web-thread-left"));
   const close = openAt({ client, hash: hashOf(parent) });
+  await refused;
 
   const alert = await inThread().findByRole("alert");
 
@@ -192,14 +195,6 @@ it("a refused reply says so and keeps the thread shown, and its text in the box"
   close();
 });
 
-async function inboxEmptied(client: CookoutClient): Promise<InboxResponse | false> {
-  const inbox = await vi.waitUntil(async () => {
-    const answer = await inboxOnceEmpty(client);
-    return answer;
-  });
-  return inbox;
-}
-
 async function alerted(): Promise<void> {
   await inThread().findByRole("alert");
 }
@@ -209,19 +204,25 @@ async function leaveForTheList(): Promise<void> {
   await screen.findByRole("list", { name: "Channels" });
 }
 
+interface Left extends Omit<Answering, "client"> {
+  readonly close: () => void;
+}
+
 async function openedThenLeft(
-  client: CookoutClient,
+  viewer: CookoutClient,
   parent: Message,
   settled: () => Promise<unknown> = shownReplies,
-): Promise<() => void> {
+): Promise<Left> {
+  const { answered, client } = answering(viewer);
   const close = openAt({ client, hash: hashOf(parent) });
+  await answered("getThread");
   await settled();
   await leaveForTheList();
-  return close;
+  return { answered, close };
 }
 
 function failingOnce(client: CookoutClient): CookoutClient {
-  const unreachable = createCookoutClient({ env: {}, token: "cookout_unused", url: "http://127.0.0.1:9" });
+  const unreachable = unreachableClient({ token: "cookout_unused" });
   const sources = [unreachable];
   return {
     ...client,
@@ -236,10 +237,11 @@ it("reopening a thread shows the replies posted while it was closed", { timeout:
   expect.hasAssertions();
 
   const parent = await threadIn("web-thread-reopen");
-  const close = await openedThenLeft(adminClient(), parent);
+  const { answered, close } = await openedThenLeft(adminClient(), parent);
   await replyTo(parent, "Third reply");
 
   globalThis.location.hash = hashOf(parent);
+  await answered("getThread");
   await screen.findByText("Third reply");
 
   await expect(shownReplies()).resolves.toStrictEqual(["adminFirst reply", "Second reply", "Third reply"]);
@@ -266,7 +268,7 @@ it("reopening a thread that can no longer be read says so and keeps its replies 
     viewer: "web-thread-reopen-viewer",
   });
   const { client, refused } = refusalNoticed(reader.client);
-  const close = await openedThenLeft(client, parent);
+  const { close } = await openedThenLeft(client, parent);
   await reader.rotateToken();
 
   const alert = await refusedOnReopen(parent, refused);
@@ -284,11 +286,12 @@ it("reopening a thread that failed to load loads it again and acks it", { timeou
 
   const reader = await newIdentity({ kind: "human", name: "web-thread-reopen-failed-reader" });
   const parent = await followedThreadIn("web-thread-reopen-failed", reader.client);
-  const close = await openedThenLeft(failingOnce(reader.client), parent, alerted);
+  const { answered, close } = await openedThenLeft(failingOnce(reader.client), parent, alerted);
 
   globalThis.location.hash = hashOf(parent);
+  await answeredUntil({ answered, done: async () => (await inboxOnceEmpty(reader.client)) !== false, method: "ack" });
 
-  await expect(Promise.all([shownReplies(), inboxEmptied(reader.client)])).resolves.toStrictEqual([
+  await expect(Promise.all([shownReplies(), inboxOnceEmpty(reader.client)])).resolves.toStrictEqual([
     ["adminFirst reply", "Second reply"],
     expect.objectContaining({ items: [] }),
   ]);

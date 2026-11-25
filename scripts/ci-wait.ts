@@ -1,4 +1,4 @@
-import { failedJobsOr, verdictOnExit } from "./lib/verdict.ts";
+import { EXIT_CUT_OFF, cutOffLine, failedJobsOr, verdictOnExit } from "./lib/verdict.ts";
 import { fail } from "./lib/tools.ts";
 import { parseArgs } from "node:util";
 import { spawnSync } from "node:child_process";
@@ -40,7 +40,10 @@ const step = waitForCi({
   subject: sha.slice(NONE, SHORT_SHA),
 });
 
-if (step.kind === "stopped") {
+if (step.kind === "stopped" && step.cutOff === true) {
+  verdict.failingAt(cutOffLine(step.jobs));
+  fail(SCRIPT, step.reason, EXIT_CUT_OFF);
+} else if (step.kind === "stopped") {
   verdict.failingAt(failedJobsOr({ jobs: step.jobs, step: "waiting for the Check run" }));
   fail(SCRIPT, step.reason);
 }

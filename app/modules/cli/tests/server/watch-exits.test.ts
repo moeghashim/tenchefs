@@ -190,6 +190,24 @@ it.effect("cookout watch --until-mention skips an item that isn't a mention and 
   }).pipe(Effect.provide(commandLineServices)),
 );
 
+it.effect("cookout watch --until-mention exits 0 at a scheduled message that tags the watcher itself", () =>
+  Effect.gen(function* watchScheduledSelfTag() {
+    const text = "@bob standup";
+    const { result } = yield* watchUntilExit({
+      args: ["watch", "--until-mention", "--json"],
+      prepare: ({ bob }) =>
+        Effect.asVoid(
+          answer(() =>
+            bob.client.createScheduledMessage({ channel: "grill", cron: "0 9 * * *", text, timeZone: "UTC" }),
+          ),
+        ),
+      whileWatching: () => TestClock.adjust("9 hours"),
+    });
+
+    expect(result).toMatchObject({ exitCode: EXIT_SUCCESS, stdoutJson: { item: { message: { text } } } });
+  }).pipe(Effect.provide(commandLineServices)),
+);
+
 function twoOldMentions({ cookout }: Watch): Effect.Effect<void> {
   return Effect.gen(function* mentionBobTwice() {
     const cat = yield* cookout.createIdentity("cat");

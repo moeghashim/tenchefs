@@ -1,7 +1,9 @@
 import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import { Effect, Predicate, Schema } from "effect";
 import { IdentityRow, toIdentity } from "./identity-row.ts";
+import { memoryAvatars, sqlAvatars } from "./avatars.ts";
 import { memoryDescriptions, sqlDescriptions } from "./descriptions.ts";
+import type { AvatarsSection } from "./avatars.ts";
 import type { DescriptionsSection } from "./descriptions.ts";
 import type { Fails } from "./errors.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
@@ -9,7 +11,7 @@ import { unreadable } from "./errors.ts";
 
 type SetDisplayNameResult = { readonly status: "set"; readonly identity: Identity } | { readonly status: "not_found" };
 
-interface DisplayNamesSection extends DescriptionsSection {
+interface DisplayNamesSection extends DescriptionsSection, AvatarsSection {
   readonly setDisplayName: (name: IdentityName, displayName: DisplayName | null) => Fails<SetDisplayNameResult>;
 }
 
@@ -31,6 +33,7 @@ function renamed(identity: Identity, displayName: DisplayName | null): Identity 
 function memoryDisplayNames({ identities, open }: MemoryIdentityMap): DisplayNamesSection {
   return {
     ...memoryDescriptions({ identities, open }),
+    ...memoryAvatars({ identities, open }),
     setDisplayName: (name, displayName) =>
       open(() => {
         const identity = identities.get(name);
@@ -51,6 +54,7 @@ function decodeRow(row: unknown): Fails<typeof IdentityRow.Type> {
 function sqlDisplayNames(db: SqlDatabase): DisplayNamesSection {
   return {
     ...sqlDescriptions(db),
+    ...sqlAvatars(db),
     setDisplayName: (name, displayName) =>
       db.transaction(
         Effect.gen(function* setDisplayNameRow() {

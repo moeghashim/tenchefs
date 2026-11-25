@@ -31,9 +31,13 @@ export interface TriggerFailure {
   readonly error?: string;
 }
 
-/** An agent's trigger URL as its owner reads it: the URL and its last result, never the token. */
+/**
+ * An agent's trigger URL as its owner reads it: the URL, the names of its extra headers (lowercased, only when it has
+ * any) and its last result; never the token or a header's value.
+ */
 export interface Trigger {
   readonly url: string;
+  readonly headerNames?: readonly string[];
   readonly lastResult?: TriggerResult;
 }
 
@@ -57,21 +61,38 @@ export function isTriggerToken(value: string): value is TriggerToken {
   return value.length > NONE;
 }
 
-/** The body of setting a trigger URL: the URL and the token the board sends with each call. */
+/**
+ * An extra header the board sends with each call to a trigger URL (mattpocock/cookout#440), such as the
+ * `anthropic-version` a routine's fire URL asks for. Its value is treated like the token, since it may be secret: once
+ * set, no answer, log line, event or stream holds it.
+ */
+export interface TriggerHeader {
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * The body of setting a trigger URL: the URL, the token the board sends with each call, and up to 20 extra headers it
+ * sends too. Setting replaces every header, so leaving `headers` out drops the old ones.
+ */
 export interface SetTriggerRequest {
   readonly url: string;
   readonly token: string;
+  readonly headers?: readonly TriggerHeader[];
 }
 
 /**
  * `GET`, `PUT` and `DELETE /v1/identities/:name/trigger`: read, set (or replace) and clear an agent's trigger URL,
- * answering `TriggerResponse`. Only the agent's owner may (403 `not_owner`); a human has none (403 `identity_kind`).
- * A URL that isn't `https` (or `http://localhost`, `127.0.0.1` or `[::1]` on a board that allows it) is 400
- * `trigger_url_invalid`, and an empty token is 400 `trigger_token_missing`.
+ * answering `TriggerResponse`. Only the agent's owner, or the agent that brought it in, may (403 `not_owner`); a human
+ * has none (403 `identity_kind`). A URL that isn't `https` (or `http://localhost`, `127.0.0.1` or `[::1]` on a board
+ * that allows it) is 400 `trigger_url_invalid`, and an empty token is 400 `trigger_token_missing`. An extra header the
+ * board won't send is 400 `trigger_header_invalid`: a name that isn't an HTTP token, `Authorization` (the token sets
+ * it), a hop-by-hop header, `Host`, `Content-Length` or `Content-Type`, a name given twice, an empty value or one with
+ * a control character, or more than 20 headers.
  */
 export const identityTriggerPath = "/v1/identities/:name/trigger";
 
-/** The SDK's calls on an agent's trigger URL, each only for the agent's owner. */
+/** The SDK's calls on an agent's trigger URL, each only for the agent's owner or the agent that brought it in. */
 export interface TriggerCalls {
   /** `GET /v1/identities/:name/trigger`: the agent's trigger URL and its last result, or `null`; never the token. */
   readonly getTrigger: (agent: string) => Promise<TriggerResponse>;
@@ -87,8 +108,11 @@ export const triggerUrlInvalid = "trigger_url_invalid";
 /** The code of setting a trigger URL with no token. */
 export const triggerTokenMissing = "trigger_token_missing";
 
+/** The code of setting a trigger URL with an extra header the board won't send. */
+export const triggerHeaderInvalid = "trigger_header_invalid";
+
 /** The codes setting a trigger URL is refused with. */
-export const triggerErrorCodes = [triggerUrlInvalid, triggerTokenMissing] as const;
+export const triggerErrorCodes = [triggerUrlInvalid, triggerTokenMissing, triggerHeaderInvalid] as const;
 
 /**
  * Whether `status` is a `2xx`.

@@ -1,22 +1,15 @@
+import type { ClientMethod, OpenedView } from "./view-opened.ts";
 import type { CookoutClient, Message, ServerSentEvent } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { messagesIn, parentShown } from "./messages.ts";
 import { receiptsIn, timeTooltipOf } from "./time-tooltips.ts";
 import { screen, waitFor } from "@testing-library/react";
-import type { Live } from "../../live/index.ts";
+import type { ScriptedLive } from "../../testing/web.ts";
 import { alertsShown } from "./alerts.ts";
-import { createLive } from "../../live/index.ts";
-import { openAt } from "./render.tsx";
+import { scriptedLive } from "../../testing/web.ts";
+import { viewOpened } from "./view-opened.ts";
 import { watched } from "./watched.ts";
-
-type Link = ReturnType<Live["link"]>;
-
-interface Scripted {
-  readonly live: Live;
-  readonly send: (...events: readonly ServerSentEvent[]) => void;
-  readonly report: (link: Link) => void;
-}
 
 interface Asked {
   readonly bob: CookoutClient;
@@ -32,32 +25,6 @@ interface Talk {
   readonly ann: CookoutClient;
   readonly bob: CookoutClient;
   readonly viewer: CookoutClient;
-}
-
-function scripted(): Scripted {
-  const events: ((event: ServerSentEvent) => void)[] = [];
-  const links: ((link: Link) => void)[] = [];
-  const live = createLive({
-    open: (onEvent, onLink) => {
-      events.push(onEvent);
-      links.push(onLink);
-    },
-  });
-  return {
-    live,
-    report: (link) => {
-      for (const onLink of links) {
-        onLink(link);
-      }
-    },
-    send: (...sent) => {
-      for (const onEvent of events) {
-        for (const event of sent) {
-          onEvent(event);
-        }
-      }
-    },
-  };
 }
 
 async function person(channel: string, who: string): Promise<CookoutClient> {
@@ -90,26 +57,57 @@ async function watchedChannel(channel: string): Promise<Asked> {
   await bob.ack(earlier.id);
   const asked = await post(ann, channel, `@${channel}-bob look`);
   const { live, stream } = watched(viewer);
-  openAt({ client: viewer, hash: `#/channels/${channel}`, live });
+  await viewOpened({ client: viewer, hash: `#/channels/${channel}`, live, waitingOn: ["listMessages"] });
   await stream;
   return { asked, bob };
 }
 
-async function scriptedThread(channel: string, text = "Noon"): Promise<Scripted & { readonly reply: Message }> {
+interface Answered {
+  readonly answered: OpenedView["answered"];
+}
+
+async function scriptedThread(
+  channel: string,
+  text = "Noon",
+): Promise<Answered & ScriptedLive & { readonly reply: Message }> {
   const { ann, bob, viewer } = await talkIn(channel);
   const parent = await post(ann, channel, "Deploy?");
   const { message: reply } = await bob.createMessage({ channel, replyTo: parent.id, text });
-  const opened = scripted();
-  openAt({ client: viewer, hash: `#/channels/${channel}/threads/${String(parent.id)}`, live: opened.live });
-  return { ...opened, reply };
+  const opened = scriptedLive();
+  const { answered } = await viewOpened({
+    client: viewer,
+    hash: `#/channels/${channel}/threads/${String(parent.id)}`,
+    live: opened.live,
+    waitingOn: ["getThread"],
+  });
+  return { ...opened, answered, reply };
 }
 
-async function scriptedChannel(channel: string): Promise<Asked & Scripted> {
+async function scriptedChannel(channel: string): Promise<Answered & Asked & ScriptedLive> {
   const { ann, bob, viewer } = await talkIn(channel);
   const asked = await post(ann, channel, `@${channel}-bob look`);
-  const opened = scripted();
-  openAt({ client: viewer, hash: `#/channels/${channel}`, live: opened.live });
-  return { ...opened, asked, bob };
+  const opened = scriptedLive();
+  const { answered } = await viewOpened({
+    client: viewer,
+    hash: `#/channels/${channel}`,
+    live: opened.live,
+    waitingOn: ["listMessages"],
+  });
+  return { ...opened, answered, asked, bob };
+}
+
+interface Relinking extends Answered {
+  readonly methods: readonly ClientMethod[];
+  readonly report: ScriptedLive["report"];
+}
+
+async function linkBack({ answered, methods, report }: Relinking): Promise<void> {
+  report("up");
+  await Promise.all(
+    methods.map(async (method) => {
+      await answered(method);
+    }),
+  );
 }
 
 function backfilled(identity: string, reply: Message): ServerSentEvent {
@@ -148,15 +146,20 @@ function refusingWhenAsked(client: CookoutClient): Refusing {
   };
 }
 
-async function refusedThread(channel: string): Promise<Scripted & Pick<Refusing, "refuse">> {
+async function refusedThread(channel: string): Promise<Answered & ScriptedLive & Pick<Refusing, "refuse">> {
   const { ann, bob, viewer } = await talkIn(channel);
   const parent = await post(ann, channel, "Deploy?");
   await bob.createMessage({ channel, replyTo: parent.id, text: "Noon" });
   const { client, refuse } = refusingWhenAsked(viewer);
-  const opened = scripted();
-  openAt({ client, hash: `#/channels/${channel}/threads/${String(parent.id)}`, live: opened.live });
+  const opened = scriptedLive();
+  const { answered } = await viewOpened({
+    client,
+    hash: `#/channels/${channel}/threads/${String(parent.id)}`,
+    live: opened.live,
+    waitingOn: ["getThread"],
+  });
   await receiptsShown("Replies", [`Not seen yet: @${channel}-ann`]);
-  return { ...opened, refuse };
+  return { ...opened, answered, refuse };
 }
 
 it("a message mentioning @bob shows no receipt inline, its time's tooltip says bob hasn't seen it, and a read-receipt event changes the tooltip with no reload", {
@@ -203,12 +206,12 @@ it("receipts seen while the live link was down show once it is back", { timeout:
   expect.hasAssertions();
 
   const channel = "web-receipts-back";
-  const { asked, bob, report } = await scriptedChannel(channel);
+  const { answered, asked, bob, report } = await scriptedChannel(channel);
   await receiptsShown("Messages", [`Not seen yet: @${channel}-bob`]);
 
   report("down");
   await bob.ack(asked.id);
-  report("up");
+  await linkBack({ answered, methods: ["listMessages"], report });
 
   await receiptsShown("Messages", [`Seen by @${channel}-bob just now`]);
 });
@@ -219,7 +222,7 @@ it("a tooltip names everyone who has seen a message before everyone who hasn't, 
   expect.hasAssertions();
 
   const channel = "web-receipts-many";
-  const { reply, report, send } = await scriptedThread(channel, `@admin @${channel}-viewer Noon`);
+  const { answered, reply, report, send } = await scriptedThread(channel, `@admin @${channel}-viewer Noon`);
   await receiptsShown("Replies", [`Not seen yet: @admin, @${channel}-viewer, @${channel}-ann`]);
   send(backfilled(`${channel}-viewer`, reply), backfilled(`${channel}-ann`, reply));
 
@@ -227,7 +230,7 @@ it("a tooltip names everyone who has seen a message before everyone who hasn't, 
 
   report("down");
   await adminClient().ack(reply.id);
-  report("up");
+  await linkBack({ answered, methods: ["getThread"], report });
 
   await receiptsShown("Replies", [
     `Seen by @admin just now, @${channel}-viewer just now · Not seen yet: @${channel}-ann`,
@@ -237,10 +240,10 @@ it("a tooltip names everyone who has seen a message before everyone who hasn't, 
 it("a channel and thread that can't be fetched again when the link is back say so", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const { refuse, report } = await refusedThread("web-receipts-refused");
+  const { answered, refuse, report } = await refusedThread("web-receipts-refused");
   report("down");
   refuse();
-  report("up");
+  await linkBack({ answered, methods: ["listMessages", "getThread"], report });
 
   await waitFor(() => {
     expect(alertsShown()).toStrictEqual([

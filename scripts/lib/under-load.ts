@@ -132,5 +132,54 @@ function failureList(tests: readonly FailedTest[]): string {
   return tests.map((test) => `  ${keyOf(test)}\n    ${test.reason}`).join("\n");
 }
 
-export type { FailedTest };
-export { failingOnlyUnderLoad, failureList, filesOf, playwrightCount, playwrightFailures, vitestCount, vitestFailures };
+type Suite = "all" | "none" | readonly string[];
+
+interface Loading {
+  readonly files: readonly string[];
+  readonly webOnly: boolean;
+}
+
+interface LoadedSuites {
+  readonly browser: Suite;
+  readonly web: Suite;
+}
+
+function named(files: readonly string[]): Suite {
+  if (files.length === NONE) {
+    return "none";
+  }
+  return files;
+}
+
+function browserSuite({ files, webOnly }: Loading): Suite {
+  if (webOnly) {
+    return "none";
+  }
+  if (files.length === NONE) {
+    return "all";
+  }
+  return named(files.filter((file) => file.endsWith(".browser.test.ts")));
+}
+
+function webSuite(files: readonly string[]): Suite {
+  if (files.length === NONE) {
+    return "all";
+  }
+  return named(files.filter((file) => file.endsWith(".tsx")));
+}
+
+function loadedSuites(loading: Loading): LoadedSuites {
+  return { browser: browserSuite(loading), web: webSuite(loading.files) };
+}
+
+export type { FailedTest, LoadedSuites };
+export {
+  failingOnlyUnderLoad,
+  failureList,
+  filesOf,
+  loadedSuites,
+  playwrightCount,
+  playwrightFailures,
+  vitestCount,
+  vitestFailures,
+};

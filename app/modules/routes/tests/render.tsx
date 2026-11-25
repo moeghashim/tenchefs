@@ -1,7 +1,7 @@
 import type { AgentJoinApprovals, LoginApprovals, Session } from "../../board/index.ts";
-import type { BoardStore, BoardStoreClient, Live, Reading, Unread } from "./defaults.ts";
+import type { BoardStore, BoardStoreClient, ComposerOptions, Live, Reading, Unread } from "./defaults.ts";
 import { adminClient, anonymousClient } from "./identities.ts";
-import { boardStoreFor, createUnread, readingFor, unreadFor } from "./defaults.ts";
+import { boardStoreFor, composerFor, createKeymap, createUnread, readingFor, unreadFor } from "./defaults.ts";
 import { cleanup, render } from "@testing-library/react";
 import { createAgentJoinApprovals, createLoginApprovals } from "../../board/index.ts";
 import { onTestFinished, vi } from "vitest";
@@ -10,7 +10,6 @@ import { CookoutApp } from "../index.tsx";
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { Layout } from "../../layout/index.ts";
 import type { Search } from "../../search/web.ts";
-import { createComposer } from "../../composer/index.ts";
 import { createLayout } from "../../layout/index.ts";
 import { createSearch } from "../../search/web.ts";
 
@@ -18,6 +17,7 @@ type AppClient = BoardStoreClient &
   Pick<
     CookoutClient,
     | "ackAll"
+    | "approveAgentJoin"
     | "createIdentity"
     | "countMessagesBy"
     | "deactivateIdentity"
@@ -49,6 +49,7 @@ type AppClient = BoardStoreClient &
 interface BoardOpening {
   readonly hash: string;
   readonly composer?: Composer;
+  readonly storage?: ComposerOptions["storage"] | undefined;
   readonly layout?: Layout;
   readonly live?: Live;
   readonly loginApprovals?: LoginApprovals;
@@ -63,6 +64,7 @@ interface BoardOpening {
 interface Opening {
   readonly hash: string;
   readonly client: AppClient;
+  readonly boardStore?: BoardStore;
   readonly loginApprovals?: LoginApprovals;
   readonly agentJoinApprovals?: AgentJoinApprovals;
   readonly pageSize?: number;
@@ -70,6 +72,7 @@ interface Opening {
   readonly session?: Session;
   readonly live?: Live;
   readonly reading?: Reading;
+  readonly storage?: ComposerOptions["storage"];
 }
 
 function anonymousLoginRequests(): Pick<CookoutClient, "approveLogin" | "getLoginRequest"> {
@@ -85,11 +88,18 @@ function anonymousLoginRequests(): Pick<CookoutClient, "approveLogin" | "getLogi
   };
 }
 
-function anonymousAgentJoinRequests(): Pick<CookoutClient, "approveAgentJoin" | "getAgentJoinRequest"> {
+function anonymousAgentJoinRequests(): Pick<
+  CookoutClient,
+  "approveAgentJoin" | "denyAgentJoin" | "getAgentJoinRequest"
+> {
   return {
     approveAgentJoin: async (userCode, approval) => {
       const approved = await anonymousClient().approveAgentJoin(userCode, approval);
       return approved;
+    },
+    denyAgentJoin: async (userCode) => {
+      const denied = await anonymousClient().denyAgentJoin(userCode);
+      return denied;
     },
     getAgentJoinRequest: async (userCode) => {
       const found = await anonymousClient().getAgentJoinRequest(userCode);
@@ -138,8 +148,8 @@ export function openBoard(opening: BoardOpening): () => void {
   scrollingStubbed();
   globalThis.location.hash = opening.hash;
   const boardStore = boardStoreFor({ boardStore: opening.boardStore, client: adminClient(), live: opening.live });
-  const composer = opening.composer ?? createComposer({ boardStore });
-  const unread = unreadFor(opening.unread);
+  const composer = composerFor({ boardStore, composer: opening.composer, storage: opening.storage });
+  const unread = unreadFor({ boardStore, unread: opening.unread });
   const layout = opening.layout ?? browserLayout();
   const { agentJoinApprovals, loginApprovals } = approvalsOf(opening);
   onTestFinished(cleanup);
@@ -148,8 +158,8 @@ export function openBoard(opening: BoardOpening): () => void {
       agentJoinApprovals={agentJoinApprovals}
       boardStore={boardStore}
       composer={composer}
+      keymap={createKeymap({ platform: globalThis.navigator.platform })}
       layout={layout}
-      live={opening.live ?? null}
       loginApprovals={loginApprovals}
       reading={readingFor(opening.reading)}
       search={opening.search ?? searchFor(boardStore, {})}
@@ -171,6 +181,7 @@ export function openAt(opening: Opening): () => void {
     reading: readingFor(opening.reading),
     search: searchFor(boardStore, opening),
     session,
-    unread: createUnread(opening),
+    storage: opening.storage,
+    unread: createUnread({ boardStore }),
   });
 }

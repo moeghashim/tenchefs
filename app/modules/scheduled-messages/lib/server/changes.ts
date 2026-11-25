@@ -4,12 +4,12 @@ import type { Identity, IdentityName } from "../../../identities/index.ts";
 import type { ScheduledMessage, ScheduledMessageId } from "../../index.ts";
 import type { Storage, StorageUnavailable, StoredScheduledMessage } from "../../../storage/server.ts";
 import { creatorDeactivated, scheduledMessageNotFound } from "./refusals.ts";
+import type { Announcing } from "./announced.ts";
 import type { EditRequest } from "./edit.ts";
 import type { Refusal } from "../../../http/index.ts";
 import { Storage as StorageService } from "../../../storage/server.ts";
 import { editedIn } from "./edit.ts";
 import { isoTimeOf } from "../../../time/server.ts";
-import { shownWith } from "./shown.ts";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
@@ -22,6 +22,7 @@ type Editing = (caller: Identity, id: ScheduledMessageId, asked: EditRequest) =>
 interface ScheduledOn {
   readonly storage: Storage["Service"];
   readonly wake: Effect.Effect<void>;
+  readonly announcing: Announcing;
 }
 
 function found(storage: Storage["Service"], scheduleId: ScheduledMessageId): Fails<StoredScheduledMessage> {
@@ -61,7 +62,7 @@ function changeWith(on: ScheduledOn, change: Change): Changing {
       const now = yield* Effect.map(DateTime.now, isoTimeOf);
       const changed = yield* on.storage[change](stored.id, now);
       yield* on.wake;
-      return yield* shownWith(on.storage)({ ...stored, ...changed });
+      return yield* on.announcing.shownAndAnnounced({ ...stored, ...changed }, change === "deleteScheduledMessage");
     });
 }
 
@@ -72,7 +73,7 @@ function editWith(on: ScheduledOn): Editing {
       yield* allowed(on.storage, caller, stored.creator);
       const edited = yield* editedIn({ asked, storage: on.storage, stored });
       yield* on.wake;
-      return yield* shownWith(on.storage)({ ...stored, ...edited });
+      return yield* on.announcing.shownAndAnnounced({ ...stored, ...edited }, false);
     });
 }
 
@@ -87,7 +88,7 @@ interface Changes {
 function changesOn(on: ScheduledOn): Changes {
   return {
     edit: editWith(on),
-    get: (id) => Effect.flatMap(found(on.storage, id), shownWith(on.storage)),
+    get: (id) => Effect.flatMap(found(on.storage, id), on.announcing.shown),
     pause: changeWith(on, "pauseScheduledMessage"),
     remove: changeWith(on, "deleteScheduledMessage"),
     resume: changeWith(on, "resumeScheduledMessage"),

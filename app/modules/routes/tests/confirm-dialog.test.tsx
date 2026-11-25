@@ -3,7 +3,8 @@ import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { openAt } from "./render.tsx";
+import type { OpenedView } from "./view-opened.ts";
+import { profileOpened } from "./view-opened.ts";
 
 interface Held {
   readonly client: CookoutClient;
@@ -38,12 +39,12 @@ async function undeletableAgent(name: string): Promise<void> {
   await client.createMessage({ channel: name, text: "hello" });
 }
 
-async function askingToDeactivate(name: string, client: CookoutClient): Promise<() => void> {
+async function askingToDeactivate(name: string, client: CookoutClient): Promise<OpenedView> {
   await undeletableAgent(name);
-  const close = openAt({ client, hash: `#/people/${name}` });
+  const opened = await profileOpened({ client, name });
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
   await screen.findByRole("alertdialog", { name: `Deactivate @${name}?` });
-  return close;
+  return opened;
 }
 
 async function pressInDialog(name: string): Promise<void> {
@@ -71,7 +72,7 @@ it("deactivate asks in a dialog that says what happens, and Escape closes it wit
 }, async () => {
   expect.hasAssertions();
 
-  const close = await askingToDeactivate("web-confirm-escape", adminClient());
+  const { close } = await askingToDeactivate("web-confirm-escape", adminClient());
   const body = screen.getByText(/can't post/u).textContent;
   fireEvent.keyDown(inDialog().element(), { key: "Escape" });
   await dialogClosed();
@@ -90,10 +91,11 @@ it("a confirmed action shows as pending, Escape can't close it, and it closes on
   expect.hasAssertions();
 
   const held = heldDeactivation(adminClient());
-  const close = await askingToDeactivate("web-confirm-pending", held.client);
+  const { answered, close } = await askingToDeactivate("web-confirm-pending", held.client);
   await pressInDialog("Deactivate @web-confirm-pending");
   const disabled = await escapeWhilePending();
   held.release();
+  await answered("deactivateIdentity");
   await inProfile().findByRole("button", { name: "Reactivate" });
 
   expect([disabled, screen.queryByRole("alertdialog"), await deactivated("web-confirm-pending")]).toStrictEqual([
@@ -117,8 +119,9 @@ it("a refused action keeps the dialog open with the reason inline, and Cancel cl
       throw new Error("offline");
     },
   };
-  const close = await askingToDeactivate("web-confirm-refused", refusing);
+  const { answered, close } = await askingToDeactivate("web-confirm-refused", refusing);
   await pressInDialog("Deactivate @web-confirm-refused");
+  await answered("deactivateIdentity");
   const { textContent: said } = await inDialog().findByRole("alert");
   await pressInDialog("Cancel");
   await dialogClosed();
@@ -135,7 +138,7 @@ it("deleting asks in a destructive dialog that says it can't be undone", { timeo
   expect.hasAssertions();
 
   await newIdentity({ kind: "agent", name: "web-confirm-delete" });
-  const close = openAt({ client: adminClient(), hash: "#/people/web-confirm-delete" });
+  const { close } = await profileOpened({ client: adminClient(), name: "web-confirm-delete" });
   fireEvent.click(await inProfile().findByRole("button", { name: "Delete" }));
   await screen.findByRole("alertdialog", { name: "Delete @web-confirm-delete?" });
 

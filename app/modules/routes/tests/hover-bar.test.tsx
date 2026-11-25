@@ -57,7 +57,7 @@ function valueOf(box: () => HTMLElement): string {
 }
 
 async function articleIn(list: string, text: string): Promise<HTMLElement> {
-  const found = await within(await screen.findByRole("list", { name: list })).findByText(text);
+  const found = await within(await screen.findByRole("feed", { name: list })).findByText(text);
   const article = found.closest("article");
   if (article === null) {
     throw new TypeError(`${text} is in no message`);
@@ -65,7 +65,7 @@ async function articleIn(list: string, text: string): Promise<HTMLElement> {
   return article;
 }
 
-it("a channel message's hover bar holds 👍, Reply, Close thread and More actions, each an icon labelled as its tooltip", {
+it("a channel message's hover bar holds 👍, Reply, Close thread and More actions, and no Open thread, each an icon labelled as its tooltip", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();

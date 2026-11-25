@@ -1,5 +1,5 @@
 import { Array as Arr, Effect, Option, Order, Predicate, Schema, String as Str } from "effect";
-import type { TriggerResult, TriggerToken } from "../../../triggers/index.ts";
+import type { TriggerHeader, TriggerResult, TriggerToken } from "../../../triggers/index.ts";
 import { isOkStatus, isTriggerToken } from "../../../triggers/index.ts";
 import type { Fails } from "./errors.ts";
 import type { IdentityName } from "../../../identities/index.ts";
@@ -12,12 +12,14 @@ import { unreadable } from "./errors.ts";
 interface NewTrigger {
   readonly url: string;
   readonly token: TriggerToken;
+  readonly headers?: readonly TriggerHeader[];
 }
 
 interface StoredTrigger {
   readonly url: string;
   readonly token: TriggerToken;
   readonly agent: IdentityName;
+  readonly headers?: readonly TriggerHeader[];
   readonly lastResult?: TriggerResult;
 }
 
@@ -32,6 +34,13 @@ interface TriggersSection {
 type MemoryTriggersSection = TriggersSection & {
   readonly dropTrigger: (agent: IdentityName) => Effect.Effect<void>;
 };
+
+function withHeaders(stored: StoredTrigger, headers: readonly TriggerHeader[]): StoredTrigger {
+  if (Arr.isReadonlyArrayNonEmpty(headers)) {
+    return { ...stored, headers };
+  }
+  return stored;
+}
 
 function among(agents: readonly IdentityName[]): (trigger: StoredTrigger) => boolean {
   const named = new Set(agents);
@@ -60,15 +69,20 @@ function memoryTriggers(state: MemoryState): MemoryTriggersSection {
           kept.set(agent, { ...found, lastResult });
         }
       }),
-    setTrigger: (agent, { token, url }) =>
+    setTrigger: (agent, trigger) =>
       open(() => {
-        kept.set(agent, { agent, token, url });
+        kept.set(agent, withHeaders({ agent, token: trigger.token, url: trigger.url }, trigger.headers ?? []));
       }),
   };
 }
 
+const HeadersJson = Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String, value: Schema.String })));
+
+const encodeHeaders = Schema.encodeEffect(HeadersJson);
+
 const TriggerRow = Schema.Struct({
   agent_name: Schema.String.pipe(Schema.refine(isIdentityName)),
+  headers: HeadersJson,
   last_at: Schema.NullOr(IsoTimeSchema),
   last_error: Schema.NullOr(Schema.String),
   last_status: Schema.NullOr(Schema.Int),
@@ -95,7 +109,7 @@ function resultOf({ last_at: at, last_error: error, last_status: status }: Row):
 }
 
 function triggerOf(row: Row): StoredTrigger {
-  const stored = { agent: row.agent_name, token: row.token, url: row.url };
+  const stored = withHeaders({ agent: row.agent_name, token: row.token, url: row.url }, row.headers);
   return Option.match(resultOf(row), { onNone: () => stored, onSome: (lastResult) => ({ ...stored, lastResult }) });
 }
 
@@ -105,7 +119,7 @@ function triggersOf(rows: readonly unknown[]): Fails<readonly StoredTrigger[]> {
   );
 }
 
-const COLUMNS = "agent_name, url, token, last_at, last_status, last_error";
+const COLUMNS = "agent_name, url, token, headers, last_at, last_status, last_error";
 
 function sqlTriggers(db: SqlDatabase): TriggersSection {
   return {
@@ -130,14 +144,17 @@ function sqlTriggers(db: SqlDatabase): TriggersSection {
         error ?? null,
         agent,
       ),
-    setTrigger: (agent, { token, url }) =>
-      db.run(
-        `INSERT INTO triggers (agent_name, url, token) VALUES (?, ?, ?)
-         ON CONFLICT (agent_name) DO UPDATE SET url = excluded.url, token = excluded.token,
+    setTrigger: (agent, { headers = [], token, url }) =>
+      Effect.flatMap(Effect.orDie(encodeHeaders(headers)), (json) =>
+        db.run(
+          `INSERT INTO triggers (agent_name, url, token, headers) VALUES (?, ?, ?, ?)
+         ON CONFLICT (agent_name) DO UPDATE SET url = excluded.url, token = excluded.token, headers = excluded.headers,
            last_at = NULL, last_status = NULL, last_error = NULL`,
-        agent,
-        url,
-        token,
+          agent,
+          url,
+          token,
+          json,
+        ),
       ),
   };
 }
@@ -168,8 +185,16 @@ const POSTGRES_TRIGGERS_MIGRATION: readonly string[] = [
   `ALTER TABLE offline_alerts ADD COLUMN trigger_error text COLLATE "C"`,
 ];
 
+const TRIGGER_HEADERS_MIGRATION = "ALTER TABLE triggers ADD COLUMN headers TEXT NOT NULL DEFAULT '[]';";
+
+const POSTGRES_TRIGGER_HEADERS_MIGRATION: readonly string[] = [
+  `ALTER TABLE triggers ADD COLUMN headers text COLLATE "C" NOT NULL DEFAULT '[]'`,
+];
+
 export {
+  POSTGRES_TRIGGER_HEADERS_MIGRATION,
   POSTGRES_TRIGGERS_MIGRATION,
+  TRIGGER_HEADERS_MIGRATION,
   type StoredTrigger,
   TRIGGERS_MIGRATION,
   type TriggersSection,

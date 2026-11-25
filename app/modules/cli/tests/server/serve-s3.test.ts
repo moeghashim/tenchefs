@@ -15,9 +15,9 @@ import { NodeServices } from "@effect/platform-node";
 import type { S3Bucket } from "../../../storage/server.ts";
 import type { Scope } from "effect";
 import type { Secrets } from "../../../secrets/server.ts";
-import { createCookoutClient } from "../../../sdk/index.ts";
 import { request } from "../../../http/client.ts";
 import { secretsLive } from "../../../secrets/server.ts";
+import { testClient } from "../../../testing/index.ts";
 
 const SIZE = 200_000;
 const PATTERN = 253;
@@ -43,7 +43,7 @@ const postedOnS3: Effect.Effect<PostedOnS3, never, Needs> = Effect.gen(function*
   const bucket = yield* Effect.orDie(freshS3Bucket);
   const database = yield* freshDatabasePath;
   const server = yield* startServe({ database, env: s3ServeSettings(bucket) });
-  const admin = createCookoutClient({ env: {}, token: server.adminToken, url: server.url });
+  const admin = testClient({ env: {}, token: server.adminToken, url: server.url });
   yield* answer(() => admin.createChannel({ name: "grill" }));
   const attachments = [{ bytes: BYTES, name: "trace.bin" }];
   const { message } = yield* answer(() => admin.createMessage({ attachments, channel: "grill", text: "the trace" }));

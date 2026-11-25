@@ -1,4 +1,4 @@
-import { IdentityCard, Mention, PersonMenu } from "../../design-system/index.tsx";
+import { IdentityCard, Mention, PersonMenu } from "../../design-system/messages.tsx";
 import type { ReactNode } from "react";
 import { isIdentityName } from "../../identities/index.ts";
 import { useProfileHref } from "./profile-base.ts";

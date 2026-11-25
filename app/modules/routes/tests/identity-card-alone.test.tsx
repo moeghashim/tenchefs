@@ -1,6 +1,6 @@
 import { act, render, within } from "@testing-library/react";
 import { expect, it } from "vitest";
-import { IdentityCard } from "../../design-system/index.tsx";
+import { IdentityCard } from "../../design-system/messages.tsx";
 
 const NAME = "ada";
 

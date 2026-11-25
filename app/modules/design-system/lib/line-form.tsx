@@ -1,4 +1,5 @@
 import { useCallback, useId, useRef } from "react";
+import { LineFormSave } from "./line-form-save.tsx";
 import type { ReactNode } from "react";
 
 interface LineFormParts {
@@ -9,15 +10,16 @@ interface LineFormParts {
   readonly onEdit: (text: string) => void;
   readonly onSubmit: () => void;
   readonly submit?: string;
+  readonly submitLast?: boolean;
   readonly children?: ReactNode;
 }
 
 const SAVE = "Save";
-const SAVING = "Saving…";
 
 export function LineForm(parts: LineFormParts): ReactNode {
   const { onEdit, onSubmit } = parts;
   const id = useId();
+  const submit = parts.submit ?? SAVE;
   const box = useRef<HTMLInputElement>(null);
   const handleChange = useCallback(() => {
     if (box.current !== null) {
@@ -43,16 +45,10 @@ export function LineForm(parts: LineFormParts): ReactNode {
           type="text"
           value={parts.value}
         />
-        <button
-          className="rounded-md border bg-foreground px-3 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-          disabled={parts.saving}
-          type="submit"
-        >
-          {parts.saving && SAVING}
-          {!parts.saving && (parts.submit ?? SAVE)}
-        </button>
+        {parts.submitLast !== true && <LineFormSave below={false} saving={parts.saving} submit={submit} />}
       </span>
       {parts.children}
+      {parts.submitLast === true && <LineFormSave below saving={parts.saving} submit={submit} />}
     </form>
   );
 }

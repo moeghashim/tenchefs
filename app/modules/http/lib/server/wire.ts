@@ -20,7 +20,7 @@ const contentSecurityPolicy = Arr.join(
     "script-src 'self'",
     "style-src 'self'",
     "font-src 'self'",
-    "img-src 'self' data:",
+    "img-src 'self' data: blob:",
     "connect-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",
@@ -44,4 +44,4 @@ export const ErrorResponseSchema = matchesWire<ErrorResponse>()(Schema.Struct({ 
 
 export const SchemaProblemsSchema = matchesWire<SchemaProblems>()(Schema.Array(SchemaProblemSchema));
 
-export { securityHeaders };
+export { contentSecurityPolicy, securityHeaders };

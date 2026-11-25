@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { git, repo, repos } from "./lib/merge-repos.ts";
+import { git, redCi, repo, repos } from "./lib/merge-repos.ts";
 import path from "node:path";
 
 const LOCKFILE = "pnpm-lock.yaml";
@@ -68,16 +68,56 @@ it("installs when continuing a merge that brings v1's lockfile change", { timeou
   expect([merged.ok, count()]).toStrictEqual([true, INSTALLED_ONCE]);
 });
 
-it("installs when v1 moved before the push with a lockfile change", { timeout: 10_000 }, () => {
+it("installs when v1 moved with a lockfile change before --continue", { timeout: 10_000 }, () => {
   expect.hasAssertions();
 
   const { other, root, work } = repos();
   repo(work).commit("the ticket", { "notes.txt": "ticket\n" });
-  const moved = path.join(root, "moved");
+  repo(work).merge({ ci: redCi });
+  repo(other).push({ [LOCKFILE]: "moved\n" });
   const { count, install } = installs(root);
-  const moveV1 = `echo moved > ${other}/${LOCKFILE} && git -C ${other} commit -qam moved && git -C ${other} push -q origin HEAD:v1 && touch ${moved}`;
 
-  const merged = repo(work).merge({ check: ["sh", "-c", `test -f ${moved} || { ${moveV1}; }`], install });
+  const merged = repo(work).continueMerge({ install });
 
   expect([merged.ok, count()]).toStrictEqual([true, INSTALLED_ONCE]);
+});
+
+const TICKET_ADR = { "docs/adr/0002-ticket.md": "# Ticket\n", "notes.txt": "ticket\n" } as const;
+
+function adrsAtHead(work: string): string {
+  return git(work, "ls-tree", "-r", "--name-only", "HEAD", "docs/adr/");
+}
+
+it("installs before it commits renumbered ADRs, so a failed install leaves no renumbering commit", {
+  timeout: 10_000,
+}, () => {
+  expect.hasAssertions();
+
+  const { other, work } = repos();
+  repo(other).push({ [LOCKFILE]: "v1\n", "docs/adr/0002-v1.md": "# v1\n" });
+  repo(work).commit("the ticket", TICKET_ADR);
+
+  const merged = repo(work).merge({ install: ["false"] });
+
+  expect([merged.ok, adrsAtHead(work)]).toStrictEqual([
+    false,
+    "docs/adr/0001-base.md\ndocs/adr/0002-ticket.md\ndocs/adr/0002-v1.md",
+  ]);
+});
+
+it("installs before it renumbers ADRs again when v1 moved before --continue", { timeout: 10_000 }, () => {
+  expect.hasAssertions();
+
+  const { other, work } = repos();
+  repo(other).push({ "docs/adr/0002-v1.md": "# v1\n" });
+  repo(work).commit("the ticket", TICKET_ADR);
+  repo(work).merge({ ci: redCi });
+  repo(other).push({ [LOCKFILE]: "moved\n", "docs/adr/0003-other.md": "# Other\n" });
+
+  const merged = repo(work).continueMerge({ install: ["sh", "-c", `! grep -q moved ${LOCKFILE}`] });
+
+  expect([merged.ok, adrsAtHead(work)]).toStrictEqual([
+    false,
+    "docs/adr/0001-base.md\ndocs/adr/0002-v1.md\ndocs/adr/0003-other.md\ndocs/adr/0003-ticket.md",
+  ]);
 });

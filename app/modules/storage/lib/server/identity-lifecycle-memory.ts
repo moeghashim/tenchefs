@@ -11,8 +11,8 @@ interface MemoryIdentityLifecycleOptions {
   readonly forgetIdentity: (name: IdentityName) => Fails<void>;
   readonly revokeAgentSessionsOf: (name: IdentityName) => Effect.Effect<void>;
   readonly dropAgentSessionsOf: (name: IdentityName) => Effect.Effect<void>;
-  readonly dropCommandTokensOf: (handler: IdentityName) => void;
-  readonly dropCommandsOf: (handler: IdentityName) => void;
+  readonly dropWebhookCommandTokensOf: (handler: IdentityName) => void;
+  readonly dropWebhookCommandsOf: (handler: IdentityName) => void;
 }
 
 type MemoryIdentityLifecycle = Pick<StorageService, "deactivateIdentity" | "deleteIdentity">;
@@ -21,7 +21,7 @@ function switchOff(options: MemoryIdentityLifecycleOptions, name: IdentityName):
   return Effect.andThen(
     options.revokeAgentSessionsOf(name),
     Effect.sync(() => {
-      options.dropCommandTokensOf(name);
+      options.dropWebhookCommandTokensOf(name);
     }),
   );
 }
@@ -42,7 +42,7 @@ function memoryIdentityLifecycle(options: MemoryIdentityLifecycleOptions): Memor
         if (result.status === "deleted") {
           yield* options.forgetIdentity(name);
           yield* options.dropAgentSessionsOf(name);
-          options.dropCommandsOf(name);
+          options.dropWebhookCommandsOf(name);
         }
         return result;
       }),

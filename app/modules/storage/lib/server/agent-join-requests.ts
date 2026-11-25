@@ -2,6 +2,7 @@ import type { IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { IssueAgentSession, IssueAgentSessionResult } from "./agent-sessions.ts";
 import type { Fails } from "./errors.ts";
 import type { IsoTime } from "../../../time/index.ts";
+import { Predicate } from "effect";
 import { renewedExpiry } from "./agent-sessions.ts";
 
 interface NewAgentJoinRequest {
@@ -10,6 +11,7 @@ interface NewAgentJoinRequest {
   readonly agent: IdentityName;
   readonly host: string;
   readonly idleExpiry?: string;
+  readonly sessionUrl?: string;
   readonly createdAt: IsoTime;
   readonly expiresAt: IsoTime;
 }
@@ -21,6 +23,14 @@ interface AgentJoinRequest {
   readonly idleExpiry?: string;
   readonly expiresAt: IsoTime;
   readonly approved: boolean;
+}
+
+interface PendingAgentJoinRequest {
+  readonly userCode: string;
+  readonly agent: IdentityName;
+  readonly host: string;
+  readonly createdAt: IsoTime;
+  readonly expiresAt: IsoTime;
 }
 
 interface AgentJoinApproval {
@@ -39,6 +49,7 @@ interface CollectAgentJoinRequest {
 type AgentJoinCollection =
   | { readonly status: "pending" }
   | { readonly status: "gone" }
+  | { readonly status: "denied" }
   | { readonly status: "live"; readonly identity: IdentityName; readonly expiresAt: IsoTime }
   | {
       readonly status: "collected";
@@ -46,22 +57,26 @@ type AgentJoinCollection =
       readonly created: boolean;
       readonly issuedAt: IsoTime;
       readonly expiresAt: IsoTime;
+      readonly sessionUrl?: string;
     };
 
 interface AgentJoinRequestsSection {
   readonly addAgentJoinRequest: (request: NewAgentJoinRequest, now: IsoTime) => Fails<"added" | "code_taken">;
   readonly findAgentJoinRequest: (userCode: string, now: IsoTime) => Fails<AgentJoinRequest | undefined>;
+  readonly listPendingAgentJoinRequests: (now: IsoTime) => Fails<readonly PendingAgentJoinRequest[]>;
   readonly approveAgentJoinRequest: (
     userCode: string,
     approval: AgentJoinApproval,
     now: IsoTime,
   ) => Fails<"approved" | "not_found">;
   readonly collectAgentJoinRequest: (collect: CollectAgentJoinRequest) => Fails<AgentJoinCollection>;
+  readonly denyAgentJoinRequest: (userCode: string, now: IsoTime) => Fails<"denied" | "not_found">;
 }
 
 interface Approved {
   readonly approval: AgentJoinApproval;
   readonly host: string;
+  readonly sessionUrl: string | null;
   readonly collect: CollectAgentJoinRequest;
 }
 
@@ -73,23 +88,32 @@ interface Issued {
 
 const PENDING: AgentJoinCollection = { status: "pending" };
 const GONE: AgentJoinCollection = { status: "gone" };
+const DENIED: AgentJoinCollection = { status: "denied" };
 
-function sessionToIssue({ approval, collect, host }: Approved): IssueAgentSession {
+function sessionToIssue({ approval, collect, host, sessionUrl }: Approved): IssueAgentSession {
   const { force, idleSeconds, identity } = approval;
   const { now, sessionHash } = collect;
   const expiresAt = renewedExpiry({ idleSeconds, now });
-  return { force, session: { expiresAt, hash: sessionHash, host, identity, idleSeconds, issuedAt: now } };
+  const session = { expiresAt, hash: sessionHash, host, identity, idleSeconds, issuedAt: now };
+  if (sessionUrl === null) {
+    return { force, session };
+  }
+  return { force, session: { ...session, sessionUrl } };
 }
 
 function collectionOf({ created, issue, result }: Issued): AgentJoinCollection {
-  const { expiresAt, identity, issuedAt } = issue.session;
+  const { expiresAt, identity, issuedAt, sessionUrl } = issue.session;
   if (result.status === "live") {
     return { expiresAt: result.expiresAt, identity, status: "live" };
   }
-  return { created, expiresAt, identity, issuedAt, status: "collected" };
+  const collected = { created, expiresAt, identity, issuedAt, status: "collected" } as const;
+  if (Predicate.isUndefined(sessionUrl)) {
+    return collected;
+  }
+  return { ...collected, sessionUrl };
 }
 
-export { GONE, PENDING, collectionOf, sessionToIssue };
+export { DENIED, GONE, PENDING, collectionOf, sessionToIssue };
 
 export type { JoinCodesSection } from "./join-codes.ts";
 
@@ -100,4 +124,5 @@ export type {
   AgentJoinRequestsSection,
   CollectAgentJoinRequest,
   NewAgentJoinRequest,
+  PendingAgentJoinRequest,
 };

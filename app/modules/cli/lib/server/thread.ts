@@ -4,7 +4,9 @@ import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
 import type { CommandFailed } from "./output.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import { Option } from "effect";
+import type { SearchSort } from "../../../search/index.ts";
 import { answer } from "./output.ts";
+import { searchSorts } from "../../../search/index.ts";
 
 type ThreadCommand = Command.Command<"thread", object, object, CommandFailed, AgentSessionStateNeeds>;
 
@@ -45,6 +47,7 @@ interface SearchFlags {
   readonly query: string;
   readonly cursor: Option.Option<string>;
   readonly limit: Option.Option<number>;
+  readonly sort: Option.Option<SearchSort>;
 }
 
 const queryArgument = Argument.String("query").pipe(
@@ -58,20 +61,26 @@ const searchCursorFlag = Flag.String("cursor").pipe(
   Flag.withDescription("Only results after this point: the previous page's cursor."),
 );
 const searchLimitFlag = Flag.Int("limit").pipe(Flag.optional, Flag.withDescription("1-200 results. Default 50."));
+const searchSortFlag = Flag.Literals("sort", searchSorts).pipe(
+  Flag.optional,
+  Flag.withDescription("newest (the default) or best: best match first, ties newest first. Keep it for each page."),
+);
 
-function searchRequest({ cursor, limit, query }: SearchFlags): SearchRequest {
+function searchRequest({ cursor, limit, query, sort }: SearchFlags): SearchRequest {
   const withCursor = Option.match(cursor, { onNone: () => NOTHING, onSome: (value) => ({ cursor: value }) });
   const withLimit = Option.match(limit, { onNone: () => NOTHING, onSome: (value) => ({ limit: value }) });
-  return { query, ...withCursor, ...withLimit };
+  const withSort = Option.match(sort, { onNone: () => NOTHING, onSome: (value) => ({ sort: value }) });
+  return { query, ...withCursor, ...withLimit, ...withSort };
 }
 
 const searchCommand = Command.make(
   "search",
-  { cursor: searchCursorFlag, limit: searchLimitFlag, query: queryArgument },
+  { cursor: searchCursorFlag, limit: searchLimitFlag, query: queryArgument, sort: searchSortFlag },
   (flags) => answer((client) => client.search(searchRequest(flags))),
 ).pipe(
   Command.withDescription(
-    "Search every channel's messages and replies by their words, newest first, Closed threads included: search " +
+    "Search every channel's messages and replies by their words, newest first or with --sort best, Closed threads " +
+      "included: search " +
       "before asking, since it may already be answered. Pass the answer's cursor to --cursor for the next page.",
   ),
 );

@@ -1,4 +1,4 @@
-import { FeedHeading, FeedList } from "../../design-system/index.tsx";
+import { FeedHeading, FeedList } from "../../design-system/feed.tsx";
 import type { OfflineAlert, OfflineAlertId } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import { UnreadAlertRow } from "./unread-alert-row.tsx";

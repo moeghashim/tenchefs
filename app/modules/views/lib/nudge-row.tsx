@@ -1,4 +1,4 @@
-import { FeedRow, FeedText } from "../../design-system/index.tsx";
+import { FeedRow, FeedText } from "../../design-system/feed.tsx";
 import type { Nudge } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import { firstLineOf } from "./first-line.ts";

@@ -1,8 +1,12 @@
 import { adminClient, newIdentity } from "./people.ts";
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { inPane } from "./regions.ts";
 import { logInToChannels } from "./login.ts";
+import { probeFixtures } from "./probe.ts";
+import { unique } from "./names.ts";
+
+const test = base.extend(probeFixtures);
 
 const NARROW = { height: 900, width: 600 };
 const HALF = 2;
@@ -46,11 +50,11 @@ async function boxOf(page: Page, found: ReturnType<Page["getByText"]>): Promise<
 
 async function dayLine(page: Page): Promise<Day> {
   const named = `${String(CLOSED)} closed threads`;
-  const fold = inPane(page).getByRole("button", { name: named });
+  const fold = inPane(page).getByRole("button", { exact: true, name: named });
 
   await expect(fold).toBeVisible();
 
-  const line = inPane(page).getByRole("listitem").filter({ hasText: named });
+  const line = inPane(page).getByRole("article").filter({ hasText: named });
   return {
     date: await boxOf(page, line.getByText("Today", { exact: true })),
     fold: await boxOf(page, fold),
@@ -67,14 +71,14 @@ function overlap(day: Day): number {
 }
 
 test("the day line's date sits in the centre with the fold to its right", async ({ page }) => {
-  await foldBeforeToday(page, "browser-fold-day-wide");
+  await foldBeforeToday(page, unique("browser-fold-day-wide"));
   const day = await dayLine(page);
 
   expect([offCentre(day) < CENTRED, overlap(day), day.fold.left > day.date.left]).toStrictEqual([true, NONE, true]);
 });
 
 test("at the narrowest width the date stays centred and the fold doesn't overlap it", async ({ page }) => {
-  await foldBeforeToday(page, "browser-fold-day-narrow");
+  await foldBeforeToday(page, unique("browser-fold-day-narrow"));
   await page.setViewportSize(NARROW);
   const day = await dayLine(page);
 

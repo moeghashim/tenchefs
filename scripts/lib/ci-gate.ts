@@ -16,6 +16,7 @@ interface CiGateOptions {
   readonly args: readonly string[];
   readonly base: readonly string[];
   readonly cwd: string;
+  readonly event: string;
   readonly gh: Command;
   readonly log: (line: string) => void;
   readonly polls: number;
@@ -40,7 +41,9 @@ const NO_RUN = "none";
 const NEXT = 1;
 const COMPLETED = "completed";
 const CANCELLED = "cancelled";
-const LIST = ["run", "list", "--workflow", "Check", "--event", "push", "--limit", "1", "--json", "databaseId"];
+function listOf(event: string): readonly string[] {
+  return ["run", "list", "--workflow", "Check", "--event", event, "--limit", "1", "--json", "databaseId"];
+}
 
 function unreadable(options: CiGateOptions, read: Unreadable): Stopped {
   return stop(`Could not read ${options.subject}'s Check run: gh ${read.args.join(" ")}\n${tail(read.output)}`);
@@ -67,12 +70,13 @@ function findRun(options: CiGateOptions, args: readonly string[]): number | Unre
 }
 
 function waitForRun(options: CiGateOptions, waited: number): void {
-  options.log(`${options.subject} has no Check push run yet: waiting (${waited + NEXT} of ${options.appear}).`);
+  const count = `(${waited + NEXT} of ${options.appear})`;
+  options.log(`${options.subject} has no Check ${options.event} run yet: waiting ${count}.`);
   options.sleep();
 }
 
 function awaitRun(options: CiGateOptions, waited: number): number | Stopped {
-  const args = [...LIST, ...options.args];
+  const args = [...listOf(options.event), ...options.args];
   const found = findRun(options, args);
   if (typeof found === "number") {
     return found;
@@ -81,7 +85,7 @@ function awaitRun(options: CiGateOptions, waited: number): number | Stopped {
     return unreadable(options, found);
   }
   if (waited >= options.appear) {
-    return stop(`${options.subject} has no Check push run: ${args.join(" ")}`);
+    return stop(`${options.subject} has no Check ${options.event} run: ${args.join(" ")}`);
   }
   waitForRun(options, waited);
   return awaitRun(options, waited + NEXT);
@@ -92,7 +96,7 @@ function notGreen(checkRun: CheckRun): readonly Job[] {
 }
 
 function baseRun(options: CiGateOptions): CheckRun | typeof NO_RUN {
-  const runNumber = findRun(options, [...LIST, ...options.base]);
+  const runNumber = findRun(options, [...listOf("push"), ...options.base]);
   if (typeof runNumber !== "number") {
     return NO_RUN;
   }
@@ -205,7 +209,7 @@ function supersededBy(options: CiGateOptions, { checkRun, runNumber }: Watched):
   if (!cancelledOnly(checkRun)) {
     return NO_RUN;
   }
-  const latest = findRun(options, [...LIST, ...options.args]);
+  const latest = findRun(options, [...listOf(options.event), ...options.args]);
   if (typeof latest !== "number" || latest === runNumber) {
     return NO_RUN;
   }

@@ -1,6 +1,7 @@
 import { Array as Arr, Effect, Option, pipe } from "effect";
 import type {
   CollectLoginRequest,
+  IssueLoginCredential,
   LoginCollection,
   LoginRequest,
   LoginRequestsSection,
@@ -24,12 +25,15 @@ type LoginCredentials = Map<TokenHash, IdentityName>;
 
 interface MemoryLoginRequestsOptions {
   readonly findIdentity: FindIdentity;
+  readonly tokenRevoked: (hash: TokenHash) => boolean;
   readonly state: MemoryState;
 }
 
 interface Held {
   readonly credentials: LoginCredentials;
+  readonly madeWith: Map<TokenHash, TokenHash>;
   readonly findIdentity: FindIdentity;
+  readonly tokenRevoked: (hash: TokenHash) => boolean;
 }
 
 type MemoryLoginRequestsSection = LoginRequestsSection & {
@@ -54,12 +58,26 @@ function liveByCode(requests: Requests, userCode: string, now: IsoTime): Option.
   return Arr.findFirst([...requests.values()], ({ request }) => request.userCode === userCode);
 }
 
-function dropCredentialsOf(credentials: LoginCredentials, name: IdentityName): void {
+function dropCredentialsOf({ credentials, madeWith }: Held, name: IdentityName): void {
   for (const [hash, holder] of credentials) {
     if (holder === name) {
       credentials.delete(hash);
+      madeWith.delete(hash);
     }
   }
+}
+
+function revokeMadeWithRevokedIn(held: Held) {
+  return (name: IdentityName): readonly TokenHash[] =>
+    Arr.filter([...held.credentials.keys()], (hash) => {
+      const made = Option.fromUndefinedOr(held.madeWith.get(hash));
+      if (held.credentials.get(hash) !== name || !Option.exists(made, held.tokenRevoked)) {
+        return false;
+      }
+      held.credentials.delete(hash);
+      held.madeWith.delete(hash);
+      return true;
+    });
 }
 
 function dropApprovedBy(requests: Requests, name: IdentityName): void {
@@ -130,26 +148,51 @@ function findCredentialIn(held: Held) {
     );
 }
 
-function memoryLoginRequests({ findIdentity, state }: MemoryLoginRequestsOptions): MemoryLoginRequestsSection {
+function issueStraightTo(held: Held) {
+  return ({ credentialHash, identity, madeWith }: IssueLoginCredential): Identity | undefined =>
+    pipe(
+      identityOf(held, identity),
+      Option.map((found) => {
+        held.credentials.set(credentialHash, found.name);
+        held.madeWith.set(credentialHash, held.madeWith.get(madeWith) ?? madeWith);
+        return found;
+      }),
+      Option.getOrUndefined,
+    );
+}
+
+function memoryLoginRequests({
+  findIdentity,
+  state,
+  tokenRevoked,
+}: MemoryLoginRequestsOptions): MemoryLoginRequestsSection {
   const requests: Requests = new Map();
-  const held: Held = { credentials: new Map(), findIdentity };
+  const held: Held = { credentials: new Map(), findIdentity, madeWith: new Map(), tokenRevoked };
   const approve = approveIn(requests);
   const add = addTo(requests);
   const collect = collectFrom(requests, held);
   const findCredential = findCredentialIn(held);
+  const issue = issueStraightTo(held);
+  const revokeMadeWith = revokeMadeWithRevokedIn(held);
   return {
     addLoginRequest: (request, now) => open(state, () => add(request, now)),
     approveLoginRequest: (userCode, approver, now) => open(state, () => approve(userCode, approver, now)),
     collectLoginRequest: (given) => open(state, () => collect(given)),
     dropLoginCredentials: (name) =>
       Effect.sync(() => {
-        dropCredentialsOf(held.credentials, name);
+        dropCredentialsOf(held, name);
         dropApprovedBy(requests, name);
       }),
     findLoginCredential: (hash) => open(state, () => findCredential(hash)),
     findLoginRequest: (userCode, now) =>
       open(state, () => pipe(liveByCode(requests, userCode, now), Option.map(shown), Option.getOrUndefined)),
-    revokeLoginCredential: (hash) => open(state, () => held.credentials.delete(hash)),
+    issueLoginCredential: (given) => open(state, () => issue(given)),
+    revokeLoginCredential: (hash) =>
+      open(state, () => {
+        held.madeWith.delete(hash);
+        return held.credentials.delete(hash);
+      }),
+    revokeLoginCredentialsMadeWithRevokedTokens: (name) => open(state, () => revokeMadeWith(name)),
   };
 }
 

@@ -63,7 +63,7 @@ it.effect("cookout command add reads the schema file and prints the secret once;
     expect(added).toMatchObject({ exitCode: 0, stdoutJson: { command, secret: "hmac_test_2" } });
     expect(listed).toMatchObject({
       exitCode: 0,
-      stdoutJson: { commands: [command, release, { name: "spawn-agent" }] },
+      stdoutJson: { commands: [command, release] },
     });
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
@@ -88,14 +88,19 @@ it.effect(
     }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("cookout command rotate prints the command with its new secret; an unknown command exits 1", () =>
-  Effect.gen(function* rotateFromTheCommandLine() {
-    const cookout = yield* TestCookout;
-    const env = yield* deployInGrill(cookout);
-    const rotated = yield* runCookout({ args: ["command", "rotate", "deploy"], env });
-    const missing = yield* runCookout({ args: ["command", "rotate", "release"], env });
+it.effect(
+  "cookout command rotate prints the Webhook command with its new secret; an unknown Webhook command exits 1",
+  () =>
+    Effect.gen(function* rotateFromTheCommandLine() {
+      const cookout = yield* TestCookout;
+      const env = yield* deployInGrill(cookout);
+      const rotated = yield* runCookout({ args: ["command", "rotate", "deploy"], env });
+      const missing = yield* runCookout({ args: ["command", "rotate", "release"], env });
 
-    expect(rotated).toMatchObject({ exitCode: 0, stdoutJson: { command: { name: "deploy" }, secret: "hmac_test_3" } });
-    expect(missing).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "command_not_found" } } });
-  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+      expect(rotated).toMatchObject({
+        exitCode: 0,
+        stdoutJson: { command: { name: "deploy" }, secret: "hmac_test_3" },
+      });
+      expect(missing).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "command_not_found" } } });
+    }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );

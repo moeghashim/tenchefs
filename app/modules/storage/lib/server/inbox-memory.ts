@@ -13,7 +13,7 @@ import type { Channel, ChannelName } from "../../../channels/index.ts";
 import type { InboxReason, MovedBackReadPosition } from "../../../inbox/index.ts";
 import type { Message, MessageId, ReadReceipt } from "../../../messages/index.ts";
 import { ackAllIn, ackIn, ackMessageIn, moveBackIn, readPositionsIn, receiptsOf } from "./read-positions-memory.ts";
-import { followersOf, newestPerScope, scopeOf } from "./inbox.ts";
+import { followersOf, mentionsOwnAuthor, newestPerScope, scopeOf } from "./inbox.ts";
 import { reactionHistoryFor, shownItem } from "./inbox-memory-state.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { MemoryInbox } from "./inbox-memory-state.ts";
@@ -80,12 +80,21 @@ function withoutKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string>
   return new Set(Arr.filter([...keys], (kept) => kept !== key));
 }
 
-function afterAppend({ inbox, message, messages }: Appended): readonly [readonly ReadReceipt[], MemoryInbox] {
-  const followed = Arr.map(followersOf(message), (name) => keyOf(name, threadScopeOf(message)));
-  const mentioned = Arr.map(message.mentions, (name) => mentionKeyOf(name, message.id));
+function ackedByAuthor({ inbox, message, messages }: Appended): readonly [readonly ReadReceipt[], MemoryInbox] {
+  if (mentionsOwnAuthor(message)) {
+    return [[], inbox];
+  }
   const author = message.author.name;
   const key = keyOf(author, scopeOf(message));
   const [{ receipts }, moved] = ackIn({ at: message.createdAt, identity: author, inbox, key, message, messages });
+  return [receipts, moved];
+}
+
+function afterAppend(appended: Appended): readonly [readonly ReadReceipt[], MemoryInbox] {
+  const { inbox, message } = appended;
+  const followed = Arr.map(followersOf(message), (name) => keyOf(name, threadScopeOf(message)));
+  const mentioned = Arr.map(message.mentions, (name) => mentionKeyOf(name, message.id));
+  const [receipts, moved] = ackedByAuthor(appended);
   return [
     receipts,
     {
@@ -119,11 +128,15 @@ function reasonsFor(reading: Reading, message: Message): readonly InboxReason[] 
 }
 
 function historyItemFor(reading: Reading, message: Message): readonly StoredHistoryItem[] {
-  if (message.author.name === reading.identity) {
-    return [];
-  }
   const { board } = reading;
-  return shownItem({ board, message, read: isRead(reading, message), reasons: reasonsFor(reading, message) });
+  const read = isRead(reading, message);
+  if (message.author.name !== reading.identity) {
+    return shownItem({ board, message, read, reasons: reasonsFor(reading, message) });
+  }
+  if (mentionsOwnAuthor(message)) {
+    return shownItem({ board, message, read, reasons: ["mention"] });
+  }
+  return [];
 }
 
 function historyOf(reading: Reading): readonly StoredHistoryItem[] {

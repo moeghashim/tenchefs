@@ -33,7 +33,7 @@ export function timeTooltipOf(article: () => HTMLElement): readonly string[] {
 }
 
 export async function receiptsIn(label: string): Promise<readonly (string | null)[]> {
-  const list = await screen.findByRole("list", { name: label });
+  const list = await screen.findByRole("feed", { name: label });
   const receipts: (string | null)[] = [];
   for (const article of within(list).getAllByRole("article")) {
     receipts.push(timeTooltipOf(() => article)[RECEIPT_LINE] ?? null);

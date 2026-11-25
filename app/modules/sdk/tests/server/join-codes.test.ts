@@ -16,7 +16,11 @@ it.effect("a human creates an agent they own, described, with a join code shown 
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const created = yield* answer(() =>
-      ada.client.createJoinCode({ description: "  Triage the bug queue.  ", name: "triage-agent" }),
+      ada.client.createJoinCode({
+        description: "  Triage the bug queue.  ",
+        displayName: "triage-agent",
+        name: "triage-agent",
+      }),
     );
 
     expect(created).toStrictEqual({
@@ -25,6 +29,7 @@ it.effect("a human creates an agent they own, described, with a join code shown 
         admin: false,
         createdAt: CREATED_AT,
         description: "Triage the bug queue.",
+        displayName: "triage-agent",
         kind: "agent",
         name: "triage-agent",
         owner: "ada",
@@ -38,7 +43,9 @@ it.effect("a join code joins its agent once, with no token, and never as a perso
   Effect.gen(function* redeemOnce() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    const created = yield* answer(() => ada.client.createJoinCode({ name: "triage-agent" }));
+    const created = yield* answer(() =>
+      ada.client.createJoinCode({ displayName: "triage-agent", name: "triage-agent" }),
+    );
     const session = yield* answer(() =>
       cookout.clientFor().redeemJoinCode({ host: "cloud-box", idleExpiry: "1d", joinCode: created.joinCode }),
     );
@@ -66,7 +73,7 @@ it.effect("a join code expires 15 minutes after it was made, and an unknown one 
   Effect.gen(function* expiry() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    const created = yield* answer(() => ada.client.createJoinCode({ name: "late-agent" }));
+    const created = yield* answer(() => ada.client.createJoinCode({ displayName: "late-agent", name: "late-agent" }));
     const unknown = yield* refusal(() => cookout.clientFor().redeemJoinCode({ joinCode: "cookout_never-issued" }));
     yield* TestClock.adjust(Duration.minutes(LIFETIME_MINUTES));
     const expired = yield* refusal(() => cookout.clientFor().redeemJoinCode({ joinCode: created.joinCode }));
@@ -81,7 +88,9 @@ it.effect("a join code is refused for a deactivated agent, and kept for when it 
   Effect.gen(function* deactivated() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    const created = yield* answer(() => ada.client.createJoinCode({ name: "paused-agent" }));
+    const created = yield* answer(() =>
+      ada.client.createJoinCode({ displayName: "paused-agent", name: "paused-agent" }),
+    );
     yield* answer(() => ada.client.deactivateIdentity("paused-agent"));
     const whileDeactivated = yield* refusal(() => cookout.clientFor().redeemJoinCode({ joinCode: created.joinCode }));
     yield* answer(() => ada.client.reactivateIdentity("paused-agent"));
@@ -96,7 +105,7 @@ it.effect("a join code is refused while its agent has a live agent session token
   Effect.gen(function* liveSession() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    const created = yield* answer(() => ada.client.createJoinCode({ name: "busy-agent" }));
+    const created = yield* answer(() => ada.client.createJoinCode({ displayName: "busy-agent", name: "busy-agent" }));
     yield* answer(() => ada.client.join({ as: "busy-agent" }));
     const whileLive = yield* refusal(() => cookout.clientFor().redeemJoinCode({ joinCode: created.joinCode }));
 
@@ -110,9 +119,11 @@ it.effect("only a human makes a join code, for a free name in their own namespac
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const bot = yield* cookout.createIdentity("bot", { owner: "ada" });
     yield* cookout.createIdentity("grace", { kind: "human" });
-    const byAgent = yield* refusal(() => bot.client.createJoinCode({ name: "helper" }));
-    const taken = yield* refusal(() => ada.client.createJoinCode({ name: "bot" }));
-    const othersNamespace = yield* refusal(() => ada.client.createJoinCode({ name: "grace/helper" }));
+    const byAgent = yield* refusal(() => bot.client.createJoinCode({ displayName: "helper", name: "helper" }));
+    const taken = yield* refusal(() => ada.client.createJoinCode({ displayName: "bot", name: "bot" }));
+    const othersNamespace = yield* refusal(() =>
+      ada.client.createJoinCode({ displayName: "grace/helper", name: "grace/helper" }),
+    );
     const tooLong = yield* refusal(() =>
       cookout.clientFor().redeemJoinCode({ idleExpiry: "9999d", joinCode: "cookout_never-issued" }),
     );

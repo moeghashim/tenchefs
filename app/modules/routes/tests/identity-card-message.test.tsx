@@ -32,7 +32,7 @@ async function cardName(author: string, region: () => HTMLElement): Promise<HTML
 }
 
 async function authorName(author: string): Promise<HTMLElement> {
-  const name = await cardName(author, () => screen.getByRole("list", { name: "Messages" }));
+  const name = await cardName(author, () => screen.getByRole("feed", { name: "Messages" }));
   return name;
 }
 

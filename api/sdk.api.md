@@ -15,15 +15,15 @@ The SDK's public surface: the built `dist/sdk.d.ts`, as consumers of the publish
  * `IsoTime` brand and its check. Every timestamp the protocol carries
  * (`createdAt`, `expiresAt`, `heldUntil`, the health check's `time`) is one.
  */
-declare const brand$10: unique symbol;
+declare const brand$11: unique symbol;
 /** A moment as the wire writes it: ISO 8601 in UTC with milliseconds, such as `2026-01-01T00:00:00.000Z`. */
 type IsoTime = string & {
-  readonly [brand$10]: "IsoTime";
+  readonly [brand$11]: "IsoTime";
 };
-declare const brand$9: unique symbol;
+declare const brand$10: unique symbol;
 /** A channel's name: 1–80 lowercase letters, digits or `-`. Unique on a server. */
 type ChannelName = string & {
-  readonly [brand$9]: "ChannelName";
+  readonly [brand$10]: "ChannelName";
 };
 /** A channel as the server shows it. */
 interface Channel {
@@ -49,13 +49,13 @@ interface ListChannelsResponse {
  * The calls a client makes on one identity by its name: reading it, and setting or clearing an agent's description
  * (#189). The SDK's `CookoutClient` has them.
  */
-declare const brand$8: unique symbol;
+declare const brand$9: unique symbol;
 /**
  * An agent's description: what the agent handles, written for people and for routing, such as "Matt's to-dos, life
  * admin and voice-note follow-ups". 1–500 characters with no space at either end. A human has none.
  */
 type Description = string & {
-  readonly [brand$8]: "Description";
+  readonly [brand$9]: "Description";
 };
 /** An agent identity's fields with its description, which every caller sees. */
 type Described<Fields> = Fields & {
@@ -78,6 +78,58 @@ interface DescriptionCalls<Answer> {
    */
   readonly setDescription: (name: string, description: string | null) => Promise<Answer>;
 }
+/** The body of `POST /v1/identities` as an agent sends it to create an agent for its own owner: it names no kind. */
+interface CreateAgentForOwnerRequest {
+  /** A plain name, or `<owner>/<name>` with this agent's owner before the `/` (400 `name_not_owned` otherwise). */
+  readonly name: string;
+  /** This agent's own owner, if given at all: another is 403 `admin_only`. */
+  readonly owner?: string;
+  /** Trimmed, then 1–80 characters (400 otherwise). */
+  readonly displayName?: string;
+  /** What the new agent handles: trimmed, then 1–500 characters (400 otherwise). */
+  readonly description?: string;
+}
+/** An agent creating an agent. `Answer` is the `IdentityResponse` it answers with. */
+interface AgentCreationCalls<Answer> {
+  /**
+   * `POST /v1/identities` as an agent: creates an agent owned by this agent's owner and brought in by this agent. It
+   * answers with no token: the new agent gets an agent session token only from an approved join, which shows in this
+   * agent's inbox. A human creates agents with `createIdentity`, which answers with the token.
+   */
+  readonly createAgentForOwner: (request: CreateAgentForOwnerRequest) => Promise<Answer>;
+}
+/**
+ * Avatars on the wire, shared by the server, the SDK, the CLI and the web: the `AvatarId` brand and its check, an
+ * avatar as an identity carries it, the one shape the server takes, and the paths that set and serve one (#478).
+ *
+ * The browser crops and resizes (Matt, 2026-11-25, board msg 4362): the web UI takes a PNG, JPEG, GIF or WebP of up
+ * to 2 MB, crops a centred square, resizes it to 256 px with a canvas and uploads a PNG. The server takes only a PNG
+ * that is exactly 256 by 256, judged by its signature and the width and height in its IHDR header, with no image
+ * library. A CLI or SDK caller sends one already.
+ */
+declare const brand$8: unique symbol;
+/** An avatar's ID: opaque and random, and new whenever an avatar is set, so its bytes never change under it. */
+type AvatarId = string & {
+  readonly [brand$8]: "AvatarId";
+};
+/** An identity's avatar, the picture shown beside its name, as every identity the API returns carries it. */
+interface Avatar {
+  readonly id: AvatarId;
+}
+/** The identity fields an avatar adds: absent when the identity has none, and it shows its initials. */
+type WithAvatar<Fields> = Fields & {
+  /** The picture shown beside its name, served at `avatarPath`. Absent when it has none. */
+  readonly avatar?: Avatar;
+};
+/** The SDK's avatar call, answering `Answer`: the identity, avatar and all. */
+interface AvatarCalls<Answer> {
+  /**
+   * `PUT /v1/identities/:name/avatar`: sets an identity's avatar to `png`, which must already be a PNG of exactly 256
+   * by 256 pixels (400 `avatar_not_png` or `avatar_wrong_size`) of at most 2 MB (413 `avatar_too_large`). The identity
+   * itself or, for an agent, the human who owns it may (403 `not_owner`). The old avatar is deleted.
+   */
+  readonly setAvatar: (name: string, png: Uint8Array) => Promise<Answer>;
+}
 interface IdentityMessageCountResponse {
   readonly messages: number;
 }
@@ -85,13 +137,13 @@ declare const brand$7: unique symbol;
 type Brand$1<Name extends string> = string & {
   readonly [brand$7]: Name;
 };
-type IdentityFields = {
+type IdentityFields = WithAvatar<{
   readonly name: IdentityName;
   readonly displayName?: DisplayName;
   readonly admin: boolean;
   readonly createdAt: IsoTime;
   readonly deactivated?: true;
-};
+}>;
 /**
  * An identity's name: 1–64 lowercase letters, digits or `-`, so `@name` mentions parse cleanly, or two such parts
  * joined by one `/`, such as `matt/triage-agent`. The first part of a namespaced name is the name of the human who
@@ -157,19 +209,18 @@ interface DeactivateIdentityResponse {
 }
 /**
  * The body of `POST /v1/identities`. Any human may create an agent it owns; only an admin may create a human, or an
- * agent owned by another human (403 `admin_only`). An agent may create nothing (403 `human_only`).
+ * agent owned by another human (403 `admin_only`). An agent creates only agents for its own owner, with no token.
  */
 type CreateIdentityRequest = {
   /** A plain name, or `<owner>/<name>` for an agent whose owner is `<owner>` (400 `name_not_owned` otherwise). A human's name has no `/`. */
   readonly name: string;
   readonly kind: IdentityKind;
-  /**
-   * An agent's owner: the name of an existing human (400 `owner_not_human` otherwise). Left out, the caller owns the
-   * agent. A human with one is refused with 400.
-   */
+  /** An agent's owner, an existing human (400 `owner_not_human` otherwise); left out, the caller or its owner. */
   readonly owner?: string;
-  /** Trimmed, then 1–80 characters (400 otherwise). */
+  /** Trimmed, then 1–80 characters (400 otherwise). An agent's is required (400 `display_name_required`). */
   readonly displayName?: string;
+  /** An agent's description: trimmed, then 1–500 characters (400 otherwise, or on a human). */
+  readonly description?: string;
 };
 /** The body of `PUT /v1/identities/:name/display-name`: the new display name (trimmed, then 1–80 characters), or `null` to clear it. */
 interface SetDisplayNameRequest {
@@ -235,6 +286,13 @@ interface Attachment {
   readonly contentType: AttachmentContentType;
   /** Whether its content is a PNG, JPEG, GIF or WebP image, whatever its name says. */
   readonly image: boolean;
+  /**
+   * An image's width in pixels, read from its header when it was posted (#376). Absent on anything that isn't an
+   * image, on an image whose header couldn't be read, and on one posted before the cookout read sizes.
+   */
+  readonly width?: number;
+  /** An image's height in pixels, present exactly when `width` is. */
+  readonly height?: number;
 }
 /** The attachments on a message, as `MessageFields` carries them. */
 interface WithAttachments {
@@ -316,21 +374,15 @@ interface Reply extends MessageFields {
 }
 /** A message, tagged by `kind`. */
 type Message = TopLevelMessage | Reply;
-/** An agent's reply posted to a thread with newer replies by others, oldest first; a later release refuses it instead. */
-interface ThreadMovedWarning {
-  readonly code: "thread_moved";
-  readonly message: string;
-  readonly details: {
-    readonly replies: readonly Reply[];
-  };
+/** The `details` of the 409 `thread_moved` refusal of an agent's reply: the thread's newer replies by others, oldest first. */
+interface ThreadMovedDetails {
+  readonly replies: readonly Reply[];
 }
 /** The answer to posting a message. */
 interface MessageResponse {
   readonly message: Message;
   /** Each `@name` in the text that names no identity, once each in the order written. They stay plain text. */
   readonly unknownMentions: readonly string[];
-  /** Only on an agent's reply to a thread that moved on since what it had seen (`seen`, or else `replyTo`). */
-  readonly warning?: ThreadMovedWarning;
 }
 /** The query of a channel page. With no `before`, the page is the newest messages. */
 interface ListMessagesQuery {
@@ -419,21 +471,38 @@ interface TriggerFailure {
   readonly status?: number;
   readonly error?: string;
 }
-/** An agent's trigger URL as its owner reads it: the URL and its last result, never the token. */
+/**
+ * An agent's trigger URL as its owner reads it: the URL, the names of its extra headers (lowercased, only when it has
+ * any) and its last result; never the token or a header's value.
+ */
 interface Trigger {
   readonly url: string;
+  readonly headerNames?: readonly string[];
   readonly lastResult?: TriggerResult;
 }
 /** The answer to reading, setting or clearing a trigger URL: the agent's, or `null` when it has none. */
 interface TriggerResponse {
   readonly trigger: Trigger | null;
 }
-/** The body of setting a trigger URL: the URL and the token the board sends with each call. */
+/**
+ * An extra header the board sends with each call to a trigger URL (mattpocock/cookout#440), such as the
+ * `anthropic-version` a routine's fire URL asks for. Its value is treated like the token, since it may be secret: once
+ * set, no answer, log line, event or stream holds it.
+ */
+interface TriggerHeader {
+  readonly name: string;
+  readonly value: string;
+}
+/**
+ * The body of setting a trigger URL: the URL, the token the board sends with each call, and up to 20 extra headers it
+ * sends too. Setting replaces every header, so leaving `headers` out drops the old ones.
+ */
 interface SetTriggerRequest {
   readonly url: string;
   readonly token: string;
+  readonly headers?: readonly TriggerHeader[];
 }
-/** The SDK's calls on an agent's trigger URL, each only for the agent's owner. */
+/** The SDK's calls on an agent's trigger URL, each only for the agent's owner or the agent that brought it in. */
 interface TriggerCalls {
   /** `GET /v1/identities/:name/trigger`: the agent's trigger URL and its last result, or `null`; never the token. */
   readonly getTrigger: (agent: string) => Promise<TriggerResponse>;
@@ -518,6 +587,15 @@ interface OfflineAlert {
   readonly backOnlineAt?: IsoTime;
   readonly trigger?: TriggerFailure;
 }
+interface InboxAgentJoinRequest {
+  readonly userCode: string;
+  readonly agent: Identity;
+  readonly host: string;
+  readonly text: string;
+  readonly createdAt: IsoTime;
+  readonly expiresAt: IsoTime;
+  readonly liveSessionExpiresAt?: IsoTime;
+}
 declare const brand$2: unique symbol;
 /** A nudge's ID: a positive whole number, increasing in the order nudges are raised. */
 type NudgeId = number & {
@@ -585,6 +663,10 @@ interface InboxResponse {
   readonly nudges: readonly Nudge[];
   readonly deactivationOffers: readonly DeactivationOffer[];
   readonly deactivatedQuietAgents: readonly DeactivatedQuietAgent[];
+  /**
+   * The pending Agent join requests for agents the caller owns or brought in, oldest first; none is in the history. One whose agent is already joined in another session has `liveSessionExpiresAt`, and approving it replaces that session only with `force`; any can be dismissed with `denyAgentJoin`.
+   */
+  readonly agentJoinRequests: readonly InboxAgentJoinRequest[];
 }
 /** An item in the inbox history: `read` says the identity's read position for its scope is at or after it. */
 interface InboxHistoryItem extends InboxItem {
@@ -741,14 +823,14 @@ type Brand<Name extends string> = string & {
   readonly [brand$1]: Name;
 };
 /** A command's name. It is also the name of the command's handler identity, so it follows the plain identity-name rule (no `/`). */
-type CommandName = Brand<"CommandName">;
+type WebhookCommandName = Brand<"CommandName">;
 /** The per-command secret the server signs webhook deliveries with (an HMAC of the body). Shown once, on add or rotate. */
-type CommandSecret = Brand<"CommandSecret">;
+type WebhookCommandSecret = Brand<"CommandSecret">;
 /** A JSON Schema, the rule a command's call data must follow. */
 type JsonSchema = Readonly<Record<string, JsonValue>>;
 /** A registered command as the server shows it: one an admin added, which the server calls by webhook. Its secret is never part of it. */
-interface RegisteredCommand {
-  readonly name: CommandName;
+interface RegisteredWebhookCommand {
+  readonly name: WebhookCommandName;
   /** The `http` or `https` URL the server posts calls to. */
   readonly url: string;
   /** The JSON Schema a call's data must follow. */
@@ -760,11 +842,11 @@ interface RegisteredCommand {
   readonly createdAt: IsoTime;
 }
 /** A built-in command (mattpocock/cookout#250, 2026-11-23): one the server handles itself, so it has no `url`. */
-interface BuiltInCommand extends Omit<RegisteredCommand, "url"> {
+interface BuiltInCommand extends Omit<RegisteredWebhookCommand, "url"> {
   readonly builtIn: true;
 }
 /** A command as `GET /v1/commands` lists it: registered (with a `url`) or built in (with `builtIn: true`). */
-type Command = RegisteredCommand | BuiltInCommand;
+type WebhookCommand = RegisteredWebhookCommand | BuiltInCommand;
 /** The body of `POST /v1/commands`. The server checks the name, URL, schema and description. */
 interface AddCommandRequest {
   readonly name: string;
@@ -774,16 +856,15 @@ interface AddCommandRequest {
 }
 /** The answer to adding a command or rotating its secret. The secret is shown this once only. */
 interface CommandWithSecretResponse {
-  readonly command: RegisteredCommand;
-  readonly secret: CommandSecret;
+  readonly command: RegisteredWebhookCommand;
+  readonly secret: WebhookCommandSecret;
 }
 /**
- * The answer to `GET /v1/commands`: every command, sorted by name, the registered ones and the built-in ones the server
- * handles itself (`/spawn-agent`), so every client discovers both the same way. A built-in command carries
- * `builtIn: true` and no `url`.
+ * The answer to `GET /v1/commands`: every command, sorted by name. The server has no built-in command since
+ * mattpocock/cookout#381; a built-in one would carry `builtIn: true` and no `url`.
  */
 interface ListCommandsResponse {
-  readonly commands: readonly Command[];
+  readonly commands: readonly WebhookCommand[];
 }
 /** The body of a command call. The server checks `data` against the command's schema. */
 interface CallCommandRequest {
@@ -826,14 +907,16 @@ interface JoinRequest {
   readonly idleExpiry?: string;
   /** The host the agent joins from, such as the machine's hostname, shown to its owner. 1–253 characters. */
   readonly host?: string;
+  /** The session URL (mattpocock/cookout#354): an absolute http or https URL, at most 2048 characters. */
+  readonly sessionUrl?: string;
   /**
    * The display name for the agent this join creates: 1-80 characters after trimming. Sent for an agent that
    * already exists, it is 400 `display_name_on_existing_agent` and nothing is joined.
    */
   readonly displayName?: string;
   /**
-   * Refuses to create an agent without `displayName`: 400 `display_name_required`, and nothing is created. The CLI
-   * sends it (mattpocock/cookout#313); the server refuses every such create one release later.
+   * Has no effect, but is still accepted as released CLIs send it: a join that would create an agent without
+   * `displayName` is always 400 `display_name_required`, and nothing is created (mattpocock/cookout#314).
    */
   readonly requireDisplayName?: boolean;
 }
@@ -848,6 +931,8 @@ interface AgentSessionResponse {
   readonly identity: IdentityName;
   /** Whether this join created the agent, owned by the human who joined. */
   readonly created: boolean;
+  /** The session URL this join set, if it set one. */
+  readonly sessionUrl?: string;
 }
 /** An agent's live agent session token as its owner sees it: when it was issued and last used, never the token. */
 interface ListedAgentSession {
@@ -857,6 +942,8 @@ interface ListedAgentSession {
   readonly expiresAt: IsoTime;
   /** The host it joined from, if the joining client said. */
   readonly host?: string;
+  /** Where its owner can watch the session, if the join set one. Listed only for the agent's owner. */
+  readonly sessionUrl?: string;
 }
 /** The answer to listing an agent's agent session tokens: its live one, or none. */
 interface ListAgentSessionsResponse {
@@ -891,14 +978,17 @@ declare const agentSessionExpired = "agent_session_expired";
  * the identity codes), the 409s
  * `agent_session_live` (join while the agent has a live agent session token) and `identity_deactivated` (join a
  * Deactivated agent), the 400s `idle_expiry_too_long`, `agent_session_required` (leave sent without an agent session token),
- * `display_name_required` (a join that would create an agent with no display name, when the request asks for one) and
+ * `display_name_required` (a join or join code that would create an agent with no display name) and
  * `display_name_on_existing_agent` (a display name sent to join an agent that already exists),
  * the 403 `not_brought_in` (an agent approves a join for an existing agent it didn't bring in, #370), the 404
- * `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), and the
+ * `agent_join_request_not_found` (an agent join request expired, was collected, or never existed), the 404
+ * `agent_not_found` (an agent join request names no active agent: a join request never creates one, #461), the 403
+ * `agent_join_request_denied` (collecting an agent join request that someone who could approve it dismissed, #586),
+ * and the
  * 401s any request sent with an ended agent session token gets, and the 404 `join_code_not_found` (a join code that
  * was used, expired or never issued).
  */
-declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_session_revoked", "agent_session_expired"];
+declare const agentSessionErrorCodes: readonly ["not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_not_found", "agent_join_request_denied", "agent_session_revoked", "agent_session_expired"];
 /**
  * `POST /v1/agent-join-requests` (no token): a box with no Login asks to join as an agent (Matt, 2026-11-23,
  * mattpocock/cookout#120). The server answers a user code and a secret request ID, valid 10 minutes unapproved.
@@ -912,10 +1002,16 @@ declare const collectAgentJoinRequestPath = "/v1/agent-join-requests/collect";
  */
 declare const agentJoinRequestPath = "/v1/agent-join-requests/:code";
 /**
- * `PUT /v1/agent-join-requests/:code/approval`: approves it as the caller. A human approves as before; an agent approves
- * only a join that creates an agent of its own owner, recorded as brought in by it, or rejoins one it brought in (#370).
+ * `PUT /v1/agent-join-requests/:code/approval`: approves it as the caller, joining an existing agent and never creating
+ * one (#461). A human approves for an agent they own; an agent only for an agent it brought in (#370).
  */
 declare const agentJoinRequestApprovalPath = "/v1/agent-join-requests/:code/approval";
+/**
+ * `PUT /v1/agent-join-requests/:code/denial`: dismisses the pending request, for anyone who could approve it as the
+ * agent it asked for (#586); approving that would join `<caller>/<name>` instead is 403 `not_owner`. It leaves every
+ * approver's list, and its collect is then 403 `agent_join_request_denied`.
+ */
+declare const agentJoinRequestDenialPath = "/v1/agent-join-requests/:code/denial";
 /**
  * The approval page's path on the server for an agent join request's user code.
  * @param userCode The request's user code.
@@ -930,6 +1026,8 @@ interface StartAgentJoinRequest {
   readonly host: string;
   /** The longest idle expiry the box asks for, such as `30d`; the approver may lower it. Default `7d`. */
   readonly idleExpiry?: string;
+  /** The session URL of the session the approved join issues, as `join` takes it. */
+  readonly sessionUrl?: string;
 }
 /** A started agent join request. Only `requestId` collects the agent session token, and it is shown this once. */
 interface AgentJoinRequestStartedResponse {
@@ -955,7 +1053,7 @@ interface AgentJoinRequestView {
   readonly as: string;
   /** The agent approving joins, such as `ada/triage-agent` when `triage-agent` is someone else's. */
   readonly joins: IdentityName;
-  /** Whether approving creates that agent, owned by the approver. */
+  /** Whether approving creates that agent: always `false`, since a join request never creates one (#461). */
   readonly creates: boolean;
   /** The idle expiry the box asked for (or the default); the approver may lower it, never raise it. */
   readonly idleExpiry: string;
@@ -966,6 +1064,11 @@ interface AgentJoinRequestView {
 interface AgentJoinRequestResponse {
   readonly agentJoinRequest: AgentJoinRequestView;
 }
+/** The answer to dismissing an agent join request. */
+interface DenyAgentJoinResponse {
+  readonly userCode: string;
+  readonly denied: true;
+}
 /** The body of approving an agent join request. */
 interface ApproveAgentJoinRequest {
   /** A shorter idle expiry than the box asked for; longer is 400 `idle_expiry_too_long`. */
@@ -975,7 +1078,10 @@ interface ApproveAgentJoinRequest {
 }
 /** The SDK's calls for an agent join request: a box with no Login joins once a person approves in the browser. */
 interface AgentJoinCalls {
-  /** `POST /v1/agent-join-requests` (no token): starts an agent join request, which lasts 10 minutes unapproved. */
+  /**
+   * `POST /v1/agent-join-requests` (no token): starts an agent join request, which lasts 10 minutes unapproved. It
+   * never creates an agent: a name no active agent has is 404 `agent_not_found`, and nothing is stored.
+   */
   readonly startAgentJoin: (request: StartAgentJoinRequest) => Promise<AgentJoinRequestStartedResponse>;
   /**
    * `POST /v1/agent-join-requests/collect` (no token): `pending` until a human approves, then, once, the agent
@@ -984,8 +1090,13 @@ interface AgentJoinCalls {
   readonly collectAgentJoin: (requestId: Token) => Promise<AgentJoinCollectedResponse>;
   /** `GET /v1/agent-join-requests/:code` (a human): the request, and the agent approving it would join. */
   readonly getAgentJoinRequest: (userCode: string) => Promise<AgentJoinRequestResponse>;
-  /** `PUT /v1/agent-join-requests/:code/approval` (a human): joins the agent as `join` with the caller's Login would. */
+  /** `PUT /v1/agent-join-requests/:code/approval`: joins the existing agent, as `join` with a Login would, never creating one. */
   readonly approveAgentJoin: (userCode: string, approval?: ApproveAgentJoinRequest) => Promise<AgentJoinRequestResponse>;
+  /**
+   * `PUT /v1/agent-join-requests/:code/denial`: dismisses a pending request, for anyone who could approve it. The
+   * waiting `cookout join` is refused with 403 `agent_join_request_denied`.
+   */
+  readonly denyAgentJoin: (userCode: string) => Promise<DenyAgentJoinResponse>;
 }
 /** How long a join code lasts unredeemed: 15 minutes. */
 declare const joinCodeLifetimeMinutes = 15;
@@ -1001,6 +1112,8 @@ interface CreateJoinCodeRequest {
   readonly name: string;
   /** What the agent is for, trimmed, then 1–500 characters. */
   readonly description?: string;
+  /** Trimmed, then 1–80 characters. Left out, it is 400 `display_name_required` and nothing is created. */
+  readonly displayName?: string;
 }
 /**
  * The answer to `POST /v1/join-codes`: the new agent, and its join code, shown this once. The code can only ever join
@@ -1018,7 +1131,11 @@ interface RedeemJoinCodeRequest {
   readonly idleExpiry?: string;
   /** The host the agent joins from, shown to its owner. 1–253 characters. */
   readonly host?: string;
+  /** The session URL of the session it issues, as `join` takes it (mattpocock/cookout#506). */
+  readonly sessionUrl?: string;
 }
+/** The answer to `POST /v1/join-codes/redeem`: the code's agent's agent session, as `join` answers it. */
+type RedeemJoinCodeResponse = AgentSessionResponse;
 /** The SDK's calls for join codes. */
 interface JoinCodeCalls {
   /** `POST /v1/join-codes` (a human): creates an agent the caller owns, with a join code for it, valid 15 minutes. */
@@ -1027,9 +1144,10 @@ interface JoinCodeCalls {
    * `POST /v1/join-codes/redeem` (no token): the agent session token of the code's agent. A used, expired or unknown
    * code is 404 `join_code_not_found`.
    */
-  readonly redeemJoinCode: (request: RedeemJoinCodeRequest) => Promise<AgentSessionResponse>;
+  readonly redeemJoinCode: (request: RedeemJoinCodeRequest) => Promise<RedeemJoinCodeResponse>;
 }
-interface AgentSessionCalls extends AgentJoinCalls, JoinCodeCalls {
+type AgentApprovalCalls = AgentJoinCalls & JoinCodeCalls;
+interface AgentSessionCalls extends AgentApprovalCalls {
   readonly join: (request: JoinRequest) => Promise<AgentSessionResponse>;
   readonly leave: () => Promise<LeaveResponse>;
   readonly listAgentSessions: (agent: string) => Promise<ListAgentSessionsResponse>;
@@ -1079,6 +1197,17 @@ interface ScheduledMessage {
   readonly lastRun?: ScheduledMessageRun;
   readonly createdAt: IsoTime;
   readonly updatedAt: IsoTime;
+}
+/**
+ * A Scheduled message as it now stands, sent the moment it is created, edited, paused (by hand or because its creator
+ * was Deactivated), resumed or deleted, and after each run, which may finish it (mattpocock/cookout#391). `deleted` is
+ * true only when it was just deleted: its posts then show "Schedule deleted". Sent on every live stream, so an open
+ * web UI's schedule list and its posts' markers stay current. It has no SSE `id`.
+ */
+interface ScheduledMessageEvent {
+  readonly type: "scheduled-message";
+  readonly scheduledMessage: ScheduledMessage;
+  readonly deleted: boolean;
 }
 /**
  * The body of `POST /v1/scheduled-messages`: a channel, a text, exactly one of `cron` and `at`, and a time zone. An
@@ -1160,6 +1289,10 @@ interface ScheduledMessageCalls {
   /** `DELETE /v1/scheduled-messages/:id`: stops it. The messages it posted stay, marked as from a deleted schedule. */
   readonly deleteScheduledMessage: (id: ScheduledMessageId) => Promise<ScheduledMessageResponse>;
 }
+/** The orders search results come in: newest first, or best match first, ties newest first. */
+declare const searchSorts: readonly ["newest", "best"];
+/** One of `searchSorts`. */
+type SearchSort = (typeof searchSorts)[number];
 /** One search result: the message as a channel listing or thread shows it, and whether its thread is Closed. */
 interface SearchResult {
   readonly message: Message;
@@ -1227,6 +1360,11 @@ interface SearchRequest {
    * `from:@name`, `in:#channel`, `before:YYYY-MM-DD` and `after:YYYY-MM-DD` filters narrow it, `@` and `#` optional.
    */
   readonly query: string;
+  /**
+   * `newest` (the default) lists results newest first; `best` lists first the results made most of the query's words,
+   * ties newest first. Pass the same sort with each page's `cursor`.
+   */
+  readonly sort?: SearchSort;
   /** Only results after this point: pass the previous page's `cursor` to read on. */
   readonly cursor?: string;
   /** 1–200 results. Default 50. */
@@ -1235,10 +1373,11 @@ interface SearchRequest {
 /** Searching messages. */
 interface SearchCalls {
   /**
-   * `GET /v1/search?q=<query>`: a page of the messages and replies in every channel whose text matches the query,
-   * newest first, Closed threads included, each with whether its thread is Closed. Pass the answer's `cursor` to read
+   * `GET /v1/search?q=<query>&sort=newest|best`: a page of the messages and replies in every channel whose text
+   * matches the query, newest first or best match first, Closed threads included, each with whether its thread is Closed. Pass the answer's `cursor` to read
    * the next page. A query with neither words nor filters is 400 `empty_query`; a filter naming no identity, no channel
-   * or no real day is 400 `unknown_identity`, `unknown_channel` or `invalid_date`; a command token is 403
+   * or no real day is 400 `unknown_identity`, `unknown_channel` or `invalid_date`; an unknown sort, or a cursor from
+   * the other sort, is 400 `invalid_request`; a command token is 403
    * `outside_command_thread`.
    */
   readonly search: (request: SearchRequest) => Promise<SearchResponse>;
@@ -1253,7 +1392,7 @@ interface PostMessageRequest {
   readonly close?: true;
   /**
    * With `replyTo`: the caller has read the thread up to this message, later than `replyTo`. `replyTo` alone says it
-   * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else warns `thread_moved`.
+   * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else is refused `thread_moved`.
    */
   readonly seen?: number;
 }
@@ -1300,6 +1439,15 @@ interface DeactivatedQuietAgentEvent {
 interface DeactivationOfferEvent {
   readonly type: "deactivation-offer";
   readonly deactivationOffer: DeactivationOffer;
+}
+/**
+ * The pending Agent join requests the caller may approve, all of them, oldest first, as they now stand: sent whenever
+ * one for an agent the caller owns or brought in starts, is approved or expires, on every stream of the caller's,
+ * `cookout watch` included. It replaces the list the inbox gave. It has no SSE `id`.
+ */
+interface AgentJoinRequestsEvent {
+  readonly type: "agent-join-requests";
+  readonly agentJoinRequests: readonly InboxAgentJoinRequest[];
 }
 /** The caller's new read position in a thread or channel, sent the moment any session of the caller acks. */
 interface ReadPositionEvent {
@@ -1379,7 +1527,7 @@ interface IdentityDeletedEvent {
  */
 interface CommandEvent {
   readonly type: "command";
-  readonly command: RegisteredCommand;
+  readonly command: RegisteredWebhookCommand;
 }
 /**
  * An agent's agent session just changed: the agent joined or left, or its owner or an admin revoked its session.
@@ -1433,8 +1581,19 @@ interface OfflineAlertEvent {
   readonly type: "offline-alert";
   readonly alert: OfflineAlert;
 }
+/**
+ * An agent's trigger URL as `GET /v1/identities/:name/trigger` answers it, sent the moment a call to it settles, with
+ * how that call went in `lastResult` (mattpocock/cookout#414). Sent on every stream of the agent's owner and of the
+ * agent that brought it in, the identities that may read it, so an open trigger form shows each call. It has no SSE
+ * `id`.
+ */
+interface TriggerEvent {
+  readonly type: "trigger";
+  readonly identity: IdentityName;
+  readonly trigger: Trigger;
+}
 /** Any event the stream sends. */
-type CookoutEvent = InboxItemEvent | NudgeEvent | NudgeReadEvent | DeactivationOfferEvent | DeactivatedQuietAgentEvent | ReadPositionEvent | ReadPositionMovedBackEvent | MessageEvent | ThreadEvent | IdentityEvent | ReadReceiptEvent | ReactionEvent | ChannelEvent | ChannelDeletedEvent | IdentityDeletedEvent | CommandEvent | AgentSessionEvent | SubscriptionEvent | PresenceEvent | OfflineAlertEvent;
+type CookoutEvent = InboxItemEvent | NudgeEvent | NudgeReadEvent | DeactivationOfferEvent | DeactivatedQuietAgentEvent | AgentJoinRequestsEvent | ReadPositionEvent | ReadPositionMovedBackEvent | MessageEvent | ThreadEvent | IdentityEvent | ReadReceiptEvent | ReactionEvent | ChannelEvent | ChannelDeletedEvent | IdentityDeletedEvent | CommandEvent | AgentSessionEvent | SubscriptionEvent | PresenceEvent | OfflineAlertEvent | TriggerEvent | ScheduledMessageEvent;
 /**
  * `GET /v1/events`: the caller's Server-Sent Events stream, one per connection. With `allChannelsQuery` as its query
  * it is also the all-channels feed: every new message on every channel.
@@ -1473,7 +1632,7 @@ interface HealthResponse {
   readonly time: IsoTime;
 }
 /** Every code a cookout server refuses with. */
-declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "trigger_url_invalid", "trigger_token_missing", "empty_query", "unknown_identity", "unknown_channel", "invalid_date", "attachment_too_large", "too_many_attachments", "attachment_empty", "attachment_unnamed", "message_empty", "attachment_not_found", "cron_invalid", "cron_too_frequent", "cron_never_runs", "time_zone_invalid", "at_in_past", "cron_or_at", "scheduled_message_not_found", "creator_deactivated", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
+declare const errorCodes: readonly ["token_missing", "token_unknown", "token_revoked", "token_expired", "outside_command_thread", "agent_as_human", "admin_only", "human_only", "identity_exists", "identity_not_found", "last_admin", "not_owner", "owner_not_human", "name_not_owned", "not_deactivated", "has_messages", "owns_agents", "avatar_too_large", "avatar_not_png", "avatar_wrong_size", "avatar_not_found", "login_request_not_found", "channel_exists", "channel_not_found", "message_not_found", "reply_in_other_channel", "reaction_not_found", "nudge_not_found", "deactivation_offer_not_found", "deactivated_quiet_agent_not_found", "not_your_identity", "identity_kind", "agent_session_live", "identity_deactivated", "idle_expiry_too_long", "agent_session_required", "display_name_required", "display_name_on_existing_agent", "agent_join_request_not_found", "join_code_not_found", "not_brought_in", "agent_not_found", "agent_join_request_denied", "agent_session_revoked", "agent_session_expired", "command_exists", "handler_not_agent", "command_not_found", "rate_limited", "too_many_streams", "watch_replaced", "offline_alert_not_found", "trigger_url_invalid", "trigger_token_missing", "trigger_header_invalid", "empty_query", "unknown_identity", "unknown_channel", "invalid_date", "attachment_too_large", "too_many_attachments", "attachment_empty", "attachment_unnamed", "message_empty", "thread_moved", "attachment_not_found", "cron_invalid", "cron_too_frequent", "cron_never_runs", "time_zone_invalid", "at_in_past", "cron_or_at", "scheduled_message_not_found", "creator_deactivated", "not_found", "method_not_allowed", "invalid_path", "invalid_json", "invalid_request", "body_too_large", "foreign_host", "foreign_origin", "storage_unavailable", "internal_error"];
 /** A code a cookout server refuses with. */
 type ErrorCode = (typeof errorCodes)[number];
 /** One way a request broke a schema: what is wrong, and where (`path` from the body's top, such as `["data", "branch"]`). */
@@ -1481,6 +1640,7 @@ interface SchemaProblem {
   readonly message: string;
   readonly path: readonly (string | number)[];
 }
+type IdentityAvatarCalls = AvatarCalls<IdentityResponse>;
 interface StartLoginRequest {
   readonly host: string;
 }
@@ -1536,9 +1696,7 @@ interface IdentityDeletionCalls {
   readonly deleteIdentity: (name: string) => Promise<IdentityResponse>;
   readonly countMessagesBy: (name: string) => Promise<IdentityMessageCountResponse>;
 }
-type ApprovalCalls = LoginCalls & AgentJoinCalls & JoinCodeCalls;
-type IdentityDescriptionCalls = DescriptionCalls<IdentityResponse>;
-type CallGroups = ApprovalCalls & AttachmentCalls & IdentityDeletionCalls & IdentityDescriptionCalls & ClosedThreadCalls & OpenThreadCalls & SearchCalls & ScheduledMessageCalls & TriggerCalls & Pick<EventCalls, "presence">;
+type CallGroups = LoginCalls & AgentApprovalCalls & AgentCreationCalls<IdentityResponse> & AttachmentCalls & IdentityAvatarCalls & IdentityDeletionCalls & DescriptionCalls<IdentityResponse> & ClosedThreadCalls & OpenThreadCalls & SearchCalls & ScheduledMessageCalls & TriggerCalls & Pick<EventCalls, "presence">;
 declare function scheduledMessageCalls(server: ClientConnection): ScheduledMessageCalls;
 declare const brand: unique symbol;
 type UnknownErrorCode = string & {
@@ -1763,5 +1921,5 @@ export type CookoutClient = CallGroups & Pick<ReturnType<typeof inboxCalls>, "ke
 export declare const parseEvent: typeof eventOf;
 /** A client for the server at `url` with `token`, each defaulting to `COOKOUT_URL` and `COOKOUT_TOKEN`. Throws `CookoutError` code `url_missing` (status 0) when there is no URL. */
 export declare function createCookoutClient(options?: CookoutClientOptions): CookoutClient;
-export { type AckAllRequest, type AckAllResponse, type AckRequest, type AckResponse, type AddCommandRequest, type AgentIdentity, type AgentJoinCalls, type AgentJoinCollectedResponse, type AgentJoinRequestResponse, type AgentJoinRequestStartedResponse, type AgentJoinRequestView, type AgentSessionEvent, type AgentSessionLiveDetails, type AgentSessionResponse, type ApproveAgentJoinRequest, type Attachment, type AttachmentBytes, type AttachmentContentType, type AttachmentId, type Author, type BuiltInCommand, type CallCommandRequest, type CallCommandResponse, type Channel, type ChannelDeletedEvent, type ChannelEvent, type ChannelName, type ChannelResponse, type CleanCloseResponse, type Command, type CommandEvent, type CommandName, type CommandSecret, type CommandWithSecretResponse, type ConnectedEvent, CookoutError, type CookoutErrorCode, type CookoutEvent, type CreateChannelRequest, type CreateIdentityRequest, type CreateJoinCodeRequest, type CreateMessageRequest, type CreateScheduledMessageRequest, type DeactivateIdentityResponse, type DeactivatedQuietAgent, type DeactivatedQuietAgentEvent, type DeactivatedQuietAgentId, type DeactivatedQuietAgentResponse, type DeactivationOffer, type DeactivationOfferEvent, type DeactivationOfferId, type DeactivationOfferResponse, type Description, type DescriptionCalls, type DisplayName, type EditScheduledMessageRequest, type EventStream, type FollowResponse, type Harness, type HealthResponse, type HumanIdentity, type Identity, type IdentityDeletedEvent, type IdentityEvent, type IdentityKind, type IdentityMessageCountResponse, type IdentityName, type IdentityResponse, type IdentityWithTokenResponse, type IdleExpiryTooLongDetails, type ImageContentType, type InboxHistoryItem, type InboxHistoryNudge, type InboxHistoryQuery, type InboxHistoryResponse, type InboxItem, type InboxItemEvent, type InboxReason, type InboxResponse, type IsoTime, type JoinCodeCalls, type JoinCodeResponse, type JoinRequest, type JsonSchema, type JsonValue, type LeaveResponse, type ListAgentSessionsResponse, type ListChannelsResponse, type ListCommandsResponse, type ListIdentitiesQuery, type ListIdentitiesResponse, type ListMessagesQuery, type ListMessagesResponse, type ListOpenThreadsQuery, type ListOpenThreadsResponse, type ListScheduledMessagesQuery, type ListScheduledMessagesResponse, type ListedAgentSession, type LiveConnectionDetail, type LiveConnectionId, type MarkUnreadRequest, type MarkUnreadResponse, type Message, type MessageEvent, type MessageFields, type MessageId, type MessageResponse, type MovedBackReadPosition, type NewAttachment, type Nudge, type NudgeEvent, type NudgeId, type NudgeKind, type NudgeReadEvent, type NudgeResponse, type OfflineAlert, type OfflineAlertEvent, type OfflineAlertId, type OfflineAlertResponse, type OfflineReason, type OpenThread, type Owner, type PostMessageRequest, type Presence, type PresenceEvent, type PresenceResponse, type PreviewScheduledMessageQuery, type Reaction, type ReactionCount, type ReactionEvent, type ReactionName, type ReactionsResponse, type ReadPosition, type ReadPositionEvent, type ReadPositionMovedBackEvent, type ReadPositionsResponse, type ReadReceipt, type ReadReceiptEvent, type RedeemJoinCodeRequest, type Refusal, type RegisteredCommand, type Reply, type RevokeAgentSessionResponse, type ScheduledMessage, type ScheduledMessageId, type ScheduledMessagePreviewResponse, type ScheduledMessageResponse, type ScheduledMessageRun, type SchemaProblem, type SearchRequest, type SearchResponse, type SearchResult, type ServerSentEvent, type SetDisplayNameRequest, type SetTriggerRequest, type StartAgentJoinRequest, type SubscriptionEvent, type SubscriptionResponse, type ThreadEvent, type ThreadMovedWarning, type ThreadResponse, type Token, type TopLevelMessage, type TopLevelMessageResponse, type Trigger, type TriggerFailure, type TriggerResponse, type TriggerResult, type UnknownErrorCode, type UpdateIdentityRequest, type WatchOptions, type agentJoinApprovalPathOf, type agentJoinRequestApprovalPath, type agentJoinRequestPath, type agentJoinRequestsPath, type agentSessionErrorCodes, type agentSessionExpired, type agentSessionPath, type agentSessionRevoked, type allChannelsQuery, type collectAgentJoinRequestPath, type defaultIdleExpiry, type eventsPath, type identityAgentSessionPath, type idleExpiryPattern, type joinCodeLifetimeMinutes, type joinCodesPath, type liveConnectionPath, type redeemJoinCodePath, type refusalEvent, refusalOf, type scheduledMessageCalls };
+export { type AckAllRequest, type AckAllResponse, type AckRequest, type AckResponse, type AddCommandRequest, type AgentCreationCalls, type AgentIdentity, type AgentJoinCalls, type AgentJoinCollectedResponse, type AgentJoinRequestResponse, type AgentJoinRequestStartedResponse, type AgentJoinRequestView, type AgentJoinRequestsEvent, type AgentSessionEvent, type AgentSessionLiveDetails, type AgentSessionResponse, type ApproveAgentJoinRequest, type Attachment, type AttachmentBytes, type AttachmentContentType, type AttachmentId, type Author, type BuiltInCommand, type CallCommandRequest, type CallCommandResponse, type Channel, type ChannelDeletedEvent, type ChannelEvent, type ChannelName, type ChannelResponse, type CleanCloseResponse, type WebhookCommand as Command, type CommandEvent, type WebhookCommandName as CommandName, type WebhookCommandSecret as CommandSecret, type CommandWithSecretResponse, type ConnectedEvent, CookoutError, type CookoutErrorCode, type CookoutEvent, type CreateAgentForOwnerRequest, type CreateChannelRequest, type CreateIdentityRequest, type CreateJoinCodeRequest, type CreateMessageRequest, type CreateScheduledMessageRequest, type DeactivateIdentityResponse, type DeactivatedQuietAgent, type DeactivatedQuietAgentEvent, type DeactivatedQuietAgentId, type DeactivatedQuietAgentResponse, type DeactivationOffer, type DeactivationOfferEvent, type DeactivationOfferId, type DeactivationOfferResponse, type DenyAgentJoinResponse, type Description, type DescriptionCalls, type DisplayName, type EditScheduledMessageRequest, type EventStream, type FollowResponse, type Harness, type HealthResponse, type HumanIdentity, type Identity, type IdentityDeletedEvent, type IdentityEvent, type IdentityKind, type IdentityMessageCountResponse, type IdentityName, type IdentityResponse, type IdentityWithTokenResponse, type IdleExpiryTooLongDetails, type ImageContentType, type InboxAgentJoinRequest, type InboxHistoryItem, type InboxHistoryNudge, type InboxHistoryQuery, type InboxHistoryResponse, type InboxItem, type InboxItemEvent, type InboxReason, type InboxResponse, type IsoTime, type JoinCodeCalls, type JoinCodeResponse, type JoinRequest, type JsonSchema, type JsonValue, type LeaveResponse, type ListAgentSessionsResponse, type ListChannelsResponse, type ListCommandsResponse, type ListIdentitiesQuery, type ListIdentitiesResponse, type ListMessagesQuery, type ListMessagesResponse, type ListOpenThreadsQuery, type ListOpenThreadsResponse, type ListScheduledMessagesQuery, type ListScheduledMessagesResponse, type ListedAgentSession, type LiveConnectionDetail, type LiveConnectionId, type MarkUnreadRequest, type MarkUnreadResponse, type Message, type MessageEvent, type MessageFields, type MessageId, type MessageResponse, type MovedBackReadPosition, type NewAttachment, type Nudge, type NudgeEvent, type NudgeId, type NudgeKind, type NudgeReadEvent, type NudgeResponse, type OfflineAlert, type OfflineAlertEvent, type OfflineAlertId, type OfflineAlertResponse, type OfflineReason, type OpenThread, type Owner, type PostMessageRequest, type Presence, type PresenceEvent, type PresenceResponse, type PreviewScheduledMessageQuery, type Reaction, type ReactionCount, type ReactionEvent, type ReactionName, type ReactionsResponse, type ReadPosition, type ReadPositionEvent, type ReadPositionMovedBackEvent, type ReadPositionsResponse, type ReadReceipt, type ReadReceiptEvent, type RedeemJoinCodeRequest, type RedeemJoinCodeResponse, type Refusal, type RegisteredWebhookCommand as RegisteredCommand, type Reply, type RevokeAgentSessionResponse, type ScheduledMessage, type ScheduledMessageEvent, type ScheduledMessageId, type ScheduledMessagePreviewResponse, type ScheduledMessageResponse, type ScheduledMessageRun, type SchemaProblem, type SearchRequest, type SearchResponse, type SearchResult, type SearchSort, type ServerSentEvent, type SetDisplayNameRequest, type SetTriggerRequest, type StartAgentJoinRequest, type SubscriptionEvent, type SubscriptionResponse, type ThreadEvent, type ThreadMovedDetails, type ThreadResponse, type Token, type TopLevelMessage, type TopLevelMessageResponse, type Trigger, type TriggerEvent, type TriggerFailure, type TriggerHeader, type TriggerResponse, type TriggerResult, type UnknownErrorCode, type UpdateIdentityRequest, type WatchOptions, type agentJoinApprovalPathOf, type agentJoinRequestApprovalPath, type agentJoinRequestDenialPath, type agentJoinRequestPath, type agentJoinRequestsPath, type agentSessionErrorCodes, type agentSessionExpired, type agentSessionPath, type agentSessionRevoked, type allChannelsQuery, type collectAgentJoinRequestPath, type defaultIdleExpiry, type eventsPath, type identityAgentSessionPath, type idleExpiryPattern, type joinCodeLifetimeMinutes, type joinCodesPath, type liveConnectionPath, type redeemJoinCodePath, type refusalEvent, refusalOf, type scheduledMessageCalls };
 ```

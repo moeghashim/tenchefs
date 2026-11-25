@@ -1,10 +1,13 @@
 import { adminClient, newIdentity } from "./people.ts";
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { inThread } from "./regions.ts";
 import { logInToChannels } from "./login.ts";
+import { probeFixtures } from "./probe.ts";
+import { unique } from "./names.ts";
 
-const CHANNEL = "browser-reply-link";
+const test = base.extend(probeFixtures);
+
 const OPAQUE = /^rgb\(/u;
 const HIGHLIGHT_MS = 2000;
 const INSTALLED_AT = "2030-01-01T00:00:00Z";
@@ -12,10 +15,11 @@ const PAUSED_AT = "2030-01-01T00:01:00Z";
 
 async function replyLink(): Promise<string> {
   const admin = adminClient();
-  await admin.createChannel({ name: CHANNEL });
-  const { message: parent } = await admin.createMessage({ channel: CHANNEL, text: "Deploy?" });
-  const { message: reply } = await admin.createMessage({ channel: CHANNEL, replyTo: parent.id, text: "Noon works." });
-  return `/#/channels/${CHANNEL}/threads/${String(parent.id)}/messages/${String(reply.id)}`;
+  const channel = unique("browser-reply-link");
+  await admin.createChannel({ name: channel });
+  const { message: parent } = await admin.createMessage({ channel, text: "Deploy?" });
+  const { message: reply } = await admin.createMessage({ channel, replyTo: parent.id, text: "Noon works." });
+  return `/#/channels/${channel}/threads/${String(parent.id)}/messages/${String(reply.id)}`;
 }
 
 async function coldLoadWithTimeStill(page: Page, link: string): Promise<void> {
@@ -27,7 +31,7 @@ async function coldLoadWithTimeStill(page: Page, link: string): Promise<void> {
 }
 
 test("a cold load of a reply link shows the reply highlighted once the thread's messages load", async ({ page }) => {
-  const reader = await newIdentity({ kind: "human", name: CHANNEL });
+  const reader = await newIdentity({ kind: "human", name: unique("browser-reply-link") });
   const link = await replyLink();
   await logInToChannels({ page, token: reader.token });
   await coldLoadWithTimeStill(page, link);

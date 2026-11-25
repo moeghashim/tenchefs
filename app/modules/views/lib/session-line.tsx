@@ -1,5 +1,5 @@
 import type { IdentityActions } from "../../composer/index.ts";
-import { Muted } from "../../design-system/index.tsx";
+import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { sessionText } from "./session-text.ts";
 import { useSyncExternalStore } from "react";

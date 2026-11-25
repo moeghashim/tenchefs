@@ -1,24 +1,23 @@
 import type { Reading, Unread } from "../../unread/index.ts";
-import type { Board } from "../../board/index.ts";
 import { ChannelConversation } from "./channel-conversation.tsx";
 import type { Composer } from "../../composer/index.ts";
-import { ConversationEmpty } from "../../design-system/index.tsx";
+import { ConversationEmpty } from "../../design-system/layout.tsx";
 import { ConversationView } from "./conversation.tsx";
 import type { InboxSelection } from "../../paths/index.ts";
-import type { PanelEdgeParts } from "../../design-system/index.tsx";
-
+import type { Keymap } from "../../keymap/index.ts";
+import type { PanelEdgeParts } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 
 const TEXT = { conversation: "Conversation", pick: "Pick a conversation" } as const;
 
 interface InboxConversationProps {
-  readonly board: Board;
   readonly composer: Composer;
   readonly edge: PanelEdgeParts;
   readonly selected: InboxSelection | null;
   readonly unread: Unread;
   readonly reading: Reading;
   readonly me: string;
+  readonly keymap: Keymap;
 }
 
 export function InboxConversation(props: InboxConversationProps): ReactNode {
@@ -29,11 +28,11 @@ export function InboxConversation(props: InboxConversationProps): ReactNode {
   if (selected.thread === null) {
     return (
       <ChannelConversation
-        board={props.board}
         channel={selected.channel}
         composer={props.composer}
         edge={props.edge}
         key={selected.channel}
+        keymap={props.keymap}
         me={props.me}
         reading={props.reading}
         unread={props.unread}
@@ -42,10 +41,10 @@ export function InboxConversation(props: InboxConversationProps): ReactNode {
   }
   return (
     <ConversationView
-      board={props.board}
       composer={props.composer}
       key={`${selected.channel}/${String(selected.thread)}`}
       edge={props.edge}
+      keymap={props.keymap}
       me={props.me}
       reading={props.reading}
       selected={selected}

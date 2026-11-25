@@ -72,8 +72,10 @@
     ],
     "local/no-unsafe-as": "error",
     "local/no-overloads": "error",
+    "local/no-pick-intersections": "error",
     "local/sort-imports": "error",
     "web-rules/page-title-owner": "error",
+    "web-rules/keymap-owner": "error",
     "export-rules/no-internal-tag": "error",
     "sort-imports": "off",
     "typescript/ban-ts-comment": "error",
@@ -445,7 +447,7 @@
           },
           {
             "from": "package",
-            "name": ["KeyboardEvent", "MouseEvent", "ReactNode"],
+            "name": ["ChangeEvent", "ClipboardEvent", "DragEvent", "KeyboardEvent", "MouseEvent", "ReactNode"],
             "package": "react"
           },
           {
@@ -513,6 +515,12 @@
       }
     },
     {
+      "files": ["app/modules/*/tests/**"],
+      "rules": {
+        "test-rules/agent-factory": "error"
+      }
+    },
+    {
       "files": ["app/modules/routes/tests/browser/**"],
       "excludeFiles": ["app/modules/routes/tests/browser/clock.ts"],
       "rules": {
@@ -520,7 +528,13 @@
       }
     },
     {
-      "files": ["app/modules/design-system/lib/panel-edge.tsx"],
+      "files": ["app/modules/*/tests/browser/**"],
+      "rules": {
+        "test-rules/exact-locators": "error"
+      }
+    },
+    {
+      "files": ["app/modules/design-system/lib/panel-edge.tsx", "app/modules/design-system/lib/listbox.tsx"],
       "rules": {
         "jsx-a11y/prefer-tag-over-role": "off"
       }
@@ -529,6 +543,26 @@
       "files": ["app/modules/page-title/**"],
       "rules": {
         "web-rules/page-title-owner": "off"
+      }
+    },
+    {
+      "files": ["app/modules/keymap/**"],
+      "rules": {
+        "web-rules/keymap-owner": "off"
+      }
+    },
+    {
+      "files": ["app/modules/**/*.ts", "app/modules/**/*.tsx"],
+      "excludeFiles": [
+        "app/modules/board/**",
+        "app/modules/live/**",
+        "app/modules/sdk/**",
+        "app/modules/testing/**",
+        "app/modules/*/server.ts",
+        "app/modules/*/lib/server/**"
+      ],
+      "rules": {
+        "web-rules/board-store-owner": "error"
       }
     },
     {

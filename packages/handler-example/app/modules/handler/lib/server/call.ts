@@ -7,7 +7,7 @@ function isThreadId(value: number): value is MessageId {
   return value >= LOWEST_ID;
 }
 
-const CommandCallSchema = Schema.Struct({
+const WebhookCommandCallSchema = Schema.Struct({
   callId: Schema.String,
   channel: Schema.String,
   command: Schema.String,
@@ -16,6 +16,6 @@ const CommandCallSchema = Schema.Struct({
   token: Schema.String,
 });
 
-type CommandCall = typeof CommandCallSchema.Type;
+type WebhookCommandCall = typeof WebhookCommandCallSchema.Type;
 
-export { type CommandCall, CommandCallSchema };
+export { type WebhookCommandCall, WebhookCommandCallSchema };

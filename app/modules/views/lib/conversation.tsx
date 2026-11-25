@@ -1,13 +1,13 @@
-import { actionsOf, isMissing } from "./conversation-parts.ts";
+import { INBOX_HREF, actionsOf, isMissing, openLinkOf } from "./conversation-parts.ts";
 import { ConversationMessages } from "./conversation-messages.tsx";
 import { ConversationMissing } from "./conversation-missing.tsx";
-import { ConversationPanel } from "../../design-system/index.tsx";
+import { ConversationPanel } from "../../design-system/layout.tsx";
 import type { ConversationProps } from "./conversation-parts.ts";
 import type { ReactNode } from "react";
 import { ReadNote } from "./read-note.tsx";
 import { ReplyFooter } from "./reply-footer.tsx";
-import { hrefOf } from "../../paths/index.ts";
 import { threadDraft } from "./thread-draft.ts";
+import { useShownThread } from "./use-board.ts";
 import { useSyncExternalStore } from "react";
 import { useThreadReader } from "./use-thread-reader.ts";
 
@@ -23,8 +23,7 @@ export function ConversationView(props: ConversationProps): ReactNode {
   const { channel, thread } = props.selected;
   const line = props.unread.newLine(channel, thread);
   const readPosition = useSyncExternalStore(line.subscribe, line.snapshot);
-  const messages = props.board.thread(channel, thread);
-  const state = useSyncExternalStore(messages.subscribeWithoutAcking, messages.snapshot);
+  const { closing, read: messages, state } = useShownThread({ acking: false, place: { channel, id: thread } });
   const reader = useThreadReader(props);
   const draft = threadDraft({ channel, composer: props.composer, me: props.me, messages, thread });
   if (isMissing(state)) {
@@ -32,19 +31,18 @@ export function ConversationView(props: ConversationProps): ReactNode {
   }
   return (
     <ConversationPanel
-      actions={actionsOf(reader)}
-      backHref={hrefOf({ name: "inbox", selected: null })}
+      actions={actionsOf({ keymap: props.keymap, reader })}
+      backHref={INBOX_HREF}
       backLabel={TEXT.back}
       detail={`#${channel}`}
       edge={props.edge}
       label={TEXT.conversation}
       message={draft.replyTo}
-      openHref={hrefOf({ channel, name: "thread", thread })}
-      openLabel={TEXT.open}
+      open={openLinkOf({ keymap: props.keymap, label: TEXT.open, to: { channel, name: "thread", thread } })}
     >
       <ReadNote reader={reader} />
       <ConversationMessages
-        closing={props.board.closing}
+        closing={closing}
         label={TEXT.messages}
         linked={props.selected.message ?? null}
         me={props.me}
@@ -54,7 +52,15 @@ export function ConversationView(props: ConversationProps): ReactNode {
         selection={props.unread.selection(props.selected)}
         state={state}
       />
-      <ReplyFooter draft={draft} field={TEXT.reply} focused={false} messages={messages} state={state} />
+      <ReplyFooter
+        draft={draft}
+        field={TEXT.reply}
+        focused={false}
+        channel={channel}
+        replied={null}
+        state={state}
+        thread={thread}
+      />
     </ConversationPanel>
   );
 }

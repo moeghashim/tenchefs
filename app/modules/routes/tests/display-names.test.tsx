@@ -172,12 +172,10 @@ it("a display name set elsewhere shows on the open channel's messages without a 
 
   const { human, stream, unmount } = await watchChannel("web-names-live");
   await human.setDisplayName("web-names-live-bot", "Release Bot");
-  const messages = screen.getByRole("list", { name: "Messages" });
+  const messages = screen.getByRole("feed", { name: "Messages" });
 
   await waitFor(() => {
-    expect(within(messages).getByRole("listitem").textContent).toMatch(
-      /Release Bot@web-names-live-botagent.*Deployed/u,
-    );
+    expect(within(messages).getByRole("article").textContent).toMatch(/Release Bot@web-names-live-botagent.*Deployed/u);
   });
 
   await closeBoth(unmount, stream);
@@ -206,9 +204,9 @@ it("the @ suggestions show display names and insert the name", { timeout: 5000 }
 
   const { human } = await crewOf("web-names-suggest");
   const { box, close } = await typeMention(human, "web-names-suggest");
-  const option = within(await screen.findByRole("list", { name: "Mention suggestions" })).getByRole("button");
+  const option = within(await screen.findByRole("listbox", { name: "Mention suggestions" })).getByRole("option");
   const shown = option.textContent;
-  fireEvent.click(option);
+  fireEvent.mouseDown(option);
 
   expect([shown, box]).toStrictEqual([
     "@web-names-suggest-botRelease Bot",

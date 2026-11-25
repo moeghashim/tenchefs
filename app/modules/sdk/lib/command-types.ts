@@ -3,11 +3,11 @@ export type {
   BuiltInCommand,
   CallCommandRequest,
   CallCommandResponse,
-  Command,
-  CommandName,
-  CommandSecret,
+  WebhookCommand as Command,
+  WebhookCommandName as CommandName,
+  WebhookCommandSecret as CommandSecret,
   CommandWithSecretResponse,
   JsonSchema,
   ListCommandsResponse,
-  RegisteredCommand,
-} from "../../commands/index.ts";
+  RegisteredWebhookCommand as RegisteredCommand,
+} from "../../webhook-commands/index.ts";

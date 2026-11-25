@@ -1,26 +1,12 @@
-import type { Live } from "../../live/index.ts";
-import { createLive } from "../../live/index.ts";
-
-type Link = ReturnType<Live["link"]>;
+import type { Live, LiveLink } from "../../testing/web.ts";
+import { scriptedLive } from "../../testing/web.ts";
 
 export interface Cuttable {
   readonly live: Live;
-  readonly report: (link: Link) => void;
+  readonly report: (link: LiveLink) => void;
 }
 
 export function cuttable(): Cuttable {
-  const reports: ((link: Link) => void)[] = [];
-  const live = createLive({
-    open: (_onEvent, onLink) => {
-      reports.push(onLink);
-    },
-  });
-  return {
-    live,
-    report: (link) => {
-      for (const onLink of reports) {
-        onLink(link);
-      }
-    },
-  };
+  const { live, report } = scriptedLive();
+  return { live, report };
 }

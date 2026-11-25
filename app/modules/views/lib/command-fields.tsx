@@ -2,7 +2,7 @@ import type { Prompt, PromptField, Typed } from "./prompt-fields.ts";
 import { errorText, fieldErrors } from "./prompt-fields.ts";
 import type { CallState } from "../../board/index.ts";
 import { CommandField } from "./command-field.tsx";
-import { DataArea } from "../../design-system/index.tsx";
+import { DataArea } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 

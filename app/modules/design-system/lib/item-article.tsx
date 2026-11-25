@@ -1,12 +1,12 @@
 import { hoverThread, useMessageChoices } from "./message-choices.ts";
 import { ActionContextMenu } from "./action-context-menu.tsx";
-import type { MessageItemParts } from "./parts.ts";
+import type { MessageItemParts } from "./message-parts.ts";
 import { MessageLayout } from "./message-layout.tsx";
 import type { ReactNode } from "react";
 import { messageClass } from "./message-class.ts";
 import { useScrollWhenLinked } from "./use-scroll-when-linked.ts";
 
-const FOCUSABLE = 0;
+const FOCUSABLE = -1;
 
 const TEXT = { menu: "Message actions" } as const;
 
@@ -22,11 +22,13 @@ export function ItemArticle(parts: ItemArticleParts): ReactNode {
     actionLabel: message.actionLabel,
     menu: message.menu,
     onAction: handleAction,
+    threadHref: message.threadHref,
   });
-  const article = useScrollWhenLinked({ linked: message.mark === "linked", menu: message.menu });
+  const article = useScrollWhenLinked({ focus: false, linked: message.mark === "linked", menu: message.menu });
   return (
     <ActionContextMenu choices={choices} label={TEXT.menu}>
       <article
+        aria-label={`${message.displayName ?? message.name}, ${message.time.full}`}
         aria-current={message.mark === "open" || message.mark === "linked"}
         className={messageClass(message)}
         data-for-you={message.mark === "for-you"}
@@ -48,6 +50,7 @@ export function ItemArticle(parts: ItemArticleParts): ReactNode {
           reactions={message.menu.reactions}
           replyOnHover={message.replyOnHover}
           thread={hoverThread(message)}
+          threadHref={message.threadHref}
           time={message.time}
         >
           {message.children}

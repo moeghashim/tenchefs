@@ -15,6 +15,8 @@
  * `browserTimeZone()` is the browser's own IANA time zone, and
  * `runTimeIn({ iso, timeZone })` writes a Scheduled message's run in the zone it
  * is scheduled in (`Mon, 1 Dec 2026, 09:00`).
+ * `recentDays()` is today, yesterday, a week ago and a month ago (the same day of the month before, or its last day
+ * if it has fewer), each as its local `YYYY-MM-DD` and named, for the search box's date filters.
  * This is the web UI's one reader of `Date` and its one clock.
  */
 const DAY = 1;
@@ -24,12 +26,15 @@ const SECONDS_IN_MINUTE = 60;
 const MINUTES_IN_HOUR = 60;
 const MINUTES_IN_DAY = 1440;
 const ONE = 1;
+const WEEK_DAYS = 7;
+const NO_DAY = 0;
 
 const clock = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
 const full = new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeStyle: "short" });
 const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long" });
 const date = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" });
 const dayMonth = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const isoDay = new Intl.DateTimeFormat("en-CA", { day: "2-digit", month: "2-digit", year: "numeric" });
 const hourMinute = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", minute: "2-digit" });
 
 const TEXT = {
@@ -145,6 +150,28 @@ export function timeAgo(iso: string): string {
   return minutesAgo(Math.floor(seconds / SECONDS_IN_MINUTE), at);
 }
 
+/** A recent day, as its local `YYYY-MM-DD` and its name. */
+export interface RecentDay {
+  readonly label: string;
+  readonly date: string;
+}
+
+/**
+ * Today, yesterday, a week ago and a month ago, by the current time in the person's own time zone.
+ * @returns The four days, today first.
+ */
+export function recentDays(): readonly RecentDay[] {
+  const now = new Date();
+  const [year, month, today] = [now.getFullYear(), now.getMonth(), now.getDate()];
+  const lastOfMonthBefore = new Date(year, month, NO_DAY).getDate();
+  return [
+    { date: isoDay.format(now), label: "Today" },
+    { date: isoDay.format(new Date(year, month, today - DAY)), label: "Yesterday" },
+    { date: isoDay.format(new Date(year, month, today - WEEK_DAYS)), label: "A week ago" },
+    { date: isoDay.format(new Date(year, month - ONE, Math.min(today, lastOfMonthBefore))), label: "A month ago" },
+  ];
+}
+
 /**
  * Calls `listener` every second, so a time shown as how long ago ticks live.
  * @param listener What to call.
@@ -190,4 +217,5 @@ export function runTimeIn(run: RunTime): string {
   return new Intl.DateTimeFormat("en-GB", { ...shape, timeZone }).format(new Date(iso));
 }
 
+export { runPartsIn } from "./lib/run-parts.ts";
 export { type Clock, browserClock } from "./lib/browser-clock.ts";

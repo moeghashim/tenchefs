@@ -3,8 +3,8 @@ import { alertSaying, alertsShown } from "./alerts.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { inPane, inSidebar } from "./regions.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 
 function logInWith(token: string): void {
   fireEvent.change(screen.getByLabelText("Token"), { target: { value: token } });
@@ -105,7 +105,7 @@ it("the login route says who is logged in", { timeout: 5000 }, async () => {
 it("the login view says so when the server can't be reached", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const client = createCookoutClient({ env: {}, url: "http://127.0.0.1:1" });
+  const client = unreachableClient();
   const close = openAt({ client, hash: "#/" });
 
   const alert = await alertSaying("Couldn't log in");

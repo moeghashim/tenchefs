@@ -1,0 +1,120 @@
+tests 1/2	UNKNOWN STEP	2026-11-24T16:05:03.9443712Z ^[[36;1mnode scripts/check.ts --job=tests --shard=1/2 --ci^[[0m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:05:03.9475142Z shell: /usr/bin/bash -e {0}
+tests 1/2	UNKNOWN STEP	2026-11-24T16:05:03.9475364Z env:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:05:03.9475604Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+tests 1/2	UNKNOWN STEP	2026-11-24T16:05:03.9476010Z ##[endgroup]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8778719Z FAIL tests (176.8s, budget 26s)
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8781704Z      tests: the 10 slowest of 176 test files
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8782216Z        7.3s  app/modules/cli/tests/server/cli.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8782766Z        6.7s  app/modules/routes/tests/reply-link.test.tsx
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8783479Z        5.1s  packages/handler-example/app/modules/handler/tests/server/cookout.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8784179Z        4.8s  app/modules/storage/tests/server/postgres.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8785098Z        4.3s  app/modules/routes/tests/thread.test.tsx
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8785706Z        4.1s  app/modules/routes/tests/inbox-mark-read.test.tsx
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8786420Z        4.0s  app/modules/routes/tests/identity-card.test.tsx
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8786999Z        4.0s  app/modules/dev/tests/server/dev.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8787536Z        3.6s  app/modules/cli/tests/server/interrupted.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8788096Z        3.4s  app/modules/cli/tests/server/watch-signal.test.ts
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8788809Z      First error:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8790018Z         FAIL   web  app/modules/routes/tests/trigger-url.test.tsx > an agent whose trigger call fails shows Unreachable, and the owner's Clear takes the URL away
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8791317Z        AssertionError: expected <p …(1)></p> to be null
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8791738Z        
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8792008Z        - Expected:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8792333Z        null
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8792627Z        
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8792950Z        + Received:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.8793221Z        <p
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9207699Z       ^[[32m✓^[[39m ^[[30m^[[45m web-clock ^[[49m^[[39m app/modules/routes/tests/server/inbox-deactivation-offers.clock.test.tsx ^[[2m(^[[22m^[[2m9 tests^[[22m^[[2m)^[[22m^[[33m 2922^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9208585Z         ^[[33m^[[2m✓^[[22m^[[39m after 30 quiet days the owner's inbox shows the offer under For you and counts it, with no reload^[[33m 522^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9209452Z         ^[[33m^[[2m✓^[[22m^[[39m the name in an offer row opens the agent's profile panel beside the inbox^[[33m 333^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9210196Z         ^[[33m^[[2m✓^[[22m^[[39m Deactivate in an offer row asks first, then deactivates the agent and moves the row to Earlier^[[33m 387^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9210943Z         ^[[33m^[[2m✓^[[22m^[[39m Keep in an offer row answers Keep, moves the row to Earlier and drops the count^[[33m 307^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9211546Z         ^[[33m^[[2m✓^[[22m^[[39m the agent posting clears its offer row live^[[33m 313^[[2mms^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9211868Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9212193Z      ^[[31m⎯⎯⎯⎯⎯⎯⎯^[[39m^[[1m^[[41m Failed Tests 1 ^[[49m^[[22m^[[31m⎯⎯⎯⎯⎯⎯⎯^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9212482Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9213198Z      ^[[41m^[[1m FAIL ^[[22m^[[49m ^[[30m^[[46m web ^[[49m^[[39m app/modules/routes/tests/trigger-url.test.tsx^[[2m > ^[[22man agent whose trigger call fails shows Unreachable, and the owner's Clear takes the URL away
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9213966Z      ^[[31m^[[1mAssertionError^[[22m: expected <p …(1)></p> to be null^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9214254Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9214452Z      ^[[32m- Expected:^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9214654Z      null
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9214806Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9214993Z      ^[[31m+ Received:^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9215181Z      <p
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9215400Z        class="text-xs text-muted-foreground"
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9215648Z      >
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9216094Z        Unreachable: the trigger URL couldn't be reached, just now
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9216375Z      </p>
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9216529Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9216903Z      ^[[36m ^[[2m❯^[[22m app/modules/routes/tests/trigger-url.test.tsx:^[[2m81:63^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9217253Z          ^[[90m 79|^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9217656Z          ^[[90m 80|^[[39m   await expect(inProfile().findByText("No trigger URL: a mention calls…
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9218203Z          ^[[90m 81|^[[39m   expect(screen.queryByText("Unreachable", { exact: false })).toBeNull…
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9218682Z          ^[[90m   |^[[39m                                                               ^[[31m^^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9219008Z          ^[[90m 82|^[[39m })^[[33m;^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9219249Z          ^[[90m 83|^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9219422Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9219678Z      ^[[31m^[[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯^[[22m^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9219907Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9220053Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9220454Z      ^[[2m Test Files ^[[22m ^[[1m^[[31m1 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m175 passed^[[39m^[[22m^[[90m (176)^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9221014Z      ^[[2m      Tests ^[[22m ^[[1m^[[31m1 failed^[[39m^[[22m^[[2m | ^[[22m^[[1m^[[32m1265 passed^[[39m^[[22m^[[90m (1266)^[[39m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9221402Z      ^[[2m   Start at ^[[22m 16:05:04
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9221833Z      ^[[2m   Duration ^[[22m 175.29s^[[2m (tests 43%, environment 42%, import 12%, transform 3%)^[[22m
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9222175Z      
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9222593Z      JSON report written to /home/runner/work/cookout/cookout/.timings/tests.json
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9223064Z      blob report written to /home/runner/work/cookout/cookout/.vitest/blob/blob-1-2.json
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9239933Z ##[warning]tests took 176.8s, over its 26s budget. A time budget warns and never fails the run (ADR 0030). Slowest files: app/modules/cli/tests/server/cli.test.ts (7.3s), app/modules/routes/tests/reply-link.test.tsx (6.7s), packages/handler-example/app/modules/handler/tests/server/cookout.test.ts (5.1s).
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9245949Z RESULT: FAIL (tests)
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9247736Z ##[error]Process completed with exit code 1.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9301922Z ##[group]Run actions/upload-artifact@v4
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9302171Z with:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9302351Z   name: test-timings-tests-1
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9302573Z   path: .timings/*.txt
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9302766Z   include-hidden-files: true
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9303123Z   if-no-files-found: ignore
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9303329Z   compression-level: 6
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9303512Z   overwrite: false
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9303689Z env:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9303895Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:00.9304149Z ##[endgroup]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.0635368Z (node:8425) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.0636237Z (Use `node --trace-deprecation ...` to show where the warning was created)
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.0700603Z With the provided path, there will be 1 file uploaded
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.0708187Z Artifact name is valid!
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.0708696Z Root directory input is valid!
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.2693388Z Beginning upload of artifact content to blob storage
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.2834635Z (node:8425) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.3133253Z Uploaded bytes 1754
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.3445754Z Finished uploading artifact content to blob storage!
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.3447228Z SHA256 digest of uploaded artifact zip is e393ae73d84f08c2ed3e140d2b70ed88e931957912292fd7e303405cbf2797a5
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.3448175Z Finalizing artifact upload
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6788276Z Artifact test-timings-tests-1.zip successfully finalized. Artifact ID 14940630526
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6789394Z Artifact test-timings-tests-1 has been successfully uploaded! Final size is 1754 bytes. Artifact ID is 14940630526
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6794475Z Artifact download URL: https://github.com/mattpocock/cookout/actions/runs/45432853825/artifacts/14940630526
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6973823Z Post job cleanup.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6978140Z ##[start-action display=Run actions/cache@v4;id=__0c67554a-d726-4425-bc7f-24690f96a578.__actions_cache]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6980679Z ##[end-action id=__0c67554a-d726-4425-bc7f-24690f96a578.__actions_cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6982432Z ##[start-action display=Run actions/setup-node@v4;id=__0c67554a-d726-4425-bc7f-24690f96a578.__actions_setup-node]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6984130Z ##[end-action id=__0c67554a-d726-4425-bc7f-24690f96a578.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.6985744Z ##[start-action display=Run pnpm/action-setup@v4;id=__0c67554a-d726-4425-bc7f-24690f96a578.__pnpm_action-setup]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.7012207Z Post job cleanup.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.8147522Z Pruning is unnecessary.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.8246419Z ##[end-action id=__0c67554a-d726-4425-bc7f-24690f96a578.__pnpm_action-setup;outcome=success;conclusion=success;duration_ms=125]
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.8304733Z Post job cleanup.
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9084908Z [command]/usr/bin/git version
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9123318Z git version 2.56.1
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9151588Z Temporarily overriding HOME='/home/runner/work/_temp/df550839-8efd-4018-8fb5-2f84b2b4502a' before making global git config changes
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9152856Z Adding repository directory to the temporary git global config as a safe directory
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9154954Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/cookout/cookout
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9189953Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9230042Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9495507Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9528050Z http.https://github.com/.extraheader
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9540444Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9566034Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9823296Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:01.9854361Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:02.0252212Z Cleaning up orphan processes
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:02.0583077Z Terminate orphan process: pid (8395) (sleep)
+tests 1/2	UNKNOWN STEP	2026-11-24T16:08:02.0652179Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4, pnpm/action-setup@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

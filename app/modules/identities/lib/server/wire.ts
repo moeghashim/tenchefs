@@ -8,6 +8,7 @@ import type {
   ListIdentitiesResponse,
 } from "../../index.ts";
 import { Schema, SchemaTransformation } from "effect";
+import { avatarIdPattern, isAvatarId } from "../../../avatars/index.ts";
 import { descriptionLength, isDescription } from "../../client.ts";
 import {
   displayNameLength,
@@ -56,8 +57,15 @@ const TokenSchema = Schema.String.check(Schema.isPattern(tokenPattern)).pipe(
   Schema.refine(isToken, { identifier: "Token" }),
 );
 
+const AvatarSchema = Schema.Struct({
+  id: Schema.String.check(Schema.isPattern(avatarIdPattern)).pipe(
+    Schema.refine(isAvatarId, { identifier: "AvatarId" }),
+  ),
+});
+
 const HumanIdentitySchema = Schema.Struct({
   admin: Schema.Boolean,
+  avatar: Schema.optionalKey(AvatarSchema),
   createdAt: IsoTimeSchema,
   deactivated: Schema.optionalKey(Schema.Literal(true)),
   displayName: Schema.optionalKey(DisplayNameSchema),
@@ -67,6 +75,7 @@ const HumanIdentitySchema = Schema.Struct({
 
 export const AgentIdentitySchema = Schema.Struct({
   admin: Schema.Boolean,
+  avatar: Schema.optionalKey(AvatarSchema),
   broughtInBy: Schema.optionalKey(IdentityNameSchema),
   createdAt: IsoTimeSchema,
   deactivated: Schema.optionalKey(Schema.Literal(true)),

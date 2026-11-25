@@ -1,13 +1,19 @@
+import { useCallback, useContext } from "react";
 import { ClosedBy } from "./closed-by.tsx";
 import type { Closing } from "../../messages/index.ts";
 import { ClosingRefusal } from "./closing-refusal.tsx";
+import { LandingContext } from "../../landing/index.ts";
 import type { ReactNode } from "react";
-import { ThreadBar } from "../../design-system/index.tsx";
+import { ThreadBar } from "../../design-system/messages.tsx";
 import type { ThreadClosing } from "../../board/index.ts";
 import type { TopLevelMessage } from "../../sdk/index.ts";
-import { useCallback } from "react";
 
 const TEXT = { close: "Close thread", reopen: "Reopen thread" } as const;
+
+const SWAPPED = {
+  close: `aside[aria-label="Thread"] button[aria-label="${TEXT.reopen}"]`,
+  reopen: `aside[aria-label="Thread"] button[aria-label="${TEXT.close}"]`,
+} as const;
 
 interface ThreadClosingBarProps {
   readonly closing: ThreadClosing;
@@ -26,12 +32,15 @@ export function ThreadClosingBar(props: ThreadClosingBarProps): ReactNode {
   const { closing } = props;
   const { id } = props.parent;
   const closed = closingOf(props.parent);
+  const { watch } = useContext(LandingContext);
   const handleClose = useCallback(() => {
+    watch(SWAPPED.close);
     closing.close(id);
-  }, [closing, id]);
+  }, [closing, id, watch]);
   const handleReopen = useCallback(() => {
+    watch(SWAPPED.reopen);
     closing.reopen(id);
-  }, [closing, id]);
+  }, [closing, id, watch]);
   return (
     <>
       {closed === null && <ThreadBar actionIcon="close" actionName={TEXT.close} onAction={handleClose} />}
@@ -40,7 +49,7 @@ export function ThreadClosingBar(props: ThreadClosingBarProps): ReactNode {
           <ClosedBy closing={closed} />
         </ThreadBar>
       )}
-      <ClosingRefusal closing={closing} />
+      <ClosingRefusal />
     </>
   );
 }

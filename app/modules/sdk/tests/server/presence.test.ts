@@ -1,6 +1,6 @@
 import { Array as Arr, Effect, Fiber, Option, String as Str } from "effect";
 import type { CookoutClient, CookoutEvent, EventStream, Presence } from "../../index.ts";
-import { TestCookout, answer, testCookout, twoSessions } from "../../../testing/server.ts";
+import { TestCookout, answer, pastOwnPresence, testCookout, twoSessions } from "../../../testing/server.ts";
 import type { TestCookoutService, TestIdentity } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { openEventStream, request } from "../../../http/client.ts";
@@ -13,6 +13,7 @@ import { sessionPath } from "../../../identities/index.ts";
 const BOOT = "2026-01-01T00:00:00.000Z";
 const TEN_SECONDS_IN = "2026-01-01T00:00:10.000Z";
 const AGENT = "auth-griller";
+const ADMIN = "admin";
 const HUMAN = { kind: "human" } as const;
 
 type Feed = AsyncIterator<CookoutEvent, unknown>;
@@ -76,7 +77,8 @@ function aroundTheGrace(client: CookoutClient, name: string): Effect.Effect<Arou
 }
 
 function feedOf(admin: CookoutClient): Effect.Effect<Feed, never, Scope.Scope> {
-  return Effect.map(open(admin, true), (events) => events[Symbol.asyncIterator]());
+  const feed = Effect.map(open(admin, true), (events) => events[Symbol.asyncIterator]());
+  return Effect.tap(feed, (events) => pastOwnPresence({ events, name: ADMIN }));
 }
 
 function eventIn(next: Readonly<IteratorResult<CookoutEvent, unknown>>): CookoutEvent | null {

@@ -4,7 +4,6 @@ import type { Merged } from "../lib/merge-ticket.ts";
 import { mergeRules } from "../lib/merge-rules.ts";
 
 const POSTGRES_MIGRATIONS = "app/modules/storage/lib/server/postgres-migrations.ts";
-const ONE_ATTEMPT = 1;
 
 function postgresMigrations(...entries: readonly string[]): string {
   const listed = entries
@@ -57,6 +56,6 @@ it("appends both sides when v1 and the ticket each add a Postgres migration", { 
 
   const merged = repo(work).merge({ rules: mergeRules });
 
-  expect(merged).toStrictEqual({ attempts: ONE_ATTEMPT, ok: true, sha: git(origin, "rev-parse", "v1") });
+  expect(merged).toStrictEqual({ ok: true, sha: git(origin, "rev-parse", "v1") });
   expect(git(origin, "show", `v1:${POSTGRES_MIGRATIONS}`)).toBe(postgresMigrations("a", "c", "b").trim());
 });

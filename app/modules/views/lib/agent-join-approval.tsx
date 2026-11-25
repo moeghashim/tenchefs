@@ -1,4 +1,5 @@
-import { Card, CardHeader, Heading, Muted } from "../../design-system/index.tsx";
+import { Card, CardHeader } from "../../design-system/layout.tsx";
+import { Heading, Muted } from "../../design-system/content.tsx";
 import type { AgentJoinApproval } from "../../board/index.ts";
 import { AgentJoinApprovalBody } from "./agent-join-approval-body.tsx";
 import type { ReactNode } from "react";

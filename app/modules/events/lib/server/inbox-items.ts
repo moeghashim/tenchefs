@@ -1,14 +1,16 @@
-import { Array as Arr, Effect, Option, Stream } from "effect";
-import type { Connected, StreamRequest } from "./source.ts";
 import {
+  AgentJoinRequestsEventSchema,
   DeactivatedQuietAgentEventSchema,
   DeactivationOfferEventSchema,
   InboxItemEventSchema,
   NudgeEventSchema,
   NudgeReadEventSchema,
 } from "./wire.ts";
+import { Array as Arr, Effect, Option, Stream } from "effect";
+import type { Connected, StreamRequest } from "./source.ts";
 import { DeactivationOffers, Inbox, Nudges } from "../../../inbox/server.ts";
 import { Messages, Reactions } from "../../../messages/server.ts";
+import { AgentSessions } from "../../../agent-sessions/server.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import { sseEvent } from "./source.ts";
 
@@ -20,6 +22,7 @@ const nudgeReadEvent = sseEvent(NudgeReadEventSchema);
 
 const deactivationOfferEvent = sseEvent(DeactivationOfferEventSchema);
 const deactivatedQuietAgentEvent = sseEvent(DeactivatedQuietAgentEventSchema);
+const agentJoinRequestsEvent = sseEvent(AgentJoinRequestsEventSchema);
 
 function reactionItems({ caller, lastEventId }: StreamRequest): Connected<Inbox | Reactions> {
   return Effect.gen(function* subscribeToReactionItems() {
@@ -112,4 +115,17 @@ function deactivatedQuietAgents({ caller }: StreamRequest): Connected<Deactivati
   });
 }
 
-export { deactivatedQuietAgents, deactivationOffers, inboxItems, nudges, nudgesRead, reactionItems };
+function agentJoinRequests({ caller }: StreamRequest): Connected<Inbox | AgentSessions> {
+  return Effect.gen(function* subscribeToAgentJoinRequests() {
+    const inbox = yield* Inbox;
+    const agentSessions = yield* AgentSessions;
+    const changed = yield* agentSessions.joinRequestChanged;
+    return Stream.fromSubscription(changed).pipe(
+      Stream.mapEffect((agent) => inbox.agentJoinRequestsAfterChange({ agent, caller })),
+      Stream.flatMap((listed) => Stream.fromIterable(Option.toArray(listed))),
+      Stream.mapEffect((listed) => agentJoinRequestsEvent({ agentJoinRequests: listed, type: "agent-join-requests" })),
+    );
+  });
+}
+
+export { agentJoinRequests, deactivatedQuietAgents, deactivationOffers, inboxItems, nudges, nudgesRead, reactionItems };

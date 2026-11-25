@@ -1,6 +1,7 @@
 import type { CookoutClient, EventStream } from "../../sdk/index.ts";
 import { adminClient, anonymousClient, clientWith, newIdentity } from "./identities.ts";
 import { agentNamed, openedBy } from "./presence.ts";
+import { createTestAgent, testAgentDisplayName } from "../../testing/index.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inPane } from "./regions.ts";
@@ -23,8 +24,10 @@ async function readerOn(channel: string): Promise<() => void> {
 }
 
 async function authorName(name: string): Promise<HTMLElement> {
-  const messages = await screen.findByRole("list", { name: "Messages" });
-  const link = await within(messages).findByRole("link", { name });
+  const messages = await screen.findByRole("feed", { name: "Messages" });
+  const link = await within(messages).findByRole("link", {
+    name: (shown) => shown === name || shown === testAgentDisplayName(name),
+  });
   return link;
 }
 
@@ -228,9 +231,15 @@ it("a deactivated identity's card says Deactivated in place of its presence, sti
   close();
 });
 
+async function chiefWithWorker(channel: string): Promise<Awaited<ReturnType<typeof newIdentity>>> {
+  const chief = await newIdentity({ kind: "agent", name: `${channel}-chief`, owner: `${channel}-owner` });
+  await createTestAgent({ broughtIn: true, by: chief.client, name: `${channel}-worker` });
+  return chief;
+}
+
 async function broughtInAuthor(channel: string): Promise<() => void> {
   const owner = await newIdentity({ kind: "human", name: `${channel}-owner` });
-  const chief = await newIdentity({ kind: "agent", name: `${channel}-chief`, owner: `${channel}-owner` });
+  const chief = await chiefWithWorker(channel);
   const started = await anonymousClient().startAgentJoin({ as: `${channel}-worker`, host: "box" });
   await chief.client.approveAgentJoin(started.userCode);
   const collected = await anonymousClient().collectAgentJoin(started.requestId);
@@ -253,7 +262,8 @@ it("an agent another agent brought in has a card saying Brought in by, linking t
   const bringer = within(shownCard()).getByRole("link", { name: `@${channel}-chief` });
 
   expect(card.lines).toStrictEqual([
-    `${channel}-worker`,
+    testAgentDisplayName(`${channel}-worker`),
+    `@${channel}-worker`,
     "Offline",
     `Agent · owned by ${channel}-owner`,
     `Brought in by @${channel}-chief`,

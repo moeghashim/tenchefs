@@ -17,8 +17,16 @@ interface Check {
   readonly timings?: ReportFile;
 }
 
+interface CiOnly {
+  readonly ciJob: string;
+  readonly command: string;
+  readonly name: string;
+  readonly workflow?: string;
+}
+
 interface Checks {
   readonly checks: readonly Check[];
+  readonly ciOnly: readonly CiOnly[];
   readonly inCi: boolean;
   readonly job: string;
   readonly lockFile: string;
@@ -195,6 +203,25 @@ function exitCodeOf(failed: readonly string[]): number {
   return EXIT_FAILURE;
 }
 
+function ownerOf(suite: CiOnly): string {
+  const workflow = suite.workflow ?? "";
+  if (workflow === "") {
+    return "its";
+  }
+  return `the ${workflow} workflow's`;
+}
+
+function reportSkipped({ ciOnly, inCi, job }: Checks): void {
+  if (inCi || job !== "") {
+    return;
+  }
+  for (const suite of ciOnly) {
+    console.log(
+      `skipped: ${suite.name}, which CI runs as ${ownerOf(suite)} ${suite.ciJob} job. Run it here on purpose with ${suite.command}.`,
+    );
+  }
+}
+
 async function runChecks(options: Checks): Promise<number> {
   const { checks, inCi, job } = options;
   const selected = checks.filter((check) => job === "" || check.job === job);
@@ -206,8 +233,9 @@ async function runChecks(options: Checks): Promise<number> {
   for (const outcome of final) {
     report(outcome, inCi);
   }
+  reportSkipped(options);
   return exitCodeOf(final.filter((outcome) => !passed(outcome)).map((outcome) => outcome.check.name));
 }
 
-export type { Check };
+export type { Check, CiOnly };
 export { runChecks };

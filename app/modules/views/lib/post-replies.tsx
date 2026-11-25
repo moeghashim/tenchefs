@@ -17,6 +17,7 @@ interface PostRepliesProps {
 export function PostReplies(props: PostRepliesProps): ReactNode {
   return (
     <MessageStream
+      closing={null}
       after={props.post}
       channel={null}
       label={LABEL}
@@ -28,6 +29,7 @@ export function PostReplies(props: PostRepliesProps): ReactNode {
       receipts={props.receipts}
       reply={null}
       threads={NO_THREADS}
+      threadParent={null}
     />
   );
 }

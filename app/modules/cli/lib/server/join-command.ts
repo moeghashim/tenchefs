@@ -38,6 +38,14 @@ const idleExpiryFlag = Flag.String("idle-expiry").pipe(
   ),
 );
 
+const sessionUrlFlag = Flag.String("session-url").pipe(
+  Flag.optional,
+  Flag.withDescription(
+    "Where a person can watch this session, such as a cloud session's page: an absolute http or https URL. Shown " +
+      "to the agent's owner until the session ends.",
+  ),
+);
+
 const codeDescription = "A single-use join code: joins the one agent it was made for, within 15 minutes. No --as.";
 const codeFlag = Flag.String("code").pipe(Flag.optional, Flag.withDescription(codeDescription));
 
@@ -59,6 +67,7 @@ interface JoinInput {
   readonly force: Option.Option<boolean>;
   readonly idleExpiry: Option.Option<string>;
   readonly printEnv: Option.Option<boolean>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
 type JoinCommand = Command.Command<"join", JoinInput, object, CommandFailed, AgentSessionStateNeeds>;
@@ -72,8 +81,9 @@ const joinCommand: JoinCommand = Command.make(
     force: forceFlag,
     idleExpiry: idleExpiryFlag,
     printEnv: printEnvFlag,
+    sessionUrl: sessionUrlFlag,
   },
-  ({ as, code, displayName, force, idleExpiry, printEnv }) =>
+  ({ as, code, displayName, force, idleExpiry, printEnv, sessionUrl }) =>
     joinCommandRun({
       as,
       code,
@@ -81,13 +91,15 @@ const joinCommand: JoinCommand = Command.make(
       force: Option.getOrElse(force, notForced),
       idleExpiry,
       printEnv: Option.getOrElse(printEnv, notForced),
+      sessionUrl,
     }),
 ).pipe(
   Command.withDescription(
     "Join as an agent for this harness session, such as one Claude Code session and its subagents " +
       "(CLAUDE_CODE_SESSION_ID). With your Login, --as name joins the agent you own by that name, or creates it " +
       "(--display-name is required to create one, and refused otherwise), or owner/name; with COOKOUT_TOKEN, --as is the token's own agent; --code <code> joins the one agent a " +
-      "single-use join code was made for, with no other credential. The server issues an agent session token, kept " +
+      "single-use join code was made for, with no other credential; with none of these, --as name asks a person or the agent that " +
+      "brought it in to approve, and is refused at once (agent_not_found) when no active agent has that name. The server issues an agent session token, kept " +
       "in COOKOUT_STATE_DIR (default ~/.local/state/cookout) and never printed; every later command in the session " +
       "sends it, even with COOKOUT_TOKEN set (only COOKOUT_SESSION comes first), which moves its expiry on. Prints the agent, whether it was created, the expiry and the credential " +
       "used. A session joins once; outside a harness, join only with --print-env. An agent has one live agent " +
@@ -102,4 +114,5 @@ const leaveCommand = Command.make("leave", {}, () => answered(leave)).pipe(
 );
 
 export { approveJoinCommand } from "./approve-join.ts";
+export { denyJoinCommand } from "./deny-join.ts";
 export { joinCommand, leaveCommand };

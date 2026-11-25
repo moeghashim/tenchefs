@@ -1,6 +1,6 @@
+import { AgentSessionSent, LoginCredentialSent } from "../../../identities/server.ts";
 import { DateTime, Effect, Option, Predicate } from "effect";
 import type { Identity, IdentityName } from "../../../identities/index.ts";
-import { AgentSessionSent } from "../../../identities/server.ts";
 import type { Connection } from "./book.ts";
 import type { LiveConnectionDetail } from "../../index.ts";
 import { Storage } from "../../../storage/server.ts";
@@ -28,7 +28,8 @@ const connectionOf = Effect.fnUntraced(function* detailOfConnection({
   caller,
 }: OpenedStream): Effect.fn.Return<Connection, never, Storage> {
   if (Predicate.isUndefined(authorization)) {
-    return { detail: WEB, sentWith: { kind: "web" } };
+    const loginCredential = yield* LoginCredentialSent;
+    return { detail: WEB, sentWith: { kind: "web", loginCredential } };
   }
   const sent = yield* AgentSessionSent;
   if (Option.isNone(sent)) {

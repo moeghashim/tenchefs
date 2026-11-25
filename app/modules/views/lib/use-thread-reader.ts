@@ -1,13 +1,14 @@
-import type { Board, ThreadMessages, ThreadMessagesState } from "../../board/index.ts";
+import type { BoardStore, ThreadMessagesState } from "../../board/index.ts";
 import type { InboxItem, Message, MessageId } from "../../sdk/index.ts";
 import type { Newest, Reader, ReaderSources, Reading, Selection, Unread } from "../../unread/index.ts";
+import { threadRead, useBoardStore } from "./use-board.ts";
+import type { Read } from "./use-board.ts";
 import type { ThreadSelection } from "../../paths/index.ts";
 import { useSyncExternalStore } from "react";
 
 const FIRST = 0;
 
 interface ThreadReading {
-  readonly board: Board;
   readonly unread: Unread;
   readonly reading: Reading;
   readonly selected: ThreadSelection;
@@ -30,28 +31,39 @@ function firstOf(items: readonly InboxItem[]): MessageId | null {
 }
 
 interface Sources {
-  readonly messages: ThreadMessages;
+  readonly messages: Read<ThreadMessagesState>;
+  readonly ack: (id: MessageId) => void;
   readonly selection: Selection;
   readonly unread: Unread;
   readonly me: string;
 }
 
-function readerSources({ me, messages, selection, unread }: Sources): ReaderSources {
+function readerSources({ ack, me, messages, selection, unread }: Sources): ReaderSources {
   return {
-    ack: messages.ack,
+    ack,
     firstUnread: () => firstOf(selection.snapshot().items),
     markUnread: unread.markUnread,
     newest: () => newestOf(messages.snapshot(), me),
-    subscribe: messages.subscribeWithoutAcking,
+    subscribe: messages.subscribe,
     subscribeToUnread: selection.subscribe,
   };
 }
 
-function useThreadReader({ board, me, reading, selected, unread }: ThreadReading): Reader {
+function useThreadReader({ me, reading, selected, unread }: ThreadReading): Reader {
   const { channel, thread } = selected;
+  const store: BoardStore = useBoardStore();
+  const place = { channel, id: thread };
   const reader = reading.reader(
     `${channel}/${String(thread)}`,
-    readerSources({ me, messages: board.thread(channel, thread), selection: unread.selection(selected), unread }),
+    readerSources({
+      ack: (id) => {
+        store.threads.ack(place, id);
+      },
+      me,
+      messages: threadRead({ acking: false, place, store }),
+      selection: unread.selection(selected),
+      unread,
+    }),
   );
   useSyncExternalStore(reader.subscribe, reader.snapshot);
   return reader;

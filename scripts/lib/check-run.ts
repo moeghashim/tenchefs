@@ -3,10 +3,12 @@ import type { Command } from "./merge-steps.ts";
 import { run } from "./merge-steps.ts";
 
 interface Job {
+  readonly completedAt: string;
   readonly conclusion: string;
   readonly failedSteps: readonly string[];
   readonly jobArg: string;
   readonly name: string;
+  readonly startedAt: string;
   readonly status: string;
 }
 
@@ -65,6 +67,10 @@ function jobArgOf(value: unknown): string {
   return String(databaseId);
 }
 
+function textOf(value: unknown, key: string): string {
+  return text(field(value, key)) ?? "";
+}
+
 function jobsOf(values: readonly unknown[]): readonly Job[] {
   return values.flatMap((value) => {
     const name = text(field(value, "name"));
@@ -72,8 +78,17 @@ function jobsOf(values: readonly unknown[]): readonly Job[] {
     if (typeof name !== "string" || typeof status !== "string") {
       return [];
     }
-    const conclusion = text(field(value, "conclusion")) ?? "";
-    return [{ conclusion, failedSteps: failedStepsOf(value), jobArg: jobArgOf(value), name, status }];
+    return [
+      {
+        completedAt: textOf(value, "completedAt"),
+        conclusion: textOf(value, "conclusion"),
+        failedSteps: failedStepsOf(value),
+        jobArg: jobArgOf(value),
+        name,
+        startedAt: textOf(value, "startedAt"),
+        status,
+      },
+    ];
   });
 }
 

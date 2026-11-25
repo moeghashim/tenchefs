@@ -1,13 +1,10 @@
-import { CardBody, Muted, Profile, ProfileName, Skeleton } from "../../design-system/index.tsx";
-import { shownIn, usePresences } from "./use-presence.ts";
+import { Muted, Skeleton } from "../../design-system/content.tsx";
+import { CardBody } from "../../design-system/layout.tsx";
 import type { Composer } from "../../composer/index.ts";
 import type { IdentityName } from "../../sdk/index.ts";
-import { IdentityTags } from "./identity-tags.tsx";
-import { ProfileControls } from "./profile-controls.tsx";
-import { ProfileFacts } from "./profile-facts.tsx";
-import { ProfileTexts } from "./profile-texts.tsx";
+import { ProfileEntry } from "./profile-entry.tsx";
 import type { ReactNode } from "react";
-import { noteOf } from "./use-author.ts";
+import { usePresences } from "./use-presence.ts";
 import { useSyncExternalStore } from "react";
 
 const NONE = 0;
@@ -40,18 +37,12 @@ export function ProfileBody(props: ProfileBodyProps): ReactNode {
     );
   }
   return found.map((identity) => (
-    <Profile
-      agent={identity.kind === "agent"}
+    <ProfileEntry
+      composer={props.composer}
+      identity={identity}
       key={identity.name}
-      name={identity.name}
-      presence={shownIn({ name: identity.name, presences })}
-    >
-      <ProfileName displayName={identity.displayName ?? null} name={identity.name} note={noteOf(identity)}>
-        <IdentityTags identity={identity} />
-      </ProfileName>
-      <ProfileFacts identity={identity} />
-      <ProfileTexts composer={props.composer} identity={identity} me={props.me} />
-      <ProfileControls identities={identities} identity={identity} me={props.me} />
-    </Profile>
+      me={props.me}
+      presences={presences}
+    />
   ));
 }

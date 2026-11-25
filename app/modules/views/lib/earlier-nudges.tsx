@@ -1,5 +1,5 @@
 import type { Nudges, NudgesState } from "../../unread/index.ts";
-import { FeedList } from "../../design-system/index.tsx";
+import { FeedList } from "../../design-system/feed.tsx";
 import type { InboxHistoryNudge } from "../../sdk/index.ts";
 import { NudgeRow } from "./nudge-row.tsx";
 import type { ReactNode } from "react";

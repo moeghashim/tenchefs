@@ -41,7 +41,7 @@ function reactionNotFound(asked: string): Refusal {
   };
 }
 
-const replyOutsideCommandThread: Refusal = {
+const replyOutsideWebhookCommandThread: Refusal = {
   code: "outside_command_thread",
   message: "A command token can only reply in its call's thread, in that thread's channel.",
   status: FORBIDDEN,
@@ -59,7 +59,7 @@ const seenWithoutReplyTo: Refusal = {
   status: BAD_REQUEST,
 };
 
-const closeWithCommandToken: Refusal = {
+const closeWithWebhookCommandToken: Refusal = {
   code: "outside_command_thread",
   message: "A command token can only reply in its call's thread, not close it.",
   status: FORBIDDEN,
@@ -67,12 +67,12 @@ const closeWithCommandToken: Refusal = {
 
 export type { Refusal } from "../../../http/index.ts";
 export {
-  closeWithCommandToken,
+  closeWithWebhookCommandToken,
   closeWithoutReplyTo,
   messageNotFound,
   reactionNotFound,
   replyInOtherChannel,
-  replyOutsideCommandThread,
+  replyOutsideWebhookCommandThread,
   seenWithoutReplyTo,
   threadIdOf,
 };

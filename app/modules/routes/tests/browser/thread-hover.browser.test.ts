@@ -1,8 +1,12 @@
 import type { Locator, Page } from "@playwright/test";
 import { adminClient, newIdentity } from "./people.ts";
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import { inThread } from "./regions.ts";
 import { logIn } from "./login.ts";
+import { probeFixtures } from "./probe.ts";
+import { unique } from "./names.ts";
+
+const test = base.extend(probeFixtures);
 
 interface Opened {
   readonly page: Page;
@@ -21,11 +25,16 @@ async function openThread({ channel, page }: Opened): Promise<void> {
 }
 
 function replyNamed(page: Page, text: string): Locator {
-  return inThread(page).getByRole("list", { name: "Replies" }).getByRole("article").filter({ hasText: text });
+  return inThread(page)
+    .getByRole("feed", { exact: true, name: "Replies" })
+    .getByRole("article")
+    .filter({ hasText: text });
 }
 
 async function hoverReply(message: Locator): Promise<void> {
-  const reply = message.getByRole("group", { name: "Quick actions" }).getByRole("button", { name: "Reply" });
+  const reply = message
+    .getByRole("group", { exact: true, name: "Quick actions" })
+    .getByRole("button", { exact: true, name: "Reply" });
 
   await expect(async () => {
     await message.hover();
@@ -37,7 +46,7 @@ async function hoverReply(message: Locator): Promise<void> {
 }
 
 test("a thread reply's hover Reply mentions its author once, keeping the draft", async ({ page }) => {
-  const channel = "browser-panel-hover-reply";
+  const channel = unique("browser-panel-hover-reply");
   await openThread({ channel, page });
   const box = inThread(page).getByRole("textbox", { exact: true, name: "Reply" });
   await box.fill("works for me");
@@ -52,7 +61,7 @@ test("a thread reply's hover Reply mentions its author once, keeping the draft",
 });
 
 test("hover Reply on your own thread reply mentions nobody and focuses the reply box", async ({ page }) => {
-  await openThread({ channel: "browser-panel-hover-own", page });
+  await openThread({ channel: unique("browser-panel-hover-own"), page });
   const box = inThread(page).getByRole("textbox", { exact: true, name: "Reply" });
   await hoverReply(replyNamed(page, "Or one"));
 
@@ -61,9 +70,9 @@ test("hover Reply on your own thread reply mentions nobody and focuses the reply
 });
 
 test("tabbing to a thread reply shows its hover Reply", async ({ page }) => {
-  await openThread({ channel: "browser-panel-hover-tab", page });
+  await openThread({ channel: unique("browser-panel-hover-tab"), page });
   const message = replyNamed(page, "Noon works");
-  const reply = message.getByRole("button", { name: "Reply" });
+  const reply = message.getByRole("button", { exact: true, name: "Reply" });
 
   await expect(reply).toBeHidden();
 
@@ -86,19 +95,19 @@ async function threadHoverBarIn({ page, theme }: Shot): Promise<void> {
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 
   const message = replyNamed(page, "Noon works");
-  const bar = message.getByRole("group", { name: "Quick actions" });
+  const bar = message.getByRole("group", { exact: true, name: "Quick actions" });
 
   await expect(async () => {
     await message.hover();
 
-    await expect(bar.getByRole("button", { name: "Reply" })).toBeVisible({ timeout: 1000 });
+    await expect(bar.getByRole("button", { exact: true, name: "Reply" })).toBeVisible({ timeout: 1000 });
   }).toPass();
 
   await message.screenshot({ path: test.info().outputPath(`thread-hover-bar-${theme}.png`) });
 }
 
 test("a thread reply's hover bar draws 👍, Reply and More actions in both themes", async ({ page }) => {
-  await openThread({ channel: "browser-panel-hover-bar", page });
+  await openThread({ channel: unique("browser-panel-hover-bar"), page });
   await threadHoverBarIn({ page, theme: "dark" });
   await threadHoverBarIn({ page, theme: "light" });
 });

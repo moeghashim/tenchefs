@@ -18,6 +18,7 @@ interface RedeemJoinCode {
   readonly idleSeconds: number;
   readonly now: IsoTime;
   readonly host?: string;
+  readonly sessionUrl?: string;
 }
 
 type JoinCodeRedemption =
@@ -29,6 +30,7 @@ type JoinCodeRedemption =
       readonly identity: IdentityName;
       readonly issuedAt: IsoTime;
       readonly expiresAt: IsoTime;
+      readonly sessionUrl?: string;
     };
 
 interface JoinCodesSection {
@@ -48,22 +50,30 @@ interface Issued {
   readonly result: IssueAgentSessionResult;
 }
 
+function withOptional<Fields extends object, Key extends string>(
+  fields: Fields,
+  key: Key,
+  value: string | undefined,
+): Fields & Partial<Record<Key, string>> {
+  if (Predicate.isUndefined(value)) {
+    return fields;
+  }
+  return { ...fields, [key]: value };
+}
+
 function sessionFor({ agent, redeem }: Redeeming): IssueAgentSession {
-  const { host, idleSeconds, now, sessionHash } = redeem;
+  const { host, idleSeconds, now, sessionHash, sessionUrl } = redeem;
   const expiresAt = renewedExpiry({ idleSeconds, now });
   const session = { expiresAt, hash: sessionHash, identity: agent, idleSeconds, issuedAt: now };
-  if (Predicate.isUndefined(host)) {
-    return { force: false, session };
-  }
-  return { force: false, session: { ...session, host } };
+  return { force: false, session: withOptional(withOptional(session, "host", host), "sessionUrl", sessionUrl) };
 }
 
 function redemptionOf({ issue, result }: Issued): JoinCodeRedemption {
-  const { expiresAt, identity, issuedAt } = issue.session;
+  const { expiresAt, identity, issuedAt, sessionUrl } = issue.session;
   if (result.status === "live") {
     return { expiresAt: result.expiresAt, identity, status: "live" };
   }
-  return { expiresAt, identity, issuedAt, status: "redeemed" };
+  return withOptional({ expiresAt, identity, issuedAt, status: "redeemed" } as const, "sessionUrl", sessionUrl);
 }
 
 export { GONE, redemptionOf, sessionFor };

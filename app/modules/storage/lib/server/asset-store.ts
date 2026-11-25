@@ -1,13 +1,16 @@
 import { Context, Effect, FileSystem, Layer, Option, Path, Ref, Stream } from "effect";
 import type { AttachmentId } from "../../../attachments/index.ts";
+import type { AvatarId } from "../../../avatars/index.ts";
 import { StorageUnavailable } from "./errors.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
+type AssetKey = AttachmentId | AvatarId;
+
 interface AssetStoreService {
-  readonly put: (id: AttachmentId, bytes: Uint8Array) => Fails<void>;
-  readonly read: (id: AttachmentId) => Stream.Stream<Uint8Array, StorageUnavailable>;
-  readonly remove: (ids: readonly AttachmentId[]) => Fails<void>;
+  readonly put: (id: AssetKey, bytes: Uint8Array) => Fails<void>;
+  readonly read: (id: AssetKey) => Stream.Stream<Uint8Array, StorageUnavailable>;
+  readonly remove: (ids: readonly AssetKey[]) => Fails<void>;
 }
 
 class AssetStore extends Context.Service<AssetStore, AssetStoreService>()(
@@ -19,8 +22,8 @@ const OWNER_ONLY_FILE = 0o600;
 const ONE_AT_A_TIME = { concurrency: 1, discard: true } as const;
 const PARTIAL = ".partial";
 
-function missing(id: AttachmentId): StorageUnavailable {
-  return StorageUnavailable.make({ message: `The asset store holds no bytes for attachment ${id}.` });
+function missing(id: AssetKey): StorageUnavailable {
+  return StorageUnavailable.make({ message: `The asset store holds no bytes for asset ${id}.` });
 }
 
 function unavailable({ message }: { readonly message: string }): StorageUnavailable {
@@ -28,7 +31,7 @@ function unavailable({ message }: { readonly message: string }): StorageUnavaila
 }
 
 const openMemoryAssets: Effect.Effect<AssetStoreService> = Effect.gen(function* openMemoryAssets() {
-  const held = yield* Ref.make<ReadonlyMap<AttachmentId, Uint8Array>>(new Map());
+  const held = yield* Ref.make<ReadonlyMap<AssetKey, Uint8Array>>(new Map());
   return {
     put: (id, bytes) => Ref.update(held, (current) => new Map([...current, [id, Uint8Array.from(bytes)]])),
     read: (id) =>
@@ -96,4 +99,4 @@ function diskAssetStore(
   return Layer.effect(AssetStore, openDiskAssets(directory));
 }
 
-export { AssetStore, diskAssetStore, memoryAssetStore, missing };
+export { type AssetKey, AssetStore, diskAssetStore, memoryAssetStore, missing };

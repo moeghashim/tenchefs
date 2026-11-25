@@ -9,6 +9,7 @@ interface SentEvent {
 }
 
 const eventTypes = {
+  "agent-join-requests": true,
   "agent-session": true,
   channel: true,
   "channel-deleted": true,
@@ -27,8 +28,10 @@ const eventTypes = {
   "read-position": true,
   "read-position-moved-back": true,
   "read-receipt": true,
+  "scheduled-message": true,
   subscription: true,
   thread: true,
+  trigger: true,
 } as const satisfies Readonly<Record<CookoutEvent["type"], true>>;
 
 function eventSourceAdapter(baseUrl: string): LiveAdapter {

@@ -3,7 +3,9 @@ import { withEntry, withFresh } from "./messages-table.ts";
 import type { Held } from "./messages-held.ts";
 import { LOADING } from "./message-states.ts";
 import type { MessagesHeld } from "./messages-table.ts";
+import type { Outgoing } from "./outgoing.ts";
 import type { ThreadLoaded } from "./message-states.ts";
+import { attachmentsOf } from "./outgoing.ts";
 import { failure } from "./failure.ts";
 
 type ThreadsClient = Pick<CookoutClient, "ack" | "createMessage" | "getThread">;
@@ -17,8 +19,7 @@ interface ThreadAt {
   readonly acking: () => boolean;
 }
 
-interface ReplyRequest {
-  readonly text: string;
+interface ReplyRequest extends Outgoing {
   readonly posted: () => void;
 }
 
@@ -129,10 +130,11 @@ async function reloadThread(at: ThreadAt): Promise<void> {
   }
 }
 
-async function postReply(at: ThreadAt, { posted, text }: ReplyRequest): Promise<void> {
+async function postReply(at: ThreadAt, { files, posted, text }: ReplyRequest): Promise<void> {
   updateThread(at, (thread) => ({ ...thread, reply: { status: "posting" } }));
   try {
-    await at.client.createMessage({ channel: at.channel, replyTo: at.id, text });
+    const attachments = await attachmentsOf(files);
+    await at.client.createMessage({ attachments, channel: at.channel, replyTo: at.id, text });
     await readThread(at, repliedRead);
     posted();
   } catch (error: unknown) {

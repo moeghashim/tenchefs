@@ -5,12 +5,14 @@ import {
   AgentJoinRequestStartedResponseSchema,
   ApproveAgentJoinRequestSchema,
   CollectAgentJoinRequestSchema,
+  DenyAgentJoinResponseSchema,
   StartAgentJoinRequestSchema,
 } from "./wire.ts";
 import { Effect, Function, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
   agentJoinRequestApprovalPath,
+  agentJoinRequestDenialPath,
   agentJoinRequestPath,
   agentJoinRequestsPath,
   collectAgentJoinRequestPath,
@@ -106,6 +108,19 @@ const approveRoute: Route<Caller | AgentSessions> = {
   segments: userCodeSegments,
 };
 
+const denyRoute: Route<Caller | AgentSessions> = {
+  handle: (params) =>
+    Effect.gen(function* denyAgentJoinRequest() {
+      const caller = yield* Caller;
+      const agentSessions = yield* AgentSessions;
+      const denied = yield* agentSessions.denyJoin({ caller, userCode: codeParam(params) });
+      return yield* HttpServerResponse.schemaJson(DenyAgentJoinResponseSchema)(denied);
+    }),
+  method: "PUT",
+  path: agentJoinRequestDenialPath,
+  segments: userCodeSegments,
+};
+
 export const openJoinRequestRoutes: readonly Route<AgentSessions | AddressLimit>[] = [startRoute, collectRoute];
 
-export const joinRequestRoutes: readonly Route<Caller | AgentSessions>[] = [showRoute, approveRoute];
+export const joinRequestRoutes: readonly Route<Caller | AgentSessions>[] = [showRoute, approveRoute, denyRoute];

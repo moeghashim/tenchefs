@@ -14,17 +14,26 @@ const PATH_BASE = "http://cookout.invalid";
 
 type Query = typeof SearchQuerySchema.Type;
 
-function pageRequest({ cursor, limit = pageSize.default }: Query): SearchPageRequest {
-  if (Predicate.isUndefined(cursor)) {
+const FIRST_RESULT = 0;
+
+function pageRequest(query: Query): SearchPageRequest {
+  const limit = query.limit ?? pageSize.default;
+  if (query.sort === "best") {
+    return { limit, offset: query.cursor ?? FIRST_RESULT, sort: "best" };
+  }
+  if (Predicate.isUndefined(query.cursor)) {
     return { limit };
   }
-  return { after: cursor, limit };
+  return { after: query.cursor, limit };
 }
 
-function cursorAfter({ hasMore, results }: Pick<SearchResponse, "hasMore" | "results">): string | null {
-  const last = Arr.last(results);
-  if (!hasMore || Option.isNone(last)) {
+function cursorAfter(page: SearchPageRequest, stored: Pick<SearchResponse, "hasMore" | "results">): string | null {
+  const last = Arr.last(stored.results);
+  if (!stored.hasMore || Option.isNone(last)) {
     return null;
+  }
+  if (page.sort === "best") {
+    return String(page.offset + stored.results.length);
   }
   const { createdAt, id } = last.value.message;
   return cursorText({ createdAt, id });
@@ -40,8 +49,12 @@ const searchRoute: Route<Storage> = {
       );
       const searched = yield* searchQueryOf(query.query);
       const storage = yield* Storage;
-      const stored = yield* storage.searchMessages(searched, pageRequest(query));
-      return yield* HttpServerResponse.schemaJson(SearchResponseSchema)({ ...stored, cursor: cursorAfter(stored) });
+      const page = pageRequest(query);
+      const stored = yield* storage.searchMessages(searched, page);
+      return yield* HttpServerResponse.schemaJson(SearchResponseSchema)({
+        ...stored,
+        cursor: cursorAfter(page, stored),
+      });
     }),
   method: "GET",
   path: searchPath,

@@ -4,7 +4,7 @@ import { useMessageMenu, useReplyAction } from "./use-message-menu.ts";
 import { MessageContent } from "./message-content.tsx";
 import type { MessageMenu } from "../../unread/index.ts";
 import type { ReactNode } from "react";
-import { StandaloneMessage } from "../../design-system/index.tsx";
+import { StandaloneMessage } from "../../design-system/messages.tsx";
 import { dayLabel } from "../../format/index.ts";
 import { useAuthor } from "./use-author.ts";
 import { useMarkOf } from "./message-marks.ts";
@@ -25,7 +25,7 @@ interface StandaloneEntryProps {
 export function StandaloneEntry(props: StandaloneEntryProps): ReactNode {
   const { message } = props;
   const { agent, displayName, note, presence, profileHref } = useAuthor(message.author);
-  const menu = useMessageMenu({ closing: props.closing, me: props.me, menu: props.menu, message });
+  const menu = useMessageMenu({ closing: props.closing, me: props.me, menu: props.menu, message, threadParent: null });
   const handleReply = useReplyAction({ me: props.me, message, reply: props.reply });
   return (
     <StandaloneMessage
@@ -44,6 +44,7 @@ export function StandaloneEntry(props: StandaloneEntryProps): ReactNode {
       presence={presence}
       onAction={handleReply}
       replyOnHover={props.reply !== null}
+      threadHref={null}
       threadOnHover={false}
       time={useMessageTime({ message, parent: null, receipts: props.receipts })}
       unreadLine={false}

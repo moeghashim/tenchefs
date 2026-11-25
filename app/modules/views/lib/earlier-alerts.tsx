@@ -1,6 +1,6 @@
 import type { Alerts, AlertsState } from "../../unread/index.ts";
 import { AlertRow } from "./alert-row.tsx";
-import { FeedList } from "../../design-system/index.tsx";
+import { FeedList } from "../../design-system/feed.tsx";
 import type { OfflineAlert } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

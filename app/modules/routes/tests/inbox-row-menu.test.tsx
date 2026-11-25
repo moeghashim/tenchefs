@@ -5,8 +5,8 @@ import { openReading, otherThread, readAtLast, rowsAt, shown, threadToRead } fro
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { ReadThread } from "./reading.ts";
 import { inPane } from "./regions.ts";
-import { openAt } from "./render.tsx";
 import { subscribedReader } from "./inbox-reader.ts";
+import { viewOpened } from "./view-opened.ts";
 
 const ICON_FIRST = ':scope > svg[aria-hidden="true"]:first-child';
 const MENU = "Inbox row actions";
@@ -86,7 +86,7 @@ it("right-clicking an unread Activity row opens its actions menu, every item wit
   expect.hasAssertions();
 
   const thread = await threadToRead("web-inbox-row-menu-right");
-  const close = openAt({ client: thread.reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: thread.reader, hash: "#/inbox", waitingOn: ["inbox"] });
   fireEvent.contextMenu(await rowLink(thread.address));
 
   await expect(menuItems(MENU)).resolves.toStrictEqual([
@@ -102,7 +102,7 @@ it("a For you row's More actions button opens the same menu", { timeout: 5000 },
 
   const channel = "web-inbox-row-menu-more";
   const reader = await mentioned(channel);
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: ["inbox"] });
   const button = await moreActionsOf(`#/inbox/${channel}`);
   pressed(() => button);
 
@@ -123,7 +123,7 @@ it.each(KEYS)("%s on an Inbox row's link opens its actions menu", { timeout: 500
   expect.hasAssertions();
 
   const thread = await threadToRead(`web-inbox-row-menu-key-${key.toLowerCase()}`);
-  const close = openAt({ client: thread.reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: thread.reader, hash: "#/inbox", waitingOn: ["inbox"] });
   fireEvent.keyDown(await rowLink(thread.address), { key, shiftKey });
 
   await expect(menuItems(MENU)).resolves.toHaveLength(TWO);
@@ -140,7 +140,7 @@ it("open in channel leads to a reply in its thread, and to a top-level message i
   const { channel } = thread;
   await thread.poster.createMessage({ channel, text: "Top-level news" });
   const latest = await latestReplyIn(thread);
-  const close = openAt({ client: thread.reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: thread.reader, hash: "#/inbox", waitingOn: ["inbox"] });
   const reply = await openHrefFor(thread.address);
 
   expect([reply, await openHrefFor(`#/inbox/${channel}`)]).toStrictEqual([
@@ -159,6 +159,7 @@ it("mark read on a row that isn't selected reads it and takes it out of its sect
   const opened = await openReading({ hash: other.address, thread: other });
   fireEvent.contextMenu(await rowLink(thread.address));
   await chose("Mark read");
+  await opened.answered("ack");
   const read = await readAtLast(thread);
 
   await waitFor(() => {
@@ -175,6 +176,7 @@ it("the selected row, once read, offers Mark unread, which brings it back and ke
 
   const thread = await threadToRead("web-inbox-row-menu-unread");
   const opened = await openReading({ hash: thread.address, thread });
+  await opened.answered("getThread");
   await shown("Unread two in Deploy at noon?");
   await opened.readAfter(READ_AFTER);
   const items = await chosenFrom(thread, "Mark unread");

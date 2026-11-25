@@ -1,4 +1,4 @@
-import { Caller, CommandThread, sentHarness } from "../../../identities/server.ts";
+import { Caller, WebhookCommandThread, sentHarness } from "../../../identities/server.ts";
 import { Effect, Option, Predicate, Schema, String as Str, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse, Multipart } from "effect/http";
 import { MessageResponseSchema, PostMessageRequestSchema, PostWithAttachmentsRequestSchema } from "./wire.ts";
@@ -141,7 +141,7 @@ const postRoute: Route<Caller | Messages> = {
       const body = yield* postBody;
       const caller = yield* Caller;
       const messages = yield* Messages;
-      const thread = yield* CommandThread;
+      const thread = yield* WebhookCommandThread;
       const posting = { ...seenOnReply(body), ...(yield* sentHarness) };
       const posted = yield* Option.match(thread, {
         onNone: () => messages.post(caller, posting),

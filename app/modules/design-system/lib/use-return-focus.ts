@@ -12,6 +12,10 @@ function useReturnFocus(): ReturnFocus {
       onClose: (event: Readonly<Event>) => {
         event.preventDefault();
         const element = opener.current;
+        const claimed = globalThis.document.activeElement;
+        if (claimed !== null && claimed !== globalThis.document.body) {
+          return;
+        }
         if (element instanceof HTMLElement && element.isConnected) {
           element.focus();
         }

@@ -49,6 +49,16 @@ it("a thread link without a message still names no message", { timeout: 1000 }, 
   expect(rebuilt(thread)).toBe(thread);
 });
 
+it("a link to a thread on its own names it alone, and builds back to the same hash", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const alone = "#/channels/general/threads/7/alone";
+
+  expect(locationOf(alone).route).toStrictEqual({ alone: true, channel: "general", name: "thread", thread: 7 });
+  expect(rebuilt(alone)).toBe(alone);
+  expect(locationOf("#/channels/general/threads/x/alone").route).toStrictEqual({ name: "missing" });
+});
+
 it("a reply link whose message isn't a message ID names no page", { timeout: 1000 }, () => {
   expect.hasAssertions();
 

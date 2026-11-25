@@ -1,0 +1,22 @@
+import { Content } from "@radix-ui/react-dialog";
+import { FormDialogText } from "./form-dialog-text.tsx";
+import type { ReactNode } from "react";
+import { ShortcutGroup } from "./shortcut-group.tsx";
+import type { ShortcutListContentParts } from "./shortcut-list-parts.ts";
+import { useReturnFocus } from "./use-return-focus.ts";
+
+export function ShortcutListContent(parts: ShortcutListContentParts): ReactNode {
+  const focus = useReturnFocus();
+  const handleOpenAutoFocus = focus.onOpen;
+  const handleCloseAutoFocus = focus.onClose;
+  return (
+    <Content asChild onCloseAutoFocus={handleCloseAutoFocus} onOpenAutoFocus={handleOpenAutoFocus}>
+      <div className="fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-1/2 gap-4 overflow-y-auto rounded-lg border bg-background p-5 shadow-lg">
+        <FormDialogText description={parts.description} title={parts.title} />
+        {parts.groups.map((group) => (
+          <ShortcutGroup heading={group.heading} key={group.heading} shortcuts={group.shortcuts} />
+        ))}
+      </div>
+    </Content>
+  );
+}

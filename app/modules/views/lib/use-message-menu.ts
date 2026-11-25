@@ -1,14 +1,28 @@
-import type { ReactionChoice, ThreadChoice } from "../../design-system/index.tsx";
-import type { Message } from "../../sdk/index.ts";
+import type { Message, MessageId, TopLevelMessage } from "../../sdk/index.ts";
+import type { ReactionChoice, ThreadChoice } from "../../design-system/messages.tsx";
+import { useContext, useMemo } from "react";
+import type { Announce } from "./announcer.ts";
+import { Announcer } from "./announcer.ts";
 import type { MessageMenu } from "../../unread/index.ts";
 import type { ThreadClosing } from "../../board/index.ts";
-import { useMemo } from "react";
+import { createCopier } from "./copying.ts";
+import { hrefOf } from "../../paths/index.ts";
 import { useReactionChoices } from "./use-reactions.ts";
 
-const TEXT = { close: "Close", closeThread: "Close thread", reopen: "Reopen", reopenThread: "Reopen thread" } as const;
+const TEXT = {
+  close: "Close",
+  closeThread: "Close thread",
+  closed: "Thread closed",
+  copied: "Link copied",
+  markedUnread: "Marked unread",
+  reopen: "Reopen",
+  reopenThread: "Reopen thread",
+  reopened: "Thread reopened",
+} as const;
 
 interface MenuParts {
   readonly onMarkUnread: () => void;
+  readonly onCopyLink: () => void;
   readonly reactions: readonly ReactionChoice[];
   readonly thread: ThreadChoice | null;
 }
@@ -18,6 +32,7 @@ interface MenuOf {
   readonly me: string;
   readonly message: Message;
   readonly closing: ThreadClosing | null;
+  readonly threadParent: TopLevelMessage | null;
 }
 
 type Reply = (name: string | null, message: Message) => void;
@@ -30,11 +45,12 @@ interface ReplyOf {
 
 interface ThreadChoiceOf {
   readonly closing: ThreadClosing | null;
-  readonly message: Message;
+  readonly message: TopLevelMessage | null;
+  readonly announce: Announce;
 }
 
-function threadChoice({ closing, message }: ThreadChoiceOf): ThreadChoice | null {
-  if (closing === null || message.kind !== "top-level") {
+function threadChoice({ announce, closing, message }: ThreadChoiceOf): ThreadChoice | null {
+  if (closing === null || message === null) {
     return null;
   }
   const { id } = message;
@@ -45,6 +61,7 @@ function threadChoice({ closing, message }: ThreadChoiceOf): ThreadChoice | null
       name: TEXT.reopenThread,
       onSelect: () => {
         closing.reopen(id);
+        announce(TEXT.reopened);
       },
     };
   }
@@ -54,22 +71,63 @@ function threadChoice({ closing, message }: ThreadChoiceOf): ThreadChoice | null
     name: TEXT.closeThread,
     onSelect: () => {
       closing.close(id);
+      announce(TEXT.closed);
     },
   };
 }
 
-function useMessageMenu({ closing, me, menu, message }: MenuOf): MenuParts {
+function threadOf(message: Message, threadParent: TopLevelMessage | null): TopLevelMessage | null {
+  if (message.kind === "top-level") {
+    return message;
+  }
+  return threadParent;
+}
+
+function threadIdOf(message: Message): MessageId {
+  if (message.kind === "top-level") {
+    return message.id;
+  }
+  return message.replyTo;
+}
+
+function linkOf(message: Message): string {
+  const thread = threadIdOf(message);
+  const href = hrefOf({ channel: message.channel, message: message.id, name: "thread", thread });
+  return new URL(href, globalThis.location.href).href;
+}
+
+interface CopyingLink {
+  readonly announce: Announce;
+  readonly link: () => string;
+}
+
+function copyingLink({ announce, link }: CopyingLink): () => void {
+  const copy = createCopier();
+  return () => {
+    copy(link());
+    announce(TEXT.copied);
+  };
+}
+
+function copyLinkOf(message: Message, announce: Announce): () => void {
+  return copyingLink({ announce, link: () => linkOf(message) });
+}
+
+function useMessageMenu({ closing, me, menu, message, threadParent }: MenuOf): MenuParts {
   const messageId = message.id;
-  const reactions = useReactionChoices({ me, message });
+  const announce = useContext(Announcer);
+  const reactions = useReactionChoices({ announce, me, message });
   return useMemo(
     () => ({
+      onCopyLink: copyLinkOf(message, announce),
       onMarkUnread: () => {
         menu.markUnread(messageId);
+        announce(TEXT.markedUnread);
       },
       reactions,
-      thread: threadChoice({ closing, message }),
+      thread: threadChoice({ announce, closing, message: threadOf(message, threadParent) }),
     }),
-    [closing, menu, message, messageId, reactions],
+    [announce, closing, menu, message, messageId, reactions, threadParent],
   );
 }
 
@@ -93,4 +151,4 @@ function useReplyAction({ me, message, reply }: ReplyOf): (() => void) | null {
 
 type MenuClosing = ThreadClosing | null;
 
-export { type MenuClosing, type Reply, threadChoice, useMessageMenu, useReplyAction };
+export { copyingLink, type MenuClosing, type Reply, threadChoice, useMessageMenu, useReplyAction };

@@ -11,6 +11,7 @@ const INLINE =
 interface HoverMoreActionsParts {
   readonly choices: readonly MenuChoice[];
   readonly inline: boolean;
+  readonly inTabOrder: boolean;
   readonly label: string;
 }
 
@@ -24,7 +25,7 @@ function placeOf(inline: boolean): string {
 export function HoverMoreActions(parts: HoverMoreActionsParts): ReactNode {
   return (
     <span className={placeOf(parts.inline)}>
-      <MoreActions choices={parts.choices} label={parts.label} />
+      <MoreActions choices={parts.choices} inTabOrder={parts.inTabOrder} label={parts.label} />
     </span>
   );
 }

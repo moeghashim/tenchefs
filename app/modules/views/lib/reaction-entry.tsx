@@ -1,6 +1,6 @@
 import type { ReactionCount, ReactionName } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
-import { ReactionChip } from "../../design-system/index.tsx";
+import { ReactionChip } from "../../design-system/messages.tsx";
 import { reactionSymbols } from "../../messages/index.ts";
 import { useCallback } from "react";
 

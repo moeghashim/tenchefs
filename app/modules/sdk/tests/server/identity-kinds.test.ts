@@ -3,6 +3,7 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { TestCookout, answer, refusal, testCookout } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { TestCookoutService } from "../../../testing/server.ts";
+import { createTestAgent } from "../../../testing/index.ts";
 import { identitiesPath } from "../../../identities/index.ts";
 
 interface RawAnswer {
@@ -73,8 +74,8 @@ it.effect("an identity keeps the kind it was created with, through a second crea
   Effect.gen(function* kindNeverChanges() {
     const cookout = yield* TestCookout;
     const human = yield* answer(() => cookout.client.createIdentity({ kind: "human", name: "ada" }));
-    const agent = yield* answer(() => cookout.client.createIdentity({ kind: "agent", name: "bot" }));
-    const recreated = yield* refusal(() => cookout.client.createIdentity({ kind: "agent", name: "ada" }));
+    const agent = yield* answer(() => createTestAgent({ by: cookout.client, displayName: "bot", name: "bot" }));
+    const recreated = yield* refusal(() => createTestAgent({ by: cookout.client, displayName: "ada", name: "ada" }));
     const rotated = yield* Effect.forEach(
       ["ada", "bot"],
       (name) => answer(() => cookout.client.rotateToken(name)),

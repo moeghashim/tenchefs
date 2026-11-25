@@ -1,5 +1,5 @@
 import type { Closing } from "../../messages/index.ts";
-import { QuietLink } from "../../design-system/index.tsx";
+import { QuietLink } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { useProfileHref } from "./profile-base.ts";
 import { useTimeAgo } from "./use-time-ago.ts";

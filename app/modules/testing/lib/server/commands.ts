@@ -1,34 +1,37 @@
-import type { CommandName, CommandSecret } from "../../../commands/index.ts";
+import type { WebhookCommandName, WebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import { fixtureOwnerName, identityName } from "./identities.ts";
-import { isCommandName, isCommandSecret } from "../../../commands/index.ts";
+import { isWebhookCommandName, isWebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import type { AgentIdentity } from "../../../identities/index.ts";
 import { Option } from "effect";
-import type { StoredCommand } from "../../../storage/server.ts";
+import type { StoredWebhookCommand } from "../../../storage/server.ts";
 import { fixtureTime } from "./time.ts";
 
-interface CommandFixtureOptions {
+interface WebhookCommandFixtureOptions {
   readonly description?: string;
   readonly secret?: string;
 }
 
-function commandName(value: string): CommandName {
-  return Option.getOrThrow(Option.liftPredicate(value, isCommandName));
+function webhookCommandName(value: string): WebhookCommandName {
+  return Option.getOrThrow(Option.liftPredicate(value, isWebhookCommandName));
 }
 
-function secretOf(value: string): CommandSecret {
-  return Option.getOrThrow(Option.liftPredicate(value, isCommandSecret));
+function secretOf(value: string): WebhookCommandSecret {
+  return Option.getOrThrow(Option.liftPredicate(value, isWebhookCommandSecret));
 }
 
 function handlerFixture(name: string): AgentIdentity {
   return { admin: false, createdAt: fixtureTime, kind: "agent", name: identityName(name), owner: fixtureOwnerName };
 }
 
-function commandFixture(name: string, ...options: readonly CommandFixtureOptions[]): StoredCommand {
+function webhookCommandFixture(
+  name: string,
+  ...options: readonly WebhookCommandFixtureOptions[]
+): StoredWebhookCommand {
   const [{ description, secret = `hmac_${name}` } = {}] = options;
   const command = {
     createdAt: fixtureTime,
     handler: identityName(name),
-    name: commandName(name),
+    name: webhookCommandName(name),
     schema: { type: "object" },
     url: `https://hooks.example.com/${name}`,
   };
@@ -38,4 +41,4 @@ function commandFixture(name: string, ...options: readonly CommandFixtureOptions
   return { command, secret: secretOf(secret) };
 }
 
-export { type CommandFixtureOptions, commandFixture, commandName, handlerFixture };
+export { type WebhookCommandFixtureOptions, webhookCommandFixture, webhookCommandName, handlerFixture };

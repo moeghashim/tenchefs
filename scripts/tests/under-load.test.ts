@@ -3,6 +3,7 @@ import {
   failingOnlyUnderLoad,
   failureList,
   filesOf,
+  loadedSuites,
   playwrightCount,
   playwrightFailures,
   vitestCount,
@@ -109,4 +110,28 @@ it("a report's test count is every test it ran or skipped, and nothing for a rep
     vitestCount(null),
     playwrightCount({}),
   ]).toStrictEqual([VITEST_TESTS, PLAYWRIGHT_TESTS, NONE, NONE]);
+});
+
+it("under load runs both whole suites by default, only the web one with --web-only, and only the given files when named", {
+  timeout: 10_000,
+}, () => {
+  expect.hasAssertions();
+
+  const web = "app/modules/routes/tests/inbox.test.tsx";
+  const browser = "app/modules/routes/tests/browser/post.browser.test.ts";
+  const files = [web, browser];
+
+  expect([
+    loadedSuites({ files: [], webOnly: false }),
+    loadedSuites({ files: [], webOnly: true }),
+    loadedSuites({ files, webOnly: false }),
+    loadedSuites({ files, webOnly: true }),
+    loadedSuites({ files: [web], webOnly: false }),
+  ]).toStrictEqual([
+    { browser: "all", web: "all" },
+    { browser: "none", web: "all" },
+    { browser: [browser], web: [web] },
+    { browser: "none", web: [web] },
+    { browser: "none", web: [web] },
+  ]);
 });

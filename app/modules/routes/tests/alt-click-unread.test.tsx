@@ -1,17 +1,17 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { altClicked, boardOpen, countsOn, newAbove } from "./alt-click.ts";
 import { expect, it } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 function inFeed(text: string): () => HTMLElement {
-  return () => within(screen.getByRole("list", { name: "Messages" })).getByText(text);
+  return () => within(screen.getByRole("feed", { name: "Messages" })).getByText(text);
 }
 
 function inReplies(text: string): () => HTMLElement {
-  return () => within(screen.getByRole("list", { name: "Replies" })).getByText(text);
+  return () => within(screen.getByRole("feed", { name: "Replies" })).getByText(text);
 }
 
 function threadLink(): HTMLElement {
-  return within(screen.getByRole("list", { name: "Messages" })).getByRole("link", { name: /2 replies/u });
+  return within(screen.getByRole("feed", { name: "Messages" })).getByRole("link", { name: /2 replies/u });
 }
 
 async function threadMarkedByAltClick(): Promise<void> {
@@ -94,18 +94,17 @@ it("a plain click on a message marks nothing unread", { timeout: 5000 }, async (
   await close();
 });
 
-it("the Mark unread menu item's tooltip names Alt-click", { timeout: 5000 }, async () => {
+it("the Mark unread menu item names its key, Alt+Enter", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const { close } = await boardOpen("web-alt-click-tooltip");
+  const { close } = await boardOpen("web-alt-click-key");
   fireEvent.contextMenu(inFeed("Third")());
   const item = await screen.findByRole("menuitem", { name: "Mark unread" });
-  act(() => {
-    item.focus();
-  });
-  const tooltip = await screen.findByRole("tooltip");
 
-  expect(tooltip.textContent).toBe("Mark unread (Alt-click)");
+  expect([item.getAttribute("aria-keyshortcuts"), item.textContent]).toStrictEqual([
+    "Alt+Enter",
+    "Mark unreadAlt+Enter",
+  ]);
 
   await close();
 });

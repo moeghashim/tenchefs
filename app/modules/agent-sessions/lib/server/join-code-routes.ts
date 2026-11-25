@@ -8,7 +8,7 @@ import {
 import { Effect, Function, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import type { HumanIdentity, Identity } from "../../../identities/index.ts";
-import { joinCodesPath, redeemJoinCodePath } from "../../index.ts";
+import { joinCodesPath, redeemJoinCodePath } from "../../join-codes.ts";
 import { AgentSessions } from "./service.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { Route } from "../../../http/server.ts";

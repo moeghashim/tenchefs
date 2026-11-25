@@ -1,9 +1,8 @@
+import { createElement, useCallback } from "react";
 import type { MenuChoice as Choice } from "./menu-parts.ts";
 import { MENU_ITEM } from "./menu-style.ts";
+import { MenuChoiceText } from "./menu-choice-text.tsx";
 import type { ReactNode } from "react";
-import { ShortcutTooltip } from "./shortcut-tooltip.tsx";
-import { menuIcon } from "./menu-icons.ts";
-import { useCallback } from "react";
 
 interface ItemShape {
   readonly asChild: true;
@@ -20,6 +19,16 @@ interface MenuChoiceParts {
   readonly onChoose: (action: () => void) => void;
 }
 
+const NO_KEYS = "";
+
+function keysOf(choice: Choice): string {
+  const keys = choice.keys ?? null;
+  if (keys === null) {
+    return NO_KEYS;
+  }
+  return keys.keys;
+}
+
 export function MenuChoice(parts: MenuChoiceParts): ReactNode {
   const { choice, onChoose } = parts;
   const RadixItem = parts.item;
@@ -31,28 +40,17 @@ export function MenuChoice(parts: MenuChoiceParts): ReactNode {
   if (choice.href !== null) {
     return (
       <RadixItem asChild>
-        <a className={MENU_ITEM} href={choice.href}>
-          {menuIcon(choice.icon)}
-          {choice.label}
+        <a aria-keyshortcuts={keysOf(choice)} className={MENU_ITEM} href={choice.href}>
+          {createElement(MenuChoiceText, { choice })}
         </a>
       </RadixItem>
     );
   }
-  const item = (
+  return (
     <RadixItem asChild disabled={choice.disabled ?? false} onSelect={handleSelect}>
-      <div className={MENU_ITEM}>
-        {menuIcon(choice.icon)}
-        {choice.label}
+      <div aria-keyshortcuts={keysOf(choice)} className={MENU_ITEM}>
+        {createElement(MenuChoiceText, { choice })}
       </div>
     </RadixItem>
-  );
-  const shortcut = choice.shortcut ?? null;
-  if (shortcut === null) {
-    return item;
-  }
-  return (
-    <ShortcutTooltip label={choice.label} shortcut={shortcut}>
-      {item}
-    </ShortcutTooltip>
   );
 }

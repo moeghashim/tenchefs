@@ -20,7 +20,7 @@ async function loadedNews(channel: string): Promise<NewsChannel> {
   const { poster, reader } = await subscribedReader(channel);
   await poster.createMessage({ channel, text: "Old post" });
   await poster.createMessage({ channel, text: "New post" });
-  const unread = createUnread({ client: reader });
+  const unread = createUnread({ boardStore: boardStoreFor({ client: reader }) });
   const statuses: string[] = [];
   unread.subscribe(() => {
     statuses.push(unread.snapshot().status);

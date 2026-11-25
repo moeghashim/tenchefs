@@ -1,10 +1,11 @@
 import type { CookoutClient, EventStream, Message } from "../../sdk/index.ts";
+import { agentShown, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { rowsOf, subscribedReader } from "./inbox-reader.ts";
+import { inboxOpened, rowsOf, subscribedReader } from "./inbox-reader.ts";
+import type { ClientMethod } from "./answering.ts";
+import type { OpenedInbox } from "./inbox-reader.ts";
 import { inPane } from "./regions.ts";
-import { newIdentity } from "./identities.ts";
-import { openWithClockStopped } from "./clock.ts";
 import { watched } from "./watched.ts";
 
 const NONE = 0;
@@ -27,6 +28,7 @@ interface Replies {
 type Thread = Started & Replies;
 
 interface Watching {
+  readonly answered: OpenedInbox["answered"];
   readonly close: () => Promise<void>;
 }
 
@@ -49,12 +51,13 @@ async function followedThread(channel: string, text: string, ...rest: readonly s
   return { ...started, ...(await repliesIn(started, text, ...rest)) };
 }
 
-async function watching(reader: CookoutClient, pageSize: number): Promise<Watching> {
+async function watching({ channel, reader }: Started, pageSize: number): Promise<Watching> {
   const { live, stream } = watched(reader);
-  const unmount = openWithClockStopped({ client: reader, hash: "#/inbox", live, pageSize });
+  const { answered, unmount } = await inboxOpened({ author: `${channel}-poster`, live, pageSize, reader });
   await screen.findByRole("list", { name: "Earlier" });
   const events: EventStream = await stream;
   return {
+    answered,
     close: async () => {
       unmount();
       await events.close();
@@ -72,8 +75,7 @@ async function watchingTwoThreads(channel: string): Promise<TwoThreads> {
   const { poster, reader } = thread;
   const { message: other } = await reader.createMessage({ channel, text: "Tea?" });
   await poster.createMessage({ channel, text: "Lunch?" });
-  const { close } = await watching(reader, FULL_PAGE);
-  return { close, other, thread };
+  return { ...(await watching(thread, FULL_PAGE)), other, thread };
 }
 
 async function readElsewhere(thread: Thread): Promise<readonly string[]> {
@@ -82,6 +84,17 @@ async function readElsewhere(thread: Thread): Promise<readonly string[]> {
     expect(screen.queryByRole("list", { name: "Activity" })).toBeNull();
   });
   return rowsOf("Earlier");
+}
+
+interface Pressing {
+  readonly answered: OpenedInbox["answered"];
+  readonly button: string;
+  readonly method: ClientMethod;
+}
+
+async function pressedAndAnswered({ answered, button, method }: Pressing): Promise<void> {
+  fireEvent.click(inPane().getByRole("button", { name: button }));
+  await answered(method);
 }
 
 async function postedTwice({ channel, poster }: Started): Promise<void> {
@@ -97,13 +110,13 @@ function followedRow(thread: Thread, row: string, opened: Message = thread.first
   const { channel } = thread;
   return threadRow(
     thread,
-    `New reply in a thread you follow${channel}-posterreplied in a thread in#${channel}${row}`,
+    `New reply in a thread you follow${agentShown(`${channel}-poster`)}replied in a thread in#${channel}${row}`,
     opened,
   );
 }
 
 function channelRow(channel: string, row: string): string {
-  return `#/inbox/${channel} New in #${channel}${channel}-posterposted in#${channel}${row}`;
+  return `#/inbox/${channel} New in #${channel}${agentShown(`${channel}-poster`)}posted in#${channel}${row}`;
 }
 
 it("unread replies in one thread share one row, and new posts in one channel share another", {
@@ -116,7 +129,7 @@ it("unread replies in one thread share one row, and new posts in one channel sha
   const other = await newIdentity({ kind: "human", name: `${channel}-other` });
   await other.client.createMessage({ channel, replyTo: thread.parent.id, text: "Three" });
   await postedTwice(thread);
-  const unmount = openWithClockStopped({ client: reader, hash: "#/inbox" });
+  const { unmount } = await inboxOpened({ author: `${channel}-poster`, reader });
   await screen.findByRole("heading", { level: 2, name: "Activity 2" });
 
   expect([rowsOf("Activity"), screen.queryByRole("list", { name: "For you" })]).toStrictEqual([
@@ -139,14 +152,14 @@ it("a thread with one reply that mentions the reader is one row under For you, l
   expect.hasAssertions();
 
   const thread = await followedThread("web-rows-mention", "@web-rows-mention-reader look", "Two", "Three");
-  const unmount = openWithClockStopped({ client: thread.reader, hash: "#/inbox" });
+  const { unmount } = await inboxOpened({ author: `${thread.channel}-poster`, reader: thread.reader });
   await screen.findByRole("heading", { level: 2, name: "For you 1" });
 
   expect([rowsOf("For you"), screen.queryByRole("list", { name: "Activity" })]).toStrictEqual([
     [
       threadRow(
         thread,
-        `Mentioned you${thread.channel}-posterreplied in a thread in#${thread.channel}3 newjust nowre: Deploy at noon?Three`,
+        `Mentioned you${agentShown(`${thread.channel}-poster`)}replied in a thread in#${thread.channel}3 newjust nowre: Deploy at noon?Three`,
       ),
     ],
     null,
@@ -170,7 +183,7 @@ it("a live reply joins its thread's row and moves it to the top, and a reply in 
   expect([rowsOf("Activity"), rowsOf("For you")]).toStrictEqual([
     [followedRow(thread, "2 newjust nowre: Deploy at noon?Two"), channelRow(channel, "just nowLunch?")],
     [
-      `#/inbox/${channel}/${String(other.id)}/messages/${String(yes.id)} Replied to you${channel}-posterreplied in a thread in#${channel}just nowre: Tea?Yes`,
+      `#/inbox/${channel}/${String(other.id)}/messages/${String(yes.id)} Replied to you${agentShown(`${channel}-poster`)}replied in a thread in#${channel}just nowre: Tea?Yes`,
     ],
   ]);
 
@@ -183,7 +196,7 @@ it("a row read in another session moves to Earlier live, and marking it unread t
   expect.hasAssertions();
 
   const thread = await followedThread("web-rows-elsewhere", "One", "Two");
-  const { close } = await watching(thread.reader, FULL_PAGE);
+  const { close } = await watching(thread, FULL_PAGE);
   await screen.findByRole("heading", { level: 2, name: "Activity 1" });
 
   const read = await readElsewhere(thread);
@@ -205,15 +218,18 @@ it("marking all as read empties For you and Activity, and their rows show in Ear
   const thread = await followedThread("web-rows-mark-all", "@web-rows-mark-all-reader look", "Two");
   const { channel, reader } = thread;
   await postedTwice(thread);
-  const unmount = openWithClockStopped({ client: reader, hash: "#/inbox" });
+  const { answered, unmount } = await inboxOpened({ author: `${channel}-poster`, reader });
   await screen.findByRole("heading", { level: 2, name: "For you 1" });
 
-  fireEvent.click(inPane().getByRole("button", { name: "Mark all as read" }));
+  await pressedAndAnswered({ answered, button: "Mark all as read", method: "ackAll" });
   await screen.findByText("You're all caught up.");
 
   expect(rowsOf("Earlier")).toStrictEqual([
     channelRow(channel, "just nowTea?"),
-    threadRow(thread, `Mentioned you${channel}-posterreplied in a thread in#${channel}just nowre: Deploy at noon?Two`),
+    threadRow(
+      thread,
+      `Mentioned you${agentShown(`${channel}-poster`)}replied in a thread in#${channel}just nowre: Deploy at noon?Two`,
+    ),
   ]);
 
   unmount();
@@ -226,11 +242,11 @@ it("earlier groups read messages by thread or channel, and a thread across two p
 
   const thread = await followedThread("web-rows-earlier", "One", "Two", "Three");
   await thread.reader.ack(thread.last.id);
-  const { close } = await watching(thread.reader, TWO_A_PAGE);
+  const { answered, close } = await watching(thread, TWO_A_PAGE);
   const before = rowsOf("Earlier");
   const [second = thread.first] = thread.after;
 
-  fireEvent.click(inPane().getByRole("button", { name: "Show earlier" }));
+  await pressedAndAnswered({ answered, button: "Show earlier", method: "inboxHistory" });
   await screen.findByText("That's everything.");
 
   expect([before, rowsOf("Earlier")]).toStrictEqual([

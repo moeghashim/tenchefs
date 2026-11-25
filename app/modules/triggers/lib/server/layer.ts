@@ -1,16 +1,11 @@
 import { Array as Arr, Context, Effect, Layer, Option, Predicate } from "effect";
 import type { Identity, IdentityName } from "../../../identities/index.ts";
-import type { Services, Watching } from "./mentions.ts";
+import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
 import { IdentityChanges } from "../../../identities/server.ts";
-import { Messages } from "../../../messages/server.ts";
-import { OfflineAlerts } from "../../../inbox/server.ts";
-import { PresenceRegistry } from "../../../presence/server.ts";
-import { SpawnSettings } from "../../../commands/server.ts";
-import { Storage } from "../../../storage/server.ts";
-import type { StorageUnavailable } from "../../../storage/server.ts";
-import { TriggerCaller } from "./caller.ts";
+import type { Services } from "./watching.ts";
 import type { TriggerReach } from "../../../presence/server.ts";
 import { watchMentions } from "./mentions.ts";
+import { watchingNow } from "./watching.ts";
 
 const IN_TURN = { concurrency: 1, discard: true } as const;
 
@@ -40,21 +35,6 @@ function activeAgents(identities: readonly Identity[]): readonly IdentityName[] 
 class MentionTriggers extends Context.Service<MentionTriggers, true>()(
   "@ai-hero/cookout/triggers/lib/server/layer/MentionTriggers",
 ) {}
-
-const servicesNow: Effect.Effect<Services, never, OfflineAlerts | TriggerCaller | PresenceRegistry | Storage> =
-  Effect.all(
-    { alerts: OfflineAlerts, caller: TriggerCaller, presence: PresenceRegistry, storage: Storage },
-    { concurrency: 1 },
-  );
-
-type WatchingNeeds = Messages | SpawnSettings | OfflineAlerts | TriggerCaller | PresenceRegistry | Storage;
-
-const watchingNow: Effect.Effect<Watching, never, WatchingNeeds> = Effect.gen(function* readWatching() {
-  const services = yield* servicesNow;
-  const messages = yield* Messages;
-  const { publicUrl } = yield* SpawnSettings;
-  return { posted: messages.posted, publicUrl, services };
-});
 
 const mentionTriggersLayer = Layer.effect(
   MentionTriggers,

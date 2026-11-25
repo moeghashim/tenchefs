@@ -1,6 +1,11 @@
 import { adminClient, newIdentity } from "./identities.ts";
 import { screen, within } from "@testing-library/react";
+import type { Answering } from "./answering.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
+import type { Live } from "../../testing/web.ts";
+import { answering } from "./answering.ts";
+import { openWithClockStopped } from "./clock.ts";
+import { testAgentDisplayName } from "../../testing/index.ts";
 
 interface InboxReader {
   readonly poster: CookoutClient;
@@ -32,4 +37,25 @@ function rowsOf(label: string): readonly string[] {
   return rows;
 }
 
-export { type InboxReader, rowsOf, subscribedReader };
+interface InboxOpening {
+  readonly author: string;
+  readonly hash?: string;
+  readonly live?: Live;
+  readonly pageSize?: number;
+  readonly reader: CookoutClient;
+}
+
+interface OpenedInbox {
+  readonly answered: Answering["answered"];
+  readonly unmount: () => void;
+}
+
+async function inboxOpened({ author, hash = "#/inbox", reader, ...opening }: InboxOpening): Promise<OpenedInbox> {
+  const { answered, client } = answering(reader);
+  const unmount = openWithClockStopped({ client, hash, ...opening });
+  await Promise.all([answered("inbox"), answered("inboxHistory"), answered("listIdentities")]);
+  await screen.findAllByText(testAgentDisplayName(author));
+  return { answered, unmount };
+}
+
+export { type InboxReader, type OpenedInbox, inboxOpened, rowsOf, subscribedReader };

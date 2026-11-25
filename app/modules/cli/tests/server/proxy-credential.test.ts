@@ -62,6 +62,55 @@ it.effect("with COOKOUT_AUTH=proxy, the CLI sends no token and whoami names the 
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
+it.effect("with COOKOUT_AUTH=proxy, an ignored COOKOUT_TOKEN or joined session gets one note on stderr only", () =>
+  Effect.gen(function* proxyIgnoredNote() {
+    const cookout = yield* TestCookout;
+    const bot = yield* cookout.createIdentity("release-bot");
+    const proxy = yield* forwardingProxy({ addsToken: bot.token, target: cookout.url });
+    const shared = claudeCode({
+      COOKOUT_STATE_DIR: yield* freshStateFolder,
+      COOKOUT_URL: UNKNOWN_HOST,
+      HTTP_PROXY: proxy.url,
+    });
+    const env = { ...shared, COOKOUT_AUTH: "proxy" };
+
+    const whoami = { args: ["whoami"], env };
+    const whoamiWithToken = { args: ["whoami"], env: { ...env, COOKOUT_TOKEN: "cookout_x" } };
+    const join = { args: ["join", "--as", "release-bot"], env: { ...shared, COOKOUT_TOKEN: bot.token } };
+
+    const [nothingSet, tokenSet, , joined, both] = yield* Effect.forEach(
+      [whoami, whoamiWithToken, join, whoami, whoamiWithToken],
+      runCookout,
+      ONE_AT_A_TIME,
+    );
+
+    expect([nothingSet, tokenSet, joined, both]).toMatchObject([
+      { exitCode: 0, stderr: "", stdoutJson: { source: "proxy" } },
+      {
+        exitCode: 0,
+        stderr:
+          "COOKOUT_TOKEN ignored: with COOKOUT_AUTH=proxy the proxy adds the credential; " +
+          "to stop this, unset COOKOUT_TOKEN",
+        stdoutJson: { source: "proxy" },
+      },
+      {
+        exitCode: 0,
+        stderr:
+          "the session joined as release-bot ignored: with COOKOUT_AUTH=proxy the proxy adds the credential; " +
+          "to stop this, run `cookout leave` without COOKOUT_AUTH",
+        stdoutJson: { source: "proxy" },
+      },
+      {
+        exitCode: 0,
+        stderr:
+          "COOKOUT_TOKEN and the session joined as release-bot ignored: with COOKOUT_AUTH=proxy the proxy adds " +
+          "the credential; to stop this, unset COOKOUT_TOKEN and run `cookout leave` without COOKOUT_AUTH",
+        stdoutJson: { source: "proxy" },
+      },
+    ]);
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
 it.effect("with COOKOUT_AUTH=proxy inside a harness, a person's token from the proxy is still agent_as_human", () =>
   Effect.gen(function* proxyHuman() {
     const cookout = yield* TestCookout;
@@ -104,4 +153,18 @@ it.effect("a COOKOUT_AUTH other than proxy is refused with usage, naming the var
     expect(result).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "usage" } } });
     expect(result.stderr).toContain("COOKOUT_AUTH");
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
+it.effect("with COOKOUT_AUTH=proxy and no board's URL anywhere, whoami is url_missing", () =>
+  Effect.gen(function* proxyNoBoard() {
+    const env = claudeCode({
+      COOKOUT_AUTH: "proxy",
+      COOKOUT_STATE_DIR: yield* freshStateFolder,
+      XDG_CONFIG_HOME: yield* freshStateFolder,
+    });
+
+    const result = yield* runCookout({ args: ["whoami"], env });
+
+    expect(result).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "url_missing" } } });
+  }).pipe(Effect.provide(commandLineServices)),
 );

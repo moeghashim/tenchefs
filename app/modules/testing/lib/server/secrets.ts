@@ -1,7 +1,7 @@
-import type { CallId, CommandSecret } from "../../../commands/index.ts";
+import type { CallId, WebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import { Effect, Layer, Option, Ref, String as Str } from "effect";
 import { Secrets, secretsLive } from "../../../secrets/server.ts";
-import { isCallId, isCommandSecret } from "../../../commands/index.ts";
+import { isCallId, isWebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import { token, tokenHash } from "../../../identities/index.ts";
 import type { SecretsService } from "../../../secrets/server.ts";
 import type { Token } from "../../../identities/index.ts";
@@ -16,8 +16,8 @@ function callId(value: string): CallId {
   return Option.getOrThrow(Option.liftPredicate(value, isCallId));
 }
 
-function commandSecret(value: string): CommandSecret {
-  return Option.getOrThrow(Option.liftPredicate(value, isCommandSecret));
+function webhookCommandSecret(value: string): WebhookCommandSecret {
+  return Option.getOrThrow(Option.liftPredicate(value, isWebhookCommandSecret));
 }
 
 function countingSecrets(live: SecretsService): Effect.Effect<SecretsService> {
@@ -33,11 +33,12 @@ function countingSecrets(live: SecretsService): Effect.Effect<SecretsService> {
       digest: live.digest,
       hashToken: (issued: Token) => Effect.succeed(tokenHash(`hash:${issued}`)),
       newAttachmentId: live.newAttachmentId,
+      newAvatarId: live.newAvatarId,
       newCallId: Effect.map(next("call_test_"), callId),
-      newCommandSecret: Effect.map(next("hmac_test_"), commandSecret),
-      newCommandToken: Effect.map(next("cookout_test_"), token),
       newToken: Effect.map(next("cookout_test_"), token),
       newUserCode: Effect.map(next(""), (count) => `TEST-${Str.padStart(USER_CODE_DIGITS, "0")(count)}`),
+      newWebhookCommandSecret: Effect.map(next("hmac_test_"), webhookCommandSecret),
+      newWebhookCommandToken: Effect.map(next("cookout_test_"), token),
       signature: live.signature,
     };
   });

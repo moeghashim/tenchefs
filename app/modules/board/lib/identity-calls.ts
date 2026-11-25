@@ -27,11 +27,16 @@ interface Created {
   readonly token: Token;
 }
 
+interface NewAgent {
+  readonly name: string;
+  readonly displayName: string;
+}
+
 interface IdentityCalls {
   readonly setAdmin: (name: IdentityName, admin: boolean) => Promise<void>;
   readonly setDisplayName: (name: IdentityName, text: string | null) => Promise<void>;
   readonly setDescription: (name: IdentityName, text: string | null) => Promise<void>;
-  readonly createAgent: (name: string) => Promise<Created>;
+  readonly createAgent: (agent: NewAgent) => Promise<Created>;
   readonly rotateToken: (name: IdentityName) => Promise<Token>;
   readonly revokeSession: (name: IdentityName) => Promise<void>;
   readonly deactivate: (name: IdentityName) => Promise<void>;
@@ -137,8 +142,8 @@ function createIdentityCalls(options: IdentityCallsOptions): IdentityCalls {
       const { messages } = await client.countMessagesBy(name);
       return messages;
     },
-    createAgent: async (name) => {
-      const { identity, token } = await client.createIdentity({ kind: "agent", name });
+    createAgent: async ({ displayName, name }) => {
+      const { identity, token } = await client.createIdentity({ displayName, kind: "agent", name });
       put(identity);
       return { name: identity.name, token };
     },

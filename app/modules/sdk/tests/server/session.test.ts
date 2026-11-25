@@ -11,6 +11,7 @@ type Call = Omit<HttpRequest, "baseUrl" | "headers">;
 
 const CREATED = 201;
 const OK = 200;
+const UNAUTHORIZED = 401;
 const NO_COOKIE = "";
 
 function cookieAttributes(response: HttpResponse): Arr.NonEmptyReadonlyArray<string> {
@@ -125,7 +126,29 @@ it.effect("a session cookie stops working when the human's token is rotated", ()
     yield* answer(() => cookout.client.rotateToken("ada"));
     const response = yield* withCookie(cookout.url, cookie)({ method: "GET", path: whoamiPath });
 
-    expect(response.json).toMatchObject({ error: { code: "token_revoked" } });
+    expect(response).toMatchObject({ json: { error: { code: "token_unknown" } }, status: UNAUTHORIZED });
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("a session cookie holds a credential of its own, not the human's identity token", () =>
+  Effect.gen(function* ownCredential() {
+    const cookout = yield* TestCookout;
+    const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    const cookie = yield* sessionCookie(cookout.url, ada.token);
+
+    expect(cookie).not.toBe(`${sessionCookieName}=${ada.token}`);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("a session cookie stops working when the human is deactivated", () =>
+  Effect.gen(function* deactivatedCookie() {
+    const cookout = yield* TestCookout;
+    const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    const cookie = yield* sessionCookie(cookout.url, ada.token);
+    yield* answer(() => cookout.client.deactivateIdentity("ada"));
+    const response = yield* withCookie(cookout.url, cookie)({ method: "GET", path: whoamiPath });
+
+    expect(response.status).toBe(UNAUTHORIZED);
   }).pipe(Effect.provide(testCookout())),
 );
 
@@ -149,6 +172,7 @@ it.effect("a human cookie session posts and acks", () =>
     expect(posted).toMatchObject({ json: { message: { author: { name: "ada" }, text: "yes" } }, status: CREATED });
     expect(acked.status).toBe(OK);
     expect(inbox.json).toStrictEqual({
+      agentJoinRequests: [],
       alerts: [],
       deactivatedQuietAgents: [],
       deactivationOffers: [],
@@ -169,5 +193,21 @@ it.effect("logging out clears the session cookie", () =>
     expect(response.json).toStrictEqual({ identity: ada.identity });
     expect(Arr.headNonEmpty(attributes)).toBe(`${sessionCookieName}=`);
     expect(attributes).toContain("Max-Age=0");
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("logging out ends the session on the server: the old cookie is refused, and other logins keep working", () =>
+  Effect.gen(function* logOutEnds() {
+    const cookout = yield* TestCookout;
+    const ada = yield* cookout.createIdentity("ada", { kind: "human" });
+    const cookie = yield* sessionCookie(cookout.url, ada.token);
+    const otherTab = yield* sessionCookie(cookout.url, ada.token);
+    yield* withCookie(cookout.url, cookie)({ method: "DELETE", path: sessionPath });
+    const refused = yield* withCookie(cookout.url, cookie)({ method: "GET", path: whoamiPath });
+    const other = yield* withCookie(cookout.url, otherTab)({ method: "GET", path: whoamiPath });
+    const byToken = yield* answer(ada.client.whoami);
+
+    expect(refused).toMatchObject({ json: { error: { code: "token_unknown" } }, status: UNAUTHORIZED });
+    expect([other.json, byToken]).toStrictEqual([{ identity: ada.identity }, { identity: ada.identity }]);
   }).pipe(Effect.provide(testCookout())),
 );

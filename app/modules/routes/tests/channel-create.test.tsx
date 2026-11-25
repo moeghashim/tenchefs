@@ -3,8 +3,8 @@ import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { inPane, inSidebar } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 
 interface NewChannel {
@@ -209,7 +209,7 @@ it("cancelling the new channel form closes it without creating anything", { time
 it("a server that can't be reached is refused beside the name field", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const unreachable = createCookoutClient({ env: {}, token: "cookout_any", url: "http://127.0.0.1:1" });
+  const unreachable = unreachableClient({ token: "cookout_any" });
   const close = openAt({ client: { ...adminClient(), createChannel: unreachable.createChannel }, hash: "#/" });
 
   await submitNew({ name: "web-create-unreachable" });

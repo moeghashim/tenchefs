@@ -10,7 +10,7 @@
  * panel open beside it. Any other hash opens the inbox, the homepage, as the
  * sidebar's "cookout" name does; a channel name that isn't a channel name, or
  * a thread ID that isn't a message ID, says there is nothing here.
- * With `live`, while the live stream's link to the server is down, a
+ * While the board store says the live stream's link to the server is down, a
  * "Reconnecting…" bar shows at the top of the workspace.
  * `#/approve/<user code>` is the approval page for a login request, a page of
  * its own outside the workspace (after the login view, if logged out), and
@@ -18,17 +18,24 @@
  * workspace route's hash can end in `?profile=<name>`, which opens that
  * identity's profile panel beside it (replacing a thread's panel); Escape or
  * its close link closes it. Clicking a name, a message's author or an
- * `@name`, goes there. The
+ * `@name`, goes there. `keymap` owns every keyboard shortcut: the app adds its one key listener to the page while
+ * drawn, and `?` (off a text box) or Ctrl/Cmd+/ opens the list of every shortcut on any page. After a move
+ * that asks for it (logging in, Alt+↑/↓, a Ctrl/Cmd+K jump, a new channel, a sidebar link on a narrow screen, an
+ * identity card's View profile), the app's `landing` focuses the new view's element once it is drawn: a profile's
+ * panel heading, a thread's reply box, a channel's message box, or else the view's level-1 heading; the login page
+ * focuses its Token field. The
  * `paths` module reads the hash and builds every link's.
- * The app makes the board's old per-channel and per-thread stores, which the views still read, from `boardStore`, as
- * thin adapters over its selectors and methods, for the last migration ticket to delete.
  */
+import { LandingContext, createLanding } from "../landing/index.ts";
+import { useMemo, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { RouteView } from "./lib/route-view.tsx";
+import { ShortcutListView } from "../views/index.tsx";
 import type { Stores } from "./lib/stores.ts";
+import { boardPageStores } from "./lib/board-page-stores.ts";
 import { locationOf } from "../paths/index.ts";
-import { useSyncExternalStore } from "react";
-import { withBoard } from "./lib/board-adapter.ts";
+import { useKeymapListener } from "./lib/use-keymap-listener.ts";
+import { useLanding } from "./lib/use-landing.ts";
 
 function subscribeToHash(listener: () => void): () => void {
   globalThis.addEventListener("hashchange", listener);
@@ -41,8 +48,8 @@ function currentHash(): string {
   return globalThis.location.hash;
 }
 
-/** What the web UI reads: the stores, each made with the SDK client it talks through. */
-export type CookoutAppProps = Omit<Stores, "board">;
+/** What the web UI reads: the stores, each made with the SDK client it talks through. The app makes the new-channel form's, the scheduling dialog's and the scheduled messages list's page-only stores from `boardStore`. */
+export type CookoutAppProps = Omit<Stores, "channelCreation" | "scheduleList" | "scheduling">;
 
 /**
  * The whole web UI: the view for the page's location hash, redrawn when it changes.
@@ -51,5 +58,15 @@ export type CookoutAppProps = Omit<Stores, "board">;
  */
 export function CookoutApp(props: CookoutAppProps): ReactNode {
   const hash = useSyncExternalStore(subscribeToHash, currentHash);
-  return <RouteView place={locationOf(hash)} stores={withBoard(props)} />;
+  useKeymapListener(props.keymap);
+  const page = useMemo(() => boardPageStores(props.boardStore), [props.boardStore]);
+  const stores = useMemo(() => ({ ...props, ...page }), [page, props]);
+  const landing = useMemo(() => createLanding(), []);
+  useLanding({ hash, landing, session: props.session });
+  return (
+    <LandingContext value={landing}>
+      <RouteView place={locationOf(hash)} stores={stores} />
+      <ShortcutListView keymap={props.keymap} />
+    </LandingContext>
+  );
 }

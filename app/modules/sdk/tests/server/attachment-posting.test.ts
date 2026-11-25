@@ -1,12 +1,9 @@
-import { Array as Arr, Effect, Option, Record as Rec, String as Str } from "effect";
-import type { CookoutEvent, EventStream, NewAttachment } from "../../index.ts";
-import { TestCookout, answer, newMessageFixture, refusal, testCookout } from "../../../testing/server.ts";
+import { Array as Arr, Effect, Record as Rec, String as Str } from "effect";
+import { TestCookout, answer, refusal, testCookout, watchingAllChannels } from "../../../testing/server.ts";
 import type { TestCookoutService, TestIdentity } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { Attachment } from "../../../attachments/index.ts";
 import type { HttpResponse } from "../../../http/client.ts";
-import type { Scope } from "effect";
-import { isAttachmentId } from "../../../attachments/index.ts";
+import type { NewAttachment } from "../../index.ts";
 import { request } from "../../../http/client.ts";
 
 const BAD_REQUEST = 400;
@@ -40,31 +37,14 @@ function file(name: string, size = FILL): NewAttachment {
 }
 
 const TEN: readonly NewAttachment[] = Arr.makeBy(LIMIT, (index) => file(`part-${String(index)}.bin`, index + ONE));
-const SHOT: Attachment = {
-  contentType: "application/octet-stream",
-  id: Option.getOrThrow(Option.liftPredicate("shot-id", isAttachmentId)),
-  image: false,
-  name: "shot.bin",
-  size: FILL,
-};
 const ELEVEN: readonly NewAttachment[] = Arr.makeBy(OVER_LIMIT, (index) => file(`f${String(index)}.bin`));
-
-function watching(who: TestIdentity): Effect.Effect<AsyncIterator<CookoutEvent>, never, Scope.Scope> {
-  return Effect.map(
-    Effect.acquireRelease(
-      answer(() => who.client.watch({ allChannels: true })),
-      (events: EventStream) => answer(() => events.close()),
-    ),
-    (events) => events[Symbol.asyncIterator](),
-  );
-}
 
 it.effect("ten attachments post in order, read back byte for byte, and arrive on the live feed", () =>
   Effect.scoped(
     Effect.gen(function* tenPosted() {
       const cookout = yield* TestCookout;
       const { ann, bob } = yield* board(cookout);
-      const events = yield* watching(bob);
+      const events = yield* watchingAllChannels(bob);
       const { message } = yield* answer(() =>
         ann.client.createMessage({ attachments: TEN, channel: "grill", text: "ten files" }),
       );
@@ -102,22 +82,26 @@ it.effect("a channel page, the thread, the inbox and search all list a message's
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("a message with attachments and no text is refused for now, yet one stored that way reads back", () =>
+it.effect("a message with attachments and no text posts and reads back, and a reply can carry one too", () =>
   Effect.gen(function* attachmentsOnly() {
     const cookout = yield* TestCookout;
     const { ann } = yield* board(cookout);
-    const refused = yield* refusal(() =>
+    const { message } = yield* answer(() =>
       ann.client.createMessage({ attachments: [file("shot.bin")], channel: "grill", text: "" }),
     );
-    const stored = yield* cookout.seedMessage({
-      ...newMessageFixture("grill", "", { author: { name: "ann" } }),
-      attachments: [SHOT],
-    });
+    const { message: reply } = yield* answer(() =>
+      ann.client.createMessage({ attachments: [file("log.txt")], channel: "grill", replyTo: message.id, text: "" }),
+    );
     const page = yield* answer(() => ann.client.listMessages("grill"));
-    const thread = yield* answer(() => ann.client.getThread(stored.id));
+    const thread = yield* answer(() => ann.client.getThread(message.id));
 
-    expect(refused).toMatchObject({ code: "message_empty", status: BAD_REQUEST });
-    expect([page.messages, thread.parent]).toMatchObject([[{ attachments: [SHOT], text: "" }], { text: "" }]);
+    expect(message).toMatchObject({ attachments: [{ name: "shot.bin", size: FILL }], text: "" });
+    expect(reply).toMatchObject({ attachments: [{ name: "log.txt" }], replyTo: message.id, text: "" });
+    expect([page.messages, thread.parent, thread.replies]).toMatchObject([
+      [{ attachments: [{ name: "shot.bin" }], text: "" }],
+      { text: "" },
+      [{ attachments: [{ name: "log.txt" }], text: "" }],
+    ]);
   }).pipe(Effect.provide(testCookout())),
 );
 

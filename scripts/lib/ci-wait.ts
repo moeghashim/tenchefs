@@ -25,6 +25,7 @@ function waitForCi({ args, base, log, rerunRed = false, subject, vouchedBy = "" 
     args,
     base,
     cwd: process.cwd(),
+    event: "push",
     gh: ["gh"],
     log,
     polls: RUN_WAITS,

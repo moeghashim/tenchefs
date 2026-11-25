@@ -97,7 +97,7 @@ it.effect("the handler answers any other path with 404", () =>
   }),
 );
 
-it.effect("a webhook signed with the command's secret is accepted and handed on", () =>
+it.effect("a webhook signed with the Webhook command's secret is accepted and handed on", () =>
   Effect.gen(function* signedCall() {
     const signature = yield* signatureOf(callBody, SECRET);
     const answer = yield* deliver(callBody, { "cookout-signature": signature });
@@ -140,7 +140,7 @@ it.effect("a webhook whose signature is not hex gets 401", () =>
   }),
 );
 
-it.effect("a signed webhook that is not a command call gets 400 and is not handed on", () =>
+it.effect("a signed webhook that is not a Webhook command call gets 400 and is not handed on", () =>
   Effect.gen(function* notACall() {
     const body = '{"command":"echo"}';
     const signature = yield* signatureOf(body, SECRET);

@@ -8,18 +8,18 @@
 import { AddressLimit, Caller } from "../identities/server.ts";
 import { Clock, Context, Effect, Layer, String as Str } from "effect";
 import type { Config, Scope } from "effect";
-import { commandCallsPerMinute, requestsPerMinute, streamsPerIdentity } from "../config/server.ts";
+import { requestsPerMinute, streamsPerIdentity, webhookCommandCallsPerMinute } from "../config/server.ts";
 import type { Bucket } from "./lib/server/bucket.ts";
 import { HttpServerRequest } from "effect/http";
 import type { Identity } from "../identities/index.ts";
 import type { Refusal } from "../http/index.ts";
-import { commandCallsPath } from "../commands/index.ts";
 import { take } from "./lib/server/bucket.ts";
+import { webhookCommandCallsPath } from "../webhook-commands/index.ts";
 
 const TOO_MANY_REQUESTS = 429;
 const NO_STREAMS = 0;
 const ONE_STREAM = 1;
-const COMMAND_CALL = new RegExp(`^${Str.replace(":name", "[^/?]+")(commandCallsPath)}(?:\\?|$)`, "u");
+const WEBHOOK_COMMAND_CALL = new RegExp(`^${Str.replace(":name", "[^/?]+")(webhookCommandCallsPath)}(?:\\?|$)`, "u");
 
 type Admit = (identity: Identity) => Effect.Effect<void, Refusal>;
 
@@ -80,8 +80,8 @@ function streamPlaces(most: number): (identity: Identity) => Effect.Effect<void,
   return (identity) => Effect.acquireRelease(acquire(identity.name), () => release(identity.name));
 }
 
-function isCommandCall({ method, url }: HttpServerRequest.HttpServerRequest): boolean {
-  return method === "POST" && COMMAND_CALL.test(url);
+function isWebhookCommandCall({ method, url }: HttpServerRequest.HttpServerRequest): boolean {
+  return method === "POST" && WEBHOOK_COMMAND_CALL.test(url);
 }
 
 /** The limits of the running server. */
@@ -89,7 +89,7 @@ export interface LimitsService {
   /** Takes one of the identity's requests for the minute; 429 `rate_limited` if it has none left. */
   readonly admitRequest: Admit;
   /** Takes one of the identity's command calls for the minute; 429 `rate_limited` if it has none left. */
-  readonly admitCommandCall: Admit;
+  readonly admitWebhookCommandCall: Admit;
   /** Holds one of the identity's open-stream places until the scope closes; 429 `too_many_streams` if none is free. */
   readonly holdStream: (identity: Identity) => Effect.Effect<void, Refusal, Scope.Scope>;
 }
@@ -101,11 +101,11 @@ export const limitsLayer: Layer.Layer<Limits, Config.ConfigError> = Layer.effect
   Limits,
   Effect.gen(function* limitsFromSettings() {
     const requests = yield* requestsPerMinute;
-    const calls = yield* commandCallsPerMinute;
+    const calls = yield* webhookCommandCallsPerMinute;
     const streams = yield* streamsPerIdentity;
     return {
-      admitCommandCall: bucketsOf(calls, "command calls"),
       admitRequest: bucketsOf(requests, "requests"),
+      admitWebhookCommandCall: bucketsOf(calls, "command calls"),
       holdStream: streamPlaces(streams),
     };
   }),
@@ -125,8 +125,8 @@ export function withinRequestLimit<Value, Failure, Needs>(
     const caller = yield* Caller;
     const request = yield* HttpServerRequest.HttpServerRequest;
     yield* limits.admitRequest(caller);
-    if (isCommandCall(request)) {
-      yield* limits.admitCommandCall(caller);
+    if (isWebhookCommandCall(request)) {
+      yield* limits.admitWebhookCommandCall(caller);
     }
     return yield* effect;
   });

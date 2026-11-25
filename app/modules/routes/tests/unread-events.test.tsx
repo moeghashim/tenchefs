@@ -2,40 +2,15 @@ import type { CookoutClient, InboxItem, Message, ReadPosition, ServerSentEvent }
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { waitFor, within } from "@testing-library/react";
-import type { Live } from "../../live/index.ts";
-import { createLive } from "../../live/index.ts";
 import { inSidebar } from "./regions.ts";
 import { openAt } from "./render.tsx";
-
-interface Scripted {
-  readonly live: Live;
-  readonly send: (...events: readonly ServerSentEvent[]) => void;
-}
+import { scriptedLive } from "../../testing/web.ts";
 
 interface Inbox {
   readonly first: Message;
   readonly second: Message;
   readonly reader: CookoutClient;
   readonly items: readonly InboxItem[];
-}
-
-function scripted(): Scripted {
-  const opened: ((event: ServerSentEvent) => void)[] = [];
-  const live = createLive({
-    open: (onEvent) => {
-      opened.push(onEvent);
-    },
-  });
-  return {
-    live,
-    send: (...events) => {
-      for (const onEvent of opened) {
-        for (const event of events) {
-          onEvent(event);
-        }
-      }
-    },
-  };
 }
 
 function itemSent(item: InboxItem): ServerSentEvent {
@@ -79,7 +54,7 @@ it("the channel list counts the inbox it loads, and an older read position or a 
 
   const channel = "web-unread-script";
   const { first, items, reader, second } = await inboxOf(channel);
-  const { live, send } = scripted();
+  const { live, send } = scriptedLive();
   const close = openAt({ client: reader, hash: "#/", live });
   await waitFor(() => {
     expect(countsOn(channel)).toStrictEqual(["3 unread"]);

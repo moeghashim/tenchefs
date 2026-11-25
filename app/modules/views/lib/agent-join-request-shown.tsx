@@ -1,9 +1,11 @@
 import type { AgentJoinApproval, AgentJoinApprovalState } from "../../board/index.ts";
-import { Alert, Button, CardBody, CheckField, InputField, Muted } from "../../design-system/index.tsx";
+import { Alert, Muted } from "../../design-system/content.tsx";
+import { CheckField, InputField } from "../../design-system/controls.tsx";
+import { AgentJoinRequestAnswers } from "./agent-join-request-answers.tsx";
+import { CardBody } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 
 const TEXT = {
-  approve: "Approve",
   code: "Code",
   idleExpiry: "Idle expiry",
   replace: "Replace its live session",
@@ -28,11 +30,10 @@ function liveNote({ agentJoinRequest }: ShownState): string | null {
   if (live === null) {
     return null;
   }
-  return `${agentJoinRequest.joins} has a live session until ${live}. Approving replaces it only if you tick this.`;
-}
-
-function approvedText({ agentJoinRequest }: ShownState): string {
-  return `Approved, with an idle expiry of ${agentJoinRequest.idleExpiry}. The box finishes joining now; you can close this page.`;
+  return (
+    `${agentJoinRequest.joins} is already joined in another session, until ${live}. ` +
+    `Tick ${TEXT.replace} to end that session and join this one, or Dismiss this request.`
+  );
 }
 
 function refusalText({ refusal }: ShownState): string | null {
@@ -49,7 +50,6 @@ export function AgentJoinRequestShown(props: AgentJoinRequestShownProps): ReactN
   const refused = refusalText(state);
   const handleIdleExpiry = approval.editIdleExpiry;
   const handleReplace = approval.editReplace;
-  const handleApprove = approval.approve;
   return (
     <CardBody>
       <p aria-label={TEXT.code} className="font-mono text-2xl font-semibold tracking-widest">
@@ -77,12 +77,7 @@ export function AgentJoinRequestShown(props: AgentJoinRequestShownProps): ReactN
         />
       )}
       {refused !== null && <Alert>{refused}</Alert>}
-      {state.status === "approved" && <Muted>{approvedText(state)}</Muted>}
-      {state.status !== "approved" && (
-        <Button disabled={state.status === "approving"} onClick={handleApprove}>
-          {TEXT.approve}
-        </Button>
-      )}
+      <AgentJoinRequestAnswers approval={approval} state={state} />
     </CardBody>
   );
 }

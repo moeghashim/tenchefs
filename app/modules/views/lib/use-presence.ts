@@ -1,11 +1,11 @@
 import type { IdentityName, LiveConnectionDetail, Presence } from "../../sdk/index.ts";
 import { isUnreachable, reachText, unreachableBrief } from "./trigger-presence.ts";
-import { useContext, useSyncExternalStore } from "react";
-import { PresenceList } from "./presence-list.ts";
 import type { Presences } from "../../board/index.ts";
 import { onTick } from "./use-time-ago.ts";
 import { presences } from "../../board/index.ts";
 import { timeAgo } from "../../format/index.ts";
+import { useBoardStore } from "./use-board.ts";
+import { useSyncExternalStore } from "react";
 
 const TEXT = {
   lastSeen: "last seen ",
@@ -128,7 +128,7 @@ function shownOf(presence: Presence, label: string): PresenceShown {
 }
 
 function usePresences(): Presences {
-  const store = useContext(PresenceList);
+  const store = useBoardStore();
   return useSyncExternalStore(store.subscribeShowing("presence"), () => presences(store.snapshot()));
 }
 

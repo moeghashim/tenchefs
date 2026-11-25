@@ -1,6 +1,7 @@
 import { Array as Arr, DateTime, Duration, Effect, Option, Order, Predicate } from "effect";
 import type { Storage, StorageUnavailable, StoredScheduledMessage } from "../../../storage/server.ts";
 import { isLate, latestDue, millisOf, runsAfter } from "./timing.ts";
+import type { Announcing } from "./announced.ts";
 import type { Cause } from "effect";
 import type { IsoTime } from "../../../time/index.ts";
 import type { Messages } from "../../../messages/server.ts";
@@ -11,6 +12,7 @@ interface Running {
   readonly storage: Storage["Service"];
   readonly messages: Messages["Service"];
   readonly woken: Effect.Effect<unknown>;
+  readonly announcing: Announcing;
 }
 
 const NO_WAIT = 0;
@@ -43,17 +45,37 @@ function postDue(
   return Effect.catchIf(Effect.asVoid(posting), isRefusal, () => Effect.void);
 }
 
+function announceRun(running: Running, schedule: StoredScheduledMessage): Effect.Effect<void, StorageUnavailable> {
+  return Effect.flatMap(running.storage.findScheduledMessage(schedule.id), (found) =>
+    Effect.forEach(
+      Option.toArray(Option.fromNullishOr(found)),
+      (still) => Effect.asVoid(running.announcing.shownAndAnnounced(still, false)),
+      { concurrency: 1, discard: true },
+    ),
+  );
+}
+
+interface Due {
+  readonly schedule: StoredScheduledMessage;
+  readonly due: IsoTime;
+  readonly now: IsoTime;
+}
+
+function runDue(running: Running, { due, now, schedule }: Due): Effect.Effect<void, StorageUnavailable> {
+  if (isLate({ due, now })) {
+    const run = { due, finished: schedule.cron === null, id: schedule.id, runsFrom: schedule.runsFrom };
+    return Effect.asVoid(running.storage.runScheduledMessage(run));
+  }
+  return postDue(running, schedule, due);
+}
+
 function handle(running: Running, now: IsoTime) {
   return (schedule: StoredScheduledMessage): Effect.Effect<void, StorageUnavailable> => {
     const due = latestDue({ now, timing: schedule });
     if (Option.isNone(due)) {
       return Effect.void;
     }
-    if (isLate({ due: due.value, now })) {
-      const run = { due: due.value, finished: schedule.cron === null, id: schedule.id, runsFrom: schedule.runsFrom };
-      return Effect.asVoid(running.storage.runScheduledMessage(run));
-    }
-    return postDue(running, schedule, due.value);
+    return Effect.andThen(runDue(running, { due: due.value, now, schedule }), announceRun(running, schedule));
   };
 }
 

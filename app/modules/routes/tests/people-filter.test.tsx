@@ -7,7 +7,13 @@ import { openAt } from "./render.tsx";
 const ONE_ROW = 1;
 
 function chipText(label: string): string {
-  return inPane().getByRole("button", { name: (name) => name.startsWith(`${label} `) }).textContent;
+  const shown = inPane()
+    .getByRole("radio", { name: (name) => name.startsWith(`${label} `) })
+    .closest("label");
+  if (shown === null) {
+    return "";
+  }
+  return shown.textContent;
 }
 
 async function filteredTo(text: string): Promise<readonly string[]> {
@@ -26,7 +32,7 @@ async function filteredTo(text: string): Promise<readonly string[]> {
   return [...texts, chipText("All"), chipText("Humans"), chipText("Agents")];
 }
 
-it("the name filter matches part of a display name in any case, or of owner/name, and the chips count it", {
+it("the name filter matches part of a display name in any case, or of owner/name, and the kind filter counts it", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();

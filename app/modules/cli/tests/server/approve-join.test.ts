@@ -8,6 +8,7 @@ import {
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
+import { createTestAgent } from "../../../testing/index.ts";
 
 const EXIT_FAILURE = 1;
 
@@ -16,12 +17,13 @@ const board = Effect.gen(function* seedBoard() {
   yield* cookout.createIdentity("ada", { kind: "human" });
   const chief = yield* cookout.createIdentity("chief", { owner: "ada" });
   const env = { COOKOUT_STATE_DIR: yield* freshStateFolder, COOKOUT_TOKEN: chief.token, COOKOUT_URL: cookout.url };
-  return { cookout, env };
+  return { chief, cookout, env };
 });
 
 it.effect("an agent approves another agent's join by its code, and the new agent collects its own session", () =>
   Effect.gen(function* approveByCode() {
-    const { cookout, env } = yield* board;
+    const { chief, cookout, env } = yield* board;
+    yield* answer(() => createTestAgent({ broughtIn: true, by: chief.client, displayName: "worker", name: "worker" }));
     const started = yield* answer(() =>
       cookout.clientFor().startAgentJoin({ as: "worker", host: "box", idleExpiry: "7d" }),
     );
@@ -33,7 +35,7 @@ it.effect("an agent approves another agent's join by its code, and the new agent
 
     expect(approved).toMatchObject({
       exitCode: 0,
-      stdoutJson: { agentJoinRequest: { approved: true, creates: true, idleExpiry: "1d", joins: "worker" } },
+      stdoutJson: { agentJoinRequest: { approved: true, creates: false, idleExpiry: "1d", joins: "worker" } },
     });
     expect(collected).toMatchObject({ agentSession: { identity: "worker" }, status: "approved" });
   }).pipe(Effect.provide([testCookout(), commandLineServices])),

@@ -1,4 +1,4 @@
-import type { ActionMenuParts, MenuChoice } from "../../design-system/index.tsx";
+import type { ActionMenuParts, MenuChoice } from "../../design-system/messages.tsx";
 import type { InboxItem, MessageId } from "../../sdk/index.ts";
 import type { InboxRow } from "../../unread/index.ts";
 import { hrefOf } from "../../paths/index.ts";

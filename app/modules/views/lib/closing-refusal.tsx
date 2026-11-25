@@ -1,15 +1,9 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
-import type { ThreadClosing } from "../../board/index.ts";
-import { useSyncExternalStore } from "react";
+import { useClosingRefusal } from "./use-board.ts";
 
-interface ClosingRefusalProps {
-  readonly closing: ThreadClosing;
-}
-
-export function ClosingRefusal(props: ClosingRefusalProps): ReactNode {
-  const { closing } = props;
-  const refusal = useSyncExternalStore(closing.subscribe, closing.refusal);
+export function ClosingRefusal(): ReactNode {
+  const refusal = useClosingRefusal();
   if (refusal === null) {
     return null;
   }

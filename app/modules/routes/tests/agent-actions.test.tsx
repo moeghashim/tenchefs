@@ -101,6 +101,15 @@ async function submitIn(label: string, text: string): Promise<void> {
   fireEvent.click(within(form).getByRole("button"));
 }
 
+async function createAgentIn(name: string, displayName: string): Promise<void> {
+  const form = await screen.findByRole("form", { name: "Create an agent" });
+  fireEvent.change(within(form).getByRole("textbox", { name: "New agent's name" }), { target: { value: name } });
+  fireEvent.change(within(form).getByRole("textbox", { name: /^Its display name/u }), {
+    target: { value: displayName },
+  });
+  fireEvent.click(within(form).getByRole("button", { name: "Create" }));
+}
+
 async function transferTo(name: string, owner: string): Promise<void> {
   await submitIn(`Transfer @${name}`, owner);
   await confirmWith(`Transfer to @${owner}`);
@@ -150,21 +159,21 @@ it("rotate shows the new token once, and the old one is refused", { timeout: 500
   close();
 });
 
-it("create makes an agent you own and shows its token once; a taken name is refused inline", {
+it("create makes an agent you own, with its display name, and shows its token once; a taken name is refused inline", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
 
   const { human } = await crewOf("web-mine-create");
   const close = await openSettings(human);
-  await submitIn("Create an agent", "web-mine-create-new");
+  await createAgentIn("web-mine-create-new", " New bot ");
   const token = await shownToken("web-mine-create-new");
   const { identity } = await clientWith(token).whoami();
-  await submitIn("Create an agent", "web-mine-create-bot");
+  await createAgentIn("web-mine-create-bot", "Taken bot");
   const alert = await alertSaying("Couldn't create the agent (identity_exists)");
 
   expect([identity, screen.getByRole("form", { name: "Create an agent" }).contains(alert)]).toStrictEqual([
-    expect.objectContaining({ kind: "agent", owner: "web-mine-create-human" }),
+    expect.objectContaining({ displayName: "New bot", kind: "agent", owner: "web-mine-create-human" }),
     true,
   ]);
 

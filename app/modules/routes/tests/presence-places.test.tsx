@@ -2,10 +2,11 @@ import { adminClient, clientWith, newIdentity } from "./identities.ts";
 import { agentNamed, offline, online, readerOn, suggestionDot } from "./presence.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { ServerSentEvent } from "../../sdk/index.ts";
-import { createLive } from "../../live/index.ts";
+import type { Live } from "../../testing/web.ts";
 import { inProfile } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { scriptedLive } from "../../testing/web.ts";
+import { testAgentDisplayName } from "../../testing/index.ts";
 
 it("the @-suggestions show each identity's dot", { timeout: 5000 }, async () => {
   expect.hasAssertions();
@@ -36,10 +37,10 @@ it("an @-suggestion for an identity with a display name reads the display name, 
   await readerOn({ hash: "#/channels/web-presence-suggest-named", reader: "web-presence-suggest-named-reader" });
 
   fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Hi @web-presence-suggest-gr" } });
-  const list = await screen.findByRole("list", { name: "Mention suggestions" });
+  const list = await screen.findByRole("listbox", { name: "Mention suggestions" });
 
   await expect(
-    within(list).findByRole("button", { name: "Grace Hopper, @web-presence-suggest-grace, Offline" }),
+    within(list).findByRole("option", { name: "Grace Hopper, @web-presence-suggest-grace, Offline" }),
   ).resolves.toBeDefined();
 });
 
@@ -78,7 +79,9 @@ it("when the server refuses presence, the People rows show no dot", { timeout: 5
     expect(asked).toStrictEqual(["presence"]);
   });
   const rows = await screen.findByRole("list", { name: "Identities" });
-  const row = await within(rows).findByRole("link", { name: /web-presence-refused-bot/u });
+  const row = await within(rows).findByRole("link", {
+    name: new RegExp(testAgentDisplayName("web-presence-refused-bot"), "u"),
+  });
 
   expect(within(row).queryByRole("img")).toBeNull();
 });
@@ -86,25 +89,18 @@ it("when the server refuses presence, the People rows show no dot", { timeout: 5
 type Sent = Readonly<Record<string, unknown>>;
 
 interface Sending {
-  readonly live: ReturnType<typeof createLive>;
+  readonly live: Live;
   readonly send: (presence: Sent) => void;
 }
 
 const TAB_BOT = "web-presence-tab-bot";
 
 function sending(): Sending {
-  const receivers: ((event: ServerSentEvent) => void)[] = [];
-  const live = createLive({
-    open: (onEvent) => {
-      receivers.push(onEvent);
-    },
-  });
+  const { live, send } = scriptedLive();
   return {
     live,
     send: (presence) => {
-      for (const receive of receivers) {
-        receive({ data: JSON.stringify({ presence, type: "presence" }), event: "presence" });
-      }
+      send({ data: JSON.stringify({ presence, type: "presence" }), event: "presence" });
     },
   };
 }

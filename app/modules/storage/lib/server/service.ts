@@ -2,11 +2,11 @@ import type { AgentJoinRequestsSection, JoinCodesSection } from "./agent-join-re
 import type { MessageSections, ScheduleMarking, ScheduledMessagesSection } from "./message-section-types.ts";
 import type { AgentSessionsSection } from "./agent-sessions.ts";
 import type { ChannelsSection } from "./channels.ts";
-import type { CommandCallsSection } from "./command-calls.ts";
-import type { CommandsSection } from "./commands.ts";
 import type { HealthSection } from "./health.ts";
 import type { IdentitySections } from "./identity-section-types.ts";
 import type { InboxSection } from "./inbox.ts";
+import type { WebhookCommandCallsSection } from "./command-calls.ts";
+import type { WebhookCommandsSection } from "./commands.ts";
 
 type BoardStorage = HealthSection &
   IdentitySections &
@@ -14,8 +14,8 @@ type BoardStorage = HealthSection &
   MessageSections &
   InboxSection &
   AgentSessionsSection &
-  CommandsSection &
-  CommandCallsSection &
+  WebhookCommandsSection &
+  WebhookCommandCallsSection &
   AgentJoinRequestsSection &
   JoinCodesSection;
 

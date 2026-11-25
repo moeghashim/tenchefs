@@ -148,7 +148,7 @@ module.exports = {
       from: { path: `^${R}/sdk/`, pathNot: `^${R}/sdk/tests/` },
       name: "sdk-imports-only-client-entry-points",
       severity: "error",
-      to: { path: `^${R}/(?!sdk/)[^/]+/`, pathNot: `^${R}/[^/]+/(index|client)\\.ts$` },
+      to: { path: `^${R}/(?!sdk/)[^/]+/`, pathNot: `^${R}/[^/]+/(?!server\\.ts$|web\\.ts$)[^/]+\\.ts$` },
     },
     {
       from: { path: WEB },

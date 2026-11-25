@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/handler-check.sh [command]: check the example handler at $COOKOUT_HANDLER_URL
-# (default https://cookout-handler-example.fly.dev) is healthy, call `command` (default `example`)
+# (default https://cookout-handler-example.fly.dev) is healthy, call the Webhook command `command` (default `example`)
 # on $COOKOUT_URL with $COOKOUT_TOKEN (an admin's) in a channel `e2e-handler-check-<time>-<pid>` it
-# creates for the call and deletes on exit, and pass only if the command's handler replies in the
+# creates for the call and deletes on exit, and pass only if the Webhook command's handler replies in the
 # call's thread within 30 s. The admin is a real person on the deployed cookout, so it unsubscribes
 # from the channel and unfollows the call's thread: the check reaches no one's Inbox.
 set -euo pipefail

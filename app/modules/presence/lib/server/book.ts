@@ -7,7 +7,7 @@ import type { TriggerResult } from "../../../triggers/index.ts";
 import { isLiveConnectionId } from "../../index.ts";
 
 type SentWith =
-  | { readonly kind: "web" }
+  | { readonly kind: "web"; readonly loginCredential: Option.Option<TokenHash> }
   | { readonly kind: "identity token" }
   | { readonly kind: "agent session"; readonly hash: TokenHash };
 

@@ -2,7 +2,9 @@ name: Release
 
 # Opens or updates the "Version Packages" pull request from the changesets on main. Merging that
 # pull request publishes @ai-hero/cookout to npm by trusted publishing (OIDC), with provenance and
-# no npm token (docs/adr/0050-the-cli-is-published-to-npm.md).
+# no npm token (docs/adr/0050-the-cli-is-published-to-npm.md). The e2e suite, pack smoke and the
+# published client run first, and release needs all three, so a release can't ship a broken package
+# or image. They moved here from Check (#605).
 on:
   push:
     branches: [main]
@@ -17,7 +19,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The image and the example handler in Docker, driven by packages/e2e, as Deploy runs it before
+  # deploying main.
+  e2e-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: e2e-docker
+      - run: pnpm exec playwright install --only-shell chromium
+      - run: pnpm e2e:docker
+      - name: Upload the per-file test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-timings-e2e-docker
+          path: .timings/*.txt
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  pack:
+    name: pack smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: pack
+      - run: pnpm run --silent pack:smoke
+
+  # The newest @ai-hero/cookout on npm drives a dev cookout from this commit, so removing a response
+  # field that the published client still requires fails here (docs/verification.md).
+  published-client:
+    name: published client
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: published-client
+      - run: pnpm run --silent published-client
+
   release:
+    needs: [e2e-docker, pack, published-client]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

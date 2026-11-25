@@ -18,6 +18,16 @@ function currentOf(active: boolean): "page" | false {
   return false;
 }
 
+const TAB_STOP = 0;
+const OUT_OF_TAB_ORDER = -1;
+
+function tabIndexOf(tabbable: boolean): number {
+  if (tabbable) {
+    return TAB_STOP;
+  }
+  return OUT_OF_TAB_ORDER;
+}
+
 interface IdentityRowLinkParts {
   readonly row: IdentityRowParts;
 }
@@ -30,6 +40,7 @@ export function IdentityRowLink(parts: IdentityRowLinkParts): ReactNode {
       aria-label={presenceNameOf({ name: row.displayName ?? row.name, presence: row.presence })}
       className={`flex flex-1 items-center gap-3 rounded-lg px-3 py-2.5 ${rowStyle(row.active)}`}
       href={row.href}
+      tabIndex={tabIndexOf(row.tabbable)}
     >
       <Avatar agent={row.agent} name={row.name} presence={row.presence} />
       <IdentityRowText row={row} />

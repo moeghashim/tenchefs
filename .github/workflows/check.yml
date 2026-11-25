@@ -1,9 +1,15 @@
 name: Check
 
+# Check runs once per commit, on v1 and the merge-ticket-* branches only (#605): a worker runs
+# `pnpm check` before opening a pull request, and the merge-ticket run is the gate. It doesn't run on
+# pull_request or on ticket-* pushes, which ran it twice per commit and queued the landing runs behind
+# them. A push to main doesn't run it: main is only fast-forwarded to a commit v1's push run already
+# checked. A Check run has 8 jobs, so 2 fit at once in GitHub's 20 concurrent jobs. The e2e suite, the
+# published client and pack smoke run in the Release workflow, before it publishes.
 on:
-  pull_request:
   push:
-    branches: [main, v1, rewrite-perfect-ts, "ticket-*", "merge-ticket-*"]
+    branches: [v1, "merge-ticket-*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,63 +21,124 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/v1' }}
 
 jobs:
-  check:
-    name: ${{ matrix.job }}
+  # The 8 static checks, one step each, one after another on one runner: the job stops at the first
+  # that fails, and its failed step names it. Each step runs the check's own `pnpm check --job=`.
+  static:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    strategy:
-      fail-fast: false
-      matrix:
-        # A runner has 2 cores, and most of a type-aware Oxlint run is starting Node and loading its
-        # plugins, so lint, canaries and fixers ran about 1.7 times slower when two of them shared one.
-        # Each gets its own job, as does any new type-aware check.
-        job: [lint, canaries, types, fixers, seams, knip, format, drift, browser]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           # lint needs the base ref's baseline; drift's hygiene needs origin/v1, each ADR's first commit
           # and the deploy/* tags, to compare the migrations list with production's.
-          fetch-depth: ${{ (matrix.job == 'lint' || matrix.job == 'drift') && '0' || '1' }}
-          fetch-tags: ${{ matrix.job == 'drift' }}
+          fetch-depth: 0
+          fetch-tags: true
       - uses: ./.github/actions/setup
         with:
-          cache-name: ${{ matrix.job }}
-      # No --with-deps: ubuntu-latest already has every library the headless shell needs, and
-      # --with-deps ran apt-get update and fetched 22 MB of fonts from the Ubuntu mirror, which
-      # sometimes crawled at ~100 kB/s and took 4.5 minutes (#265).
-      - name: Install headless Chromium
-        if: matrix.job == 'browser'
-        run: pnpm exec playwright install --only-shell chromium
-      - name: pnpm check --job=${{ matrix.job }}
+          cache-name: static
+      # lint's baseline ratchet and drift's lint-config guard both judge the push's range.
+      - name: Pick the lint baseline's base
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then BASE=HEAD^; fi
-          node scripts/check.ts --job=${{ matrix.job }} --base="$BASE" --ci
-      - name: Upload the per-file test timings
-        if: always() && matrix.job == 'browser'
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-timings-browser
-          path: .timings/*.txt
-          include-hidden-files: true
-          if-no-files-found: ignore
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then BEFORE=HEAD^; fi
+          echo "BASE=$BEFORE" >> "$GITHUB_ENV"
+      - name: pnpm check --job=lint
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=lint --base="$BASE" --ci
+      - name: pnpm check --job=canaries
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=canaries --ci
+      - name: pnpm check --job=types
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=types --ci
+      - name: pnpm check --job=fixers
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=fixers --ci
+      - name: pnpm check --job=seams
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=seams --ci
+      - name: pnpm check --job=knip
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=knip --ci
+      - name: pnpm check --job=format
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=format --ci
+      - name: pnpm check --job=drift
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=drift --base="$BASE" --ci
 
-  tests:
-    name: tests ${{ matrix.shard }}/2
+  # Every browser test in one job took 205s of a passing run and was cancelled at the 5-minute
+  # limit on loaded runners (#455), so Playwright's --shard splits them, test by test, across 3
+  # jobs: about 70s of tests each at 115 tests. Each shard uploads its JSON report, whose
+  # stats.expected sum is the run's browser test count.
+  browser:
+    name: browser ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: browser
+      # No --with-deps: ubuntu-latest already has every library the headless shell needs, and
+      # --with-deps ran apt-get update and fetched 22 MB of fonts from the Ubuntu mirror, which
+      # sometimes crawled at ~100 kB/s and took 4.5 minutes (#265).
+      - name: Install headless Chromium
+        run: pnpm exec playwright install --only-shell chromium
+      - name: pnpm check --job=browser --shard=${{ matrix.shard }}/3
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: node scripts/check.ts --job=browser --shard=${{ matrix.shard }}/3 --ci
+      - name: Upload the per-file test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-timings-browser-${{ matrix.shard }}
+          path: |
+            .timings/*.txt
+            .timings/browser.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+      # A local pnpm check fetches the newest of these on its base to pick the browser tests a branch reaches (#444).
+      - name: Upload the browser coverage map
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-coverage-map-${{ matrix.shard }}
+          path: .browser-coverage/map.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Two shards ran 4-5 minutes each and one was cancelled at the 5-minute limit after 284.7s of
+  # passing tests (#485), so Vitest's --shard splits the test files across 3 jobs. Each uploads its
+  # blob report, and the coverage job merges every vitest-blob-* into one run.
+  tests:
+    name: tests ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           cache-name: tests
-      - run: node scripts/check.ts --job=tests --shard=${{ matrix.shard }}/2 --ci
+      - run: node scripts/check.ts --job=tests --shard=${{ matrix.shard }}/3 --ci
       - uses: actions/upload-artifact@v4
         with:
           name: vitest-blob-${{ matrix.shard }}
@@ -86,51 +153,6 @@ jobs:
           path: .timings/*.txt
           include-hidden-files: true
           if-no-files-found: ignore
-
-  # The image and the example handler in Docker, driven by packages/e2e, as Deploy runs it before
-  # deploying main, so a ticket or v1 push that breaks it fails here instead of blocking a deploy.
-  e2e-docker:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          cache-name: e2e-docker
-      - run: pnpm exec playwright install --only-shell chromium
-      - run: pnpm e2e:docker
-      - name: Upload the per-file test timings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-timings-e2e-docker
-          path: .timings/*.txt
-          include-hidden-files: true
-          if-no-files-found: ignore
-
-  pack:
-    name: pack smoke
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          cache-name: pack
-      - run: pnpm run --silent pack:smoke
-
-  # The newest @ai-hero/cookout on npm drives a dev cookout from this commit, so removing a response
-  # field that the published client still requires fails here (docs/verification.md).
-  published-client:
-    name: published client
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-        with:
-          cache-name: published-client
-      - run: pnpm run --silent published-client
 
   coverage:
     runs-on: ubuntu-latest

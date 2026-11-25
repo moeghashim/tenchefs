@@ -4,6 +4,7 @@ interface Verdict {
 }
 
 const PASSED = "RESULT: PASS";
+const EXIT_CUT_OFF = 3;
 const EXIT_SUCCESS = 0;
 const NONE = 0;
 
@@ -25,6 +26,10 @@ function failedJobsOr({ jobs, step }: { readonly jobs: readonly string[]; readon
   return jobs.join(", ");
 }
 
+function cutOffLine(jobs: readonly string[]): string {
+  return `${jobs.join(", ")} cut off at its time limit`;
+}
+
 function verdictOnExit(firstStep: string): Verdict {
   const state = { step: firstStep, success: PASSED };
   process.once("exit", (code) => {
@@ -44,4 +49,4 @@ function verdictOnExit(firstStep: string): Verdict {
   };
 }
 
-export { failedJobsOr, mergedLine, verdictLine, verdictOnExit };
+export { EXIT_CUT_OFF, cutOffLine, failedJobsOr, mergedLine, verdictLine, verdictOnExit };

@@ -1,4 +1,4 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { MessageMenu } from "../../unread/index.ts";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

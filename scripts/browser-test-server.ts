@@ -38,8 +38,15 @@ async function startLine(lines: AsyncIterable<string>): Promise<DevCookout> {
   throw new Error("app/dev.ts start stopped before printing its start line");
 }
 
+function probeArguments(): string[] {
+  if (process.env["COOKOUT_BROWSER_PROBE"] === "1") {
+    return ["--probe"];
+  }
+  return [];
+}
+
 async function setup(): Promise<() => Promise<void>> {
-  const dev = spawn(process.execPath, ["app/dev.ts", "start"], {
+  const dev = spawn(process.execPath, ["app/dev.ts", "start", ...probeArguments()], {
     env: { ...process.env, COOKOUT_PRESENCE_GRACE_SECONDS: PRESENCE_GRACE_SECONDS },
     stdio: ["ignore", "pipe", "ignore"],
   });

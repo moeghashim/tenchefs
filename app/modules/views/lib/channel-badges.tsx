@@ -1,5 +1,5 @@
 import { NONE } from "./unread-counts.ts";
-import { Pill } from "../../design-system/index.tsx";
+import { Pill } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { UnreadCounts } from "../../unread/index.ts";
 

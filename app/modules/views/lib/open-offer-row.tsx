@@ -1,10 +1,11 @@
-import { ButtonRow, RowButton } from "../../design-system/index.tsx";
+import { ButtonRow } from "../../design-system/controls.tsx";
 import type { DeactivationOffer } from "../../sdk/index.ts";
 import type { DeactivationOffers } from "../../unread/index.ts";
 import type { Identities } from "../../composer/index.ts";
 import { IdentityConfirm } from "./identity-confirm.tsx";
 import { OfferRow } from "./offer-row.tsx";
 import type { ReactNode } from "react";
+import { RowButton } from "../../design-system/feed.tsx";
 import { useCallback } from "react";
 
 const TEXT = { deactivate: "Deactivate", keep: "Keep" } as const;

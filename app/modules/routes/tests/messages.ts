@@ -18,14 +18,28 @@ function articleText(article: () => HTMLElement): string {
   return copy.textContent;
 }
 
+function separatorsBefore(article: () => HTMLElement): readonly HTMLElement[] {
+  const item = article().parentElement;
+  if (item === null) {
+    return [];
+  }
+  const lines: HTMLElement[] = [];
+  for (const line of within(item).queryAllByRole("separator")) {
+    if (!article().contains(line)) {
+      lines.push(line);
+    }
+  }
+  return lines;
+}
+
 export async function streamOf(label: string): Promise<readonly string[]> {
-  const list = await screen.findByRole("list", { name: label });
+  const feed = await screen.findByRole("feed", { name: label });
   const shown: string[] = [];
-  for (const item of within(list).queryAllByRole("listitem")) {
-    for (const line of within(item).queryAllByRole("separator")) {
+  for (const article of within(feed).queryAllByRole("article")) {
+    for (const line of separatorsBefore(() => article)) {
       shown.push(`[${String(line.getAttribute("aria-label"))}]`);
     }
-    shown.push(articleText(() => within(item).getByRole("article")));
+    shown.push(articleText(() => article));
   }
   return shown;
 }

@@ -1,11 +1,12 @@
-import { Array as Arr, Console, Effect, Schema, String as Str, pipe } from "effect";
 import type {
+  AgentJoinRequestsEvent,
   DeactivatedQuietAgentEvent,
   DeactivationOfferEvent,
   InboxItemEvent,
   NudgeEvent,
   Reaction,
 } from "../../../sdk/index.ts";
+import { Array as Arr, Console, Effect, Schema, String as Str, pipe } from "effect";
 import { reactionSymbols } from "../../../messages/index.ts";
 
 type Format = "json" | "text";
@@ -29,6 +30,17 @@ function deactivatedLine({ deactivatedQuietAgent: { id, identity, text } }: Deac
   return `${text} Run cookout identity reactivate ${identity.name} to undo it. (deactivated agent ${String(id)})`;
 }
 
+function joinRequestsLine({ agentJoinRequests }: AgentJoinRequestsEvent): string {
+  return Arr.join(
+    Arr.map(
+      agentJoinRequests,
+      ({ text, userCode }) =>
+        `${text} Run cookout approve-join ${userCode} to approve it, or cookout deny-join ${userCode} to dismiss it.`,
+    ),
+    "\n",
+  );
+}
+
 function itemLine({ item: { channel, message, newReactions = [], parent } }: InboxItemEvent): string {
   const shown = pipe(message.text, Str.replaceAll(/\s+/gu, " "), Str.takeLeft(SHOWN_CHARACTERS));
   const where = `#${channel.name} thread:${String(parent.id)}`;
@@ -39,7 +51,12 @@ function itemLine({ item: { channel, message, newReactions = [], parent } }: Inb
   return `${where} @${message.author.name}: ${shown} ${at}`;
 }
 
-function textLine(event: InboxItemEvent | NudgeEvent | DeactivationOfferEvent | DeactivatedQuietAgentEvent): string {
+function textLine(
+  event: InboxItemEvent | NudgeEvent | DeactivationOfferEvent | DeactivatedQuietAgentEvent | AgentJoinRequestsEvent,
+): string {
+  if (event.type === "agent-join-requests") {
+    return joinRequestsLine(event);
+  }
   if (event.type === "nudge") {
     return nudgeLine(event);
   }

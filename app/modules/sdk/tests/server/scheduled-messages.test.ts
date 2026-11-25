@@ -89,13 +89,23 @@ function watching(who: TestIdentity): Effect.Effect<AsyncIterator<CookoutEvent>,
   );
 }
 
+function nextInboxItem(events: AsyncIterator<CookoutEvent>): Effect.Effect<IteratorResult<CookoutEvent>> {
+  return Effect.repeat(
+    answer(() => events.next()),
+    {
+      until: (heard: Readonly<IteratorResult<CookoutEvent>>) =>
+        heard.done === true || heard.value.type === "inbox-item",
+    },
+  );
+}
+
 it.effect("a scheduled post's mention reaches the Inbox with the mention reason and arrives on the live stream", () =>
   Effect.gen(function* scheduledMention() {
     const { ada, bob } = yield* board;
     const events = yield* watching(bob);
     yield* schedule(ada, DAILY_NINE);
     yield* quietFor("9 hours");
-    const event = yield* answer(() => events.next());
+    const event = yield* nextInboxItem(events);
     const { items } = yield* answer(() => bob.client.inbox());
 
     expect(items).toMatchObject([{ message: { scheduledMessage: { deleted: false } }, reasons: ["mention"] }]);

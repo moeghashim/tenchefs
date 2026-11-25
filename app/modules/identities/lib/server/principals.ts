@@ -1,6 +1,6 @@
-import type { CommandTokenGrant, Storage, StorageUnavailable } from "../../../storage/server.ts";
 import { DateTime, Effect, Function, Option, Predicate } from "effect";
 import type { Identity, TokenHash } from "../../index.ts";
+import type { Storage, StorageUnavailable, WebhookCommandTokenGrant } from "../../../storage/server.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import type { Refusal } from "../../../http/index.ts";
 
@@ -18,17 +18,23 @@ const tokenExpired: Refusal = {
 
 interface Principal {
   readonly identity: Identity;
-  readonly commandThread: Option.Option<MessageId>;
+  readonly webhookCommandThread: Option.Option<MessageId>;
   readonly agentSession: Option.Option<TokenHash>;
+  readonly loginCredential: Option.Option<TokenHash>;
 }
 
-function grantPrincipal(grant: CommandTokenGrant): Effect.Effect<Principal, Refusal> {
-  return Effect.gen(function* checkCommandToken() {
+function grantPrincipal(grant: WebhookCommandTokenGrant): Effect.Effect<Principal, Refusal> {
+  return Effect.gen(function* checkWebhookCommandToken() {
     const now = yield* DateTime.now;
     if (DateTime.isGreaterThanOrEqualTo(now, DateTime.makeUnsafe(grant.expiresAt))) {
       return yield* Effect.fail(tokenExpired);
     }
-    return { agentSession: Option.none(), commandThread: Option.some(grant.threadId), identity: grant.handler };
+    return {
+      agentSession: Option.none(),
+      identity: grant.handler,
+      loginCredential: Option.none(),
+      webhookCommandThread: Option.some(grant.threadId),
+    };
   });
 }
 
@@ -37,16 +43,21 @@ interface LoginLookup {
   readonly storage: Storage["Service"];
 }
 
-function commandTokenPrincipal({ hash, storage }: LoginLookup) {
-  return (grant: CommandTokenGrant | undefined): Effect.Effect<Principal, Refusal | StorageUnavailable> => {
+function webhookCommandTokenPrincipal({ hash, storage }: LoginLookup) {
+  return (grant: WebhookCommandTokenGrant | undefined): Effect.Effect<Principal, Refusal | StorageUnavailable> => {
     if (Predicate.isUndefined(grant)) {
       return storage.findLoginCredential(hash).pipe(
         Effect.filterOrFail(Predicate.isNotUndefined, Function.constant(tokenUnknown)),
-        Effect.map((identity) => ({ agentSession: Option.none(), commandThread: Option.none(), identity })),
+        Effect.map((identity) => ({
+          agentSession: Option.none(),
+          identity,
+          loginCredential: Option.some(hash),
+          webhookCommandThread: Option.none(),
+        })),
       );
     }
     return grantPrincipal(grant);
   };
 }
 
-export { type Principal, commandTokenPrincipal };
+export { type Principal, webhookCommandTokenPrincipal };

@@ -8,15 +8,20 @@ const CENTRE: ScrollIntoViewOptions = { block: "center" };
 interface ArticleParts {
   readonly menu: MessageMenuParts;
   readonly linked: boolean;
+  readonly focus: boolean;
 }
 
-export function useScrollWhenLinked({ linked, menu }: ArticleParts): RefObject<HTMLElement | null> {
+export function useScrollWhenLinked({ focus, linked, menu }: ArticleParts): RefObject<HTMLElement | null> {
   const element = useMessageArticle(menu);
   useEffect(() => {
     const shown = element.current;
-    if (linked && shown !== null) {
-      shown.scrollIntoView(CENTRE);
+    if (!linked || shown === null) {
+      return;
     }
-  }, [element, linked]);
+    shown.scrollIntoView(CENTRE);
+    if (focus) {
+      shown.focus();
+    }
+  }, [element, focus, linked]);
   return element;
 }

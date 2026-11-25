@@ -6,6 +6,7 @@ import type { LiveAdapter } from "../../live/index.ts";
 import { createBoardStore } from "../index.ts";
 import { createCookoutClient } from "../../sdk/index.ts";
 import { createLive } from "../../live/index.ts";
+import { createTestAgent } from "../../testing/index.ts";
 import { handLive } from "../../testing/web.ts";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
@@ -130,7 +131,7 @@ it("logging in with an agent's token is refused with human_only, and a human's t
 }, async () => {
   expect.hasAssertions();
 
-  const { token } = await adminClient().createIdentity({ kind: "agent", name: "store-session-agent", owner: "admin" });
+  const { token } = await createTestAgent({ by: adminClient(), name: "store-session-agent", owner: "admin" });
   const ada = await human("store-session-login-ada");
   const { store } = opened(createCookoutClient({ env: {}, url: webTestCookout().url }));
   store.session.logIn(token);
@@ -212,4 +213,36 @@ it("showing only the session does not open the live stream, so a page not yet lo
   });
 
   expect(open).not.toHaveBeenCalled();
+});
+
+it("logging out asks the server to end the session, and then the session is logged out with no refusal", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const ada = await human("store-session-logout-ada");
+  const logout = vi.fn<CookoutClient["logout"]>(ada.client.logout);
+  const { store } = opened({ ...ada.client, logout });
+  await loggedInAs(store, ada.identity.name);
+  store.session.logOut();
+
+  await vi.waitFor(() => {
+    expect(store.session.snapshot()).toStrictEqual({ refusal: null, status: "logged-out" });
+  });
+
+  expect(logout.mock.calls).toStrictEqual([[]]);
+});
+
+it("a log out the server can't answer checks again, keeping whoever is still logged in", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const ada = await human("store-session-logout-down-ada");
+  const unreachable = createCookoutClient({ env: {}, token: ada.token, url: UNREACHABLE_URL });
+  const { store } = opened({ ...ada.client, logout: unreachable.logout });
+  await loggedInAs(store, ada.identity.name);
+  store.session.logOut();
+
+  await expect(loggedInAs(store, ada.identity.name)).resolves.toBeUndefined();
 });

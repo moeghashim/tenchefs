@@ -1,10 +1,14 @@
 /**
- * The `unread` store: the unread inbox items of whoever is looking, oldest
- * first. An external store, read by components with `useSyncExternalStore`.
- * The items come from the same query as the API's: when its first reader
- * subscribes it loads the inbox (`GET /v1/inbox`), a message there for
- * several reasons held once. With `live`, it follows the live stream from then
- * on: each new inbox item (`inbox-item`) joins them, and each new read
+ * The `unread` store: a thin adapter over the board store's Inbox (`createBoardStore`, ticket #308), for the views
+ * that read the Inbox through it. The board store holds the state: one Inbox read (`GET /v1/inbox`), the read
+ * positions (`GET /v1/read-positions`) and one first page of the Inbox history (`GET /v1/inbox/history`) per load or
+ * catch-up, shared by every part below, with the live events applied in one place. This module keeps the shape the
+ * views read and the page state that stays here: the "New" lines, the selection and the reading rule. The levels and
+ * rows below (`rowsOf`, `rowKey`) are the board store's,
+ * re-exported for the views (the sidebar, the Inbox rows and the channel feed read the board's selectors), and a "New" line takes its place from the board's `inboxNewLine`.
+ * The unread inbox items of whoever is looking, oldest first. An external store, read by components with
+ * `useSyncExternalStore`, loaded when its first reader subscribes, a message there for several reasons held once.
+ * Each new inbox item (`inbox-item`) joins them, and each new read
  * position (`read-position`, from this tab's ack on view or any other
  * session's) drops the items it covers, so opening a channel or a thread takes
  * its messages out. When the stream's link comes back after being down, it reads the inbox and the read positions
@@ -14,7 +18,7 @@
  * can't be reached is `unreachable`. The items have two levels, as Slack
  * shows them (Matt, #152, 2026-11-23): for you (a mention, or a reply in a
  * thread you started) and activity (the rest). A row says why it is there,
- * `countsByChannel` counts both levels by channel, and `newsByThread` counts a
+ * the board's `inboxCountsByChannel` counts both levels by channel, and `newsByThread` counts a
  * thread's unread replies and how many of them are for you. `threadsWithNews` lists, oldest first, the top-level
  * messages of a channel's threads with an item there for some reason besides a subscribed channel (a mention, a
  * reply in a thread you follow, a reaction): what keeps a closed thread out of the channel's fold (#349). `rowsOf` groups
@@ -23,20 +27,16 @@
  * each with its latest item, count, level and strongest reason, newest first; `rowKey` is the key of a
  * thread's row or a channel's.
  * Being derived from the items, the rows move with every live path above.
- * `earlier` is the read part of the inbox, for the inbox view's Earlier list:
- * when its first reader subscribes it loads the inbox history
- * (`GET /v1/inbox/history`) a page of `pageSize` items at a time (50 unless
- * given), keeping the read ones newest first and reading on until a page
- * holds one, and `loadMore` reads the next page, for the "Show earlier" button; its state says the page size.
- * An item a read position
- * takes out of the counts joins it, so opening an item moves it there.
- * It loads the caller's read positions (`GET /v1/read-positions`) with the
- * inbox and follows them by `read-position`. `newLine` is where a channel's or
+ * `earlier` is the read part of the inbox, for the inbox view's Earlier list: from the history's first page, read
+ * ones newest first, reading on until a page holds one, and `loadMore` reads the next page of `pageSize` items (the
+ * board store's, 50 unless given), for the "Show earlier" button; its state says the page size.
+ * An item a read position takes out of the counts joins it, so opening an item moves it there.
+ * `newLine` is where a channel's or
  * thread's "New" line goes: its read position when the view opened, so the
  * line sits above the first message after it, kept while the view is open.
  * A closed thread's items stay in `items`, listed and counted like any other;
  * `thread` events keep each item's `parent` current, so its `closedAt` follows
- * a close or reopen live.
+ * a close or reopen live. `channel-deleted` takes the channel's items, Earlier rows and Nudges out.
  * `markChannelRead` acks one channel's items, the newest in its top-level messages and in each of its threads
  * (`POST /v1/ack`), and drops the items the read positions it moved cover, as `markAllRead` does; `markChannel` holds
  * why the last one failed, with its channel, until the next one starts.
@@ -90,18 +90,22 @@
  * made with: `browserReadingTools()` are `browserClock` and the document's focus,
  * and tests bring a clock they move on by hand.
  */
-import type { ChannelName, CookoutClient, MessageId } from "../sdk/index.ts";
-import type { DeactivatedQuietAgents, DeactivationOffers, MarkChannel, UnreadState } from "./lib/parts.ts";
+import type {
+  AgentJoinRequests,
+  Alerts,
+  DeactivatedQuietAgents,
+  DeactivationOffers,
+  Earlier,
+  InboxBoard,
+  MarkChannel,
+  MessageMenu,
+  Nudges,
+  UnreadState,
+} from "./lib/inbox-stores.ts";
+import type { ChannelName, MessageId } from "../sdk/index.ts";
 import type { NewLine, WithNewLines } from "./lib/new-lines.ts";
-import { follow, loadedOf, loadedOrFailed, partsOf } from "./lib/parts.ts";
-import type { Alerts } from "./lib/alerts.ts";
-import type { Earlier } from "./lib/earlier.ts";
-import type { Live } from "../live/index.ts";
-import type { MessageMenu } from "./lib/message-menu.ts";
-import type { Nudges } from "./lib/nudges.ts";
-import { createMarkAll } from "./lib/mark-all.ts";
-import { createMarkUnread } from "./lib/mark-unread.ts";
-import { createMessageMenu } from "./lib/message-menu.ts";
+import { inboxMovesBack, inboxNewLine } from "../board/index.ts";
+import { inboxStoresOf } from "./lib/inbox-stores.ts";
 import { withNewLines } from "./lib/new-lines.ts";
 
 /** The unread store. `subscribe` and `snapshot` are the two halves `useSyncExternalStore` takes. */
@@ -149,80 +153,44 @@ export interface Unread {
   readonly deactivationOffers: DeactivationOffers;
   /** Every Inbox entry of the caller's about a deactivated quiet agent, read or not, newest first, and marking one read. */
   readonly deactivatedQuietAgents: DeactivatedQuietAgents;
+  /**
+   * Approve, Replace (approve with `force`) and Dismiss on a pending Agent join request, and why the last of each was
+   * refused: a store of its own.
+   */
+  readonly agentJoinRequests: AgentJoinRequests;
 }
 
-/**
- * What the unread store is made with: an SDK client with the token of whoever is looking, how many inbox history items
- * a page (50 unless given), and the live stream.
- */
+/** What the unread store is made with: the board store, whose client, page size and live stream it reads by. */
 export interface UnreadOptions {
-  readonly client: Pick<
-    CookoutClient,
-    | "ack"
-    | "ackAll"
-    | "closeThread"
-    | "inbox"
-    | "inboxHistory"
-    | "keepDeactivationOffer"
-    | "markDeactivatedQuietAgentRead"
-    | "markNudgeRead"
-    | "markOfflineAlertRead"
-    | "markUnread"
-    | "readPositions"
-  >;
-  readonly pageSize?: number;
-  readonly live?: Live;
+  readonly boardStore: InboxBoard;
 }
 
 /**
- * Makes an unread store that reads the inbox through `options.client` and follows `options.live`.
- * @param options The client and the live stream.
+ * Makes an unread store over the board store's Inbox.
+ * @param options The board store.
  * @returns The store.
  */
 export function createUnread(options: UnreadOptions): Unread {
-  const parts = partsOf(options);
-  const { alerts, deactivatedQuietAgents, deactivationOffers, earlier, items, nudges, shown } = parts;
-  let loading: Promise<void> | null = null;
-  const markAll = createMarkAll({
-    ...options,
-    ...parts,
-    onChange: (state) => {
-      shown.publish(loadedOf({ ...parts, markAll: state }));
-    },
-    onRead: earlier.add,
-  });
-
-  function republish(): void {
-    if (shown.current().status === "loaded") {
-      shown.publish(loadedOf({ ...parts, markAll: markAll.state() }));
-    }
-  }
-  const markUnread = createMarkUnread({ client: options.client, dropRead: earlier.drop, items, onChange: republish });
-
-  async function load(): Promise<void> {
-    follow({ ...parts, client: options.client, live: options.live ?? null, markUnread, republish });
-    shown.publish(await loadedOrFailed({ ...parts, client: options.client, markAll: markAll.state }));
-  }
-  const menu = createMessageMenu(markUnread.markUnread);
-
+  const { boardStore } = options;
+  const stores = inboxStoresOf(boardStore);
+  const calls = boardStore.inboxCalls;
   return withNewLines<Omit<Unread, "newLine" | "selection">>({
-    alerts,
-    deactivatedQuietAgents,
-    deactivationOffers,
-    earlier,
-    markAllRead: markAll.markAllRead,
-    markChannel: markAll.markChannel,
-    markChannelRead: markAll.markChannel.markChannelRead,
-    markUnread: menu.markUnread,
-    menu,
-    movesBack: items.movesBack,
-    nudges,
-    readPosition: items.readPosition,
-    snapshot: shown.current,
-    subscribe: (listener) => {
-      loading ??= load();
-      return shown.subscribe(listener);
-    },
+    agentJoinRequests: stores.agentJoinRequests,
+    alerts: stores.alerts,
+    deactivatedQuietAgents: stores.deactivatedQuietAgents,
+    deactivationOffers: stores.deactivationOffers,
+    earlier: stores.earlier,
+    heard: boardStore.subscribeShowing("inbox"),
+    lineAt: (channel, thread) => inboxNewLine({ channel, state: boardStore.snapshot(), thread }),
+    markAllRead: calls.markAllRead,
+    markChannel: stores.markChannel,
+    markChannelRead: calls.markChannelRead,
+    markUnread: calls.markUnread,
+    menu: stores.menu,
+    movesBack: (channel, thread) => inboxMovesBack({ channel, state: boardStore.snapshot(), thread }),
+    nudges: stores.nudges,
+    snapshot: stores.inbox.snapshot,
+    subscribe: stores.inbox.subscribe,
   });
 }
 
@@ -230,19 +198,32 @@ export function createUnread(options: UnreadOptions): Unread {
  * The unread inbox items, oldest first, once they have loaded: what the Inbox and the sidebar show and count,
  * closed threads' items included. Beside them are the unread offline alerts and the unread Nudges, newest first.
  */
-export type { UnreadState } from "./lib/parts.ts";
-export type { Earlier, EarlierState } from "./lib/earlier.ts";
-export type { MarkAllState } from "./lib/mark-all.ts";
-export type { Alerts, AlertsState } from "./lib/alerts.ts";
-export type { Nudges, NudgesState } from "./lib/nudges.ts";
-export type { DeactivationOffers, DeactivationOffersState } from "./lib/deactivation-offers.ts";
-export type { DeactivatedQuietAgents, DeactivatedQuietAgentsState } from "./lib/deactivated-quiet-agents.ts";
-export type { MessageMenu } from "./lib/message-menu.ts";
+export type {
+  AgentJoinRequests,
+  Alerts,
+  AlertsState,
+  DeactivatedQuietAgents,
+  DeactivatedQuietAgentsState,
+  DeactivationOffers,
+  DeactivationOffersState,
+  Earlier,
+  EarlierState,
+  MarkAllState,
+  MessageMenu,
+  Nudges,
+  NudgesState,
+  UnreadState,
+} from "./lib/inbox-stores.ts";
 export type { Selection } from "./lib/selection.ts";
-export type { InboxRow } from "./lib/rows.ts";
-export { rowKey, rowsOf } from "./lib/rows.ts";
-export type { ThreadNews, UnreadCounts, UnreadWhy } from "./lib/levels.ts";
-export { NO_COUNTS, countsByChannel, countsOf, newsByThread, threadsWithNews } from "./lib/levels.ts";
+export {
+  type InboxRow,
+  NO_COUNTS,
+  type ThreadNews,
+  type UnreadCounts,
+  type UnreadWhy,
+  rowKey,
+  rowsOf,
+} from "../board/index.ts";
 export { type Reading, createReading } from "./lib/reading.ts";
 export { browserReadingTools } from "./lib/browser-reading.ts";
 export type { Newest, Reader, ReaderSources } from "./lib/reader.ts";

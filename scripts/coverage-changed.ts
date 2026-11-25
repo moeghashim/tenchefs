@@ -7,6 +7,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { uncoveredLines } from "./lib/coverage-changed.ts";
+import { verdictOnExit } from "./lib/verdict.ts";
 
 const SCRIPT = "coverage:changed";
 const BASE = "origin/v1";
@@ -52,6 +53,7 @@ function coverageReport(directory: string): Outcome<unknown> {
   return { ok: true, value: report };
 }
 
+const verdict = verdictOnExit("changed files");
 const changed = changedFiles();
 const directory = mkdtempSync(path.join(tmpdir(), "coverage-changed-"));
 const release = await holdMachineLock({
@@ -62,10 +64,13 @@ const release = await holdMachineLock({
   pollMs: LOCK_POLL_MS,
   worktree: process.cwd(),
 });
+verdict.failingAt("tests");
 const report = coverageReport(directory);
 release();
 rmSync(directory, { force: true, recursive: true });
-const found = uncoveredLines({ changed, coverage: unwrap(SCRIPT, report), root: process.cwd() });
+const coverage = unwrap(SCRIPT, report);
+verdict.failingAt("uncovered lines");
+const found = uncoveredLines({ changed, coverage, root: process.cwd() });
 
 if (found.length > NONE) {
   console.error(found.join("\n"));

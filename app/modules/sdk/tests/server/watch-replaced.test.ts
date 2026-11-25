@@ -1,12 +1,13 @@
 import type { CookoutClient, CookoutEvent, EventStream } from "../../index.ts";
 import { Effect, Predicate } from "effect";
-import { TestCookout, answer, refusal, testCookout, twoSessions } from "../../../testing/server.ts";
+import { TestCookout, answer, pastOwnPresence, refusal, testCookout, twoSessions } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { Scope } from "effect";
 import { TestClock } from "effect/testing";
 import type { TestCookoutService } from "../../../testing/server.ts";
 
 const AGENT = "auth-griller";
+const ADMIN = "admin";
 const HUMAN = { kind: "human" } as const;
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
 const REPLACED = { code: "watch_replaced", message: "replaced by another watch" } as const;
@@ -75,7 +76,7 @@ it.effect("a second stream for an agent ends the first with watch_replaced, and 
     const cookout = yield* TestCookout;
     const agent = yield* cookout.createIdentity(AGENT);
     const bob = yield* cookout.createIdentity("bob", HUMAN);
-    const feed = yield* feedOf(cookout.client, true);
+    const feed = yield* Effect.tap(feedOf(cookout.client, true), (events) => pastOwnPresence({ events, name: ADMIN }));
     const first = yield* feedOf(agent.client);
     yield* feedOf(agent.client);
     const ended = yield* refusal(() => first.next());

@@ -54,6 +54,25 @@ it.effect("a scheduled message that mentions the agent calls its trigger URL whe
   }).pipe(Effect.provide(testCookout({ triggers: "scripted" }))),
 );
 
+it.effect("a scheduled message that tags its own agent calls the agent's trigger URL, a direct self-tag doesn't", () =>
+  Effect.gen(function* scheduledSelfTag() {
+    const on = yield* board;
+    yield* answer(() => on.agent.client.createMessage({ channel: "grill", text: `@${AGENT} direct` }));
+    yield* answer(() =>
+      on.agent.client.createScheduledMessage({
+        channel: "grill",
+        cron: "0 9 * * *",
+        text: `@${AGENT} standup`,
+        timeZone: "UTC",
+      }),
+    );
+    yield* TestClock.adjust("9 hours");
+    const calls = yield* on.cookout.triggers.waitForCalls(ONCE);
+
+    expect(Arr.map(calls, ({ text }) => Str.endsWith(`@${AGENT} standup`)(text))).toStrictEqual([true]);
+  }).pipe(Effect.provide(testCookout({ triggers: "scripted" }))),
+);
+
 it.effect("the result of a call to a trigger URL that was replaced meanwhile is dropped", () =>
   Effect.gen(function* replacedMidCall() {
     const on = yield* board;

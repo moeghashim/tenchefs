@@ -1,4 +1,4 @@
-import { FeedRow, FeedText } from "../../design-system/index.tsx";
+import { FeedRow, FeedText } from "../../design-system/feed.tsx";
 import { contextOf, whyText } from "./inbox-row-text.ts";
 import type { InboxRow } from "../../unread/index.ts";
 import type { InboxRowActions } from "./use-inbox-row-menu.ts";

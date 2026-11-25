@@ -4,8 +4,6 @@ import {
   appendTo,
   callId,
   channelFixture as channel,
-  commandFixture,
-  commandName,
   handlerFixture,
   identityFixture,
   identityName,
@@ -13,6 +11,8 @@ import {
   newMessageFixture,
   openStore,
   storageLayers,
+  webhookCommandFixture,
+  webhookCommandName,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { isDeactivatedQuietAgentId, quietAgentDays } from "../../../inbox/index.ts";
@@ -232,12 +232,12 @@ it.effect.each(storageLayers)(
   ({ layer }) =>
     Effect.gen(function* calledHandler() {
       const { storage } = yield* board(layer);
-      yield* storage.addCommand(commandFixture("deploy"), handlerFixture("deploy"));
-      yield* storage.appendCommandCall({
+      yield* storage.addWebhookCommand(webhookCommandFixture("deploy"), handlerFixture("deploy"));
+      yield* storage.appendWebhookCommandCall({
         delivery: {
           attempts: 0,
           callId: callId("call_1"),
-          command: commandName("deploy"),
+          command: webhookCommandName("deploy"),
           data: {},
           nextAttemptAt: FEB_9,
           outcome: "pending",

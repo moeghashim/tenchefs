@@ -1,7 +1,7 @@
 import type { CookoutClient, Refusal } from "../../sdk/index.ts";
 import { refusalOf } from "../../sdk/index.ts";
 
-type AgentJoinApprovalClient = Pick<CookoutClient, "approveAgentJoin" | "getAgentJoinRequest">;
+type AgentJoinApprovalClient = Pick<CookoutClient, "approveAgentJoin" | "denyAgentJoin" | "getAgentJoinRequest">;
 
 type AgentJoinRequest = Awaited<ReturnType<CookoutClient["getAgentJoinRequest"]>>["agentJoinRequest"];
 
@@ -9,7 +9,7 @@ type AgentJoinApprovalState =
   | { readonly status: "loading" }
   | { readonly status: "refused"; readonly refusal: Refusal }
   | {
-      readonly status: "shown" | "approving" | "approved";
+      readonly status: "shown" | "approving" | "approved" | "dismissing" | "dismissed";
       readonly agentJoinRequest: AgentJoinRequest;
       readonly idleExpiry: string;
       readonly replace: boolean;
@@ -22,6 +22,7 @@ interface AgentJoinApproval {
   readonly editIdleExpiry: (idleExpiry: string) => void;
   readonly editReplace: (replace: boolean) => void;
   readonly approve: () => void;
+  readonly dismiss: () => void;
 }
 
 interface AgentJoinApprovals {
@@ -96,6 +97,21 @@ async function approveAfter(
   }
 }
 
+async function dismissAfter(
+  previous: Promise<void> | null,
+  shown: Shown,
+  { client, held, userCode }: Asked,
+): Promise<void> {
+  await previous;
+  held.publish({ ...shown, status: "dismissing" });
+  try {
+    await client.denyAgentJoin(userCode);
+    held.publish({ ...shown, status: "dismissed" });
+  } catch (error: unknown) {
+    held.publish({ ...shown, refusal: refusalOf(error) });
+  }
+}
+
 function createAgentJoinApproval(client: AgentJoinApprovalClient, userCode: string): AgentJoinApproval {
   const held = cell();
   const asked = { client, held, userCode };
@@ -113,6 +129,12 @@ function createAgentJoinApproval(client: AgentJoinApprovalClient, userCode: stri
       const current = held.current();
       if (current.status === "shown") {
         loaded = approveAfter(loaded, current, asked);
+      }
+    },
+    dismiss: () => {
+      const current = held.current();
+      if (current.status === "shown") {
+        loaded = dismissAfter(loaded, current, asked);
       }
     },
     editIdleExpiry: (idleExpiry) => {

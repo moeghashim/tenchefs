@@ -1,8 +1,9 @@
 import { expect, it } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
+import { inboxOpened, subscribedReader } from "./inbox-reader.ts";
+import { agentShown } from "./identities.ts";
 import { inProfile } from "./regions.ts";
-import { openAt } from "./render.tsx";
-import { subscribedReader } from "./inbox-reader.ts";
+import { testAgentDisplayName } from "../../testing/index.ts";
 
 async function forYouRow(): Promise<HTMLElement> {
   const list = await screen.findByRole("list", { name: "For you" });
@@ -32,9 +33,9 @@ it("an Inbox row's author name opens their profile beside the inbox, and the res
   const channel = "web-inbox-author";
   const { poster, reader } = await subscribedReader(channel);
   await poster.createMessage({ channel, text: `Ship it, @${channel}-reader?` });
-  const unmount = openAt({ client: reader, hash: "#/inbox" });
+  const { unmount } = await inboxOpened({ author: `${channel}-poster`, reader });
   const before = [await linksShown(), await rowLinkHref()];
-  fireEvent.click(within(await forYouRow()).getByRole("link", { name: `${channel}-poster` }));
+  fireEvent.click(within(await forYouRow()).getByRole("link", { name: testAgentDisplayName(`${channel}-poster`) }));
   const heading = await inProfile().findByRole("heading", { level: 3 });
 
   expect([
@@ -46,12 +47,12 @@ it("an Inbox row's author name opens their profile beside the inbox, and the res
     [
       [
         [`#/inbox/${channel}`, "Mentioned you"],
-        [`#/inbox?profile=${channel}-poster`, `${channel}-poster`],
+        [`#/inbox?profile=${channel}-poster`, testAgentDisplayName(`${channel}-poster`)],
       ],
       `#/inbox/${channel}`,
     ],
     `#/inbox?profile=${channel}-poster`,
-    `${channel}-posteragent`,
+    `${agentShown(`${channel}-poster`)}agent`,
     "MARK",
   ]);
 

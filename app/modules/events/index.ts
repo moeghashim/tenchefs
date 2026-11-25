@@ -10,6 +10,7 @@
 import type {
   DeactivatedQuietAgent,
   DeactivationOffer,
+  InboxAgentJoinRequest,
   InboxItem,
   MovedBackReadPosition,
   Nudge,
@@ -22,8 +23,11 @@ import type { Identity, IdentityName } from "../identities/index.ts";
 import type { LiveConnectionId, Presence, presenceName } from "../presence/index.ts";
 import type { Message, MessageId, ReactionsResponse, ReadReceipt, TopLevelMessage } from "../messages/index.ts";
 import type { Channel } from "../channels/index.ts";
-import type { RegisteredCommand } from "../commands/index.ts";
+import type { RegisteredWebhookCommand } from "../webhook-commands/index.ts";
+import type { ScheduledMessageEvent } from "../scheduled-messages/index.ts";
+import type { Trigger } from "../triggers/index.ts";
 
+export type { ScheduledMessageEvent } from "../scheduled-messages/index.ts";
 export type {
   LiveConnectionDetail,
   LiveConnectionId,
@@ -76,6 +80,16 @@ export interface DeactivatedQuietAgentEvent {
 export interface DeactivationOfferEvent {
   readonly type: "deactivation-offer";
   readonly deactivationOffer: DeactivationOffer;
+}
+
+/**
+ * The pending Agent join requests the caller may approve, all of them, oldest first, as they now stand: sent whenever
+ * one for an agent the caller owns or brought in starts, is approved or expires, on every stream of the caller's,
+ * `cookout watch` included. It replaces the list the inbox gave. It has no SSE `id`.
+ */
+export interface AgentJoinRequestsEvent {
+  readonly type: "agent-join-requests";
+  readonly agentJoinRequests: readonly InboxAgentJoinRequest[];
 }
 
 /** The caller's new read position in a thread or channel, sent the moment any session of the caller acks. */
@@ -166,7 +180,7 @@ export interface IdentityDeletedEvent {
  */
 export interface CommandEvent {
   readonly type: "command";
-  readonly command: RegisteredCommand;
+  readonly command: RegisteredWebhookCommand;
 }
 
 /**
@@ -227,6 +241,18 @@ export interface OfflineAlertEvent {
   readonly alert: OfflineAlert;
 }
 
+/**
+ * An agent's trigger URL as `GET /v1/identities/:name/trigger` answers it, sent the moment a call to it settles, with
+ * how that call went in `lastResult` (mattpocock/cookout#414). Sent on every stream of the agent's owner and of the
+ * agent that brought it in, the identities that may read it, so an open trigger form shows each call. It has no SSE
+ * `id`.
+ */
+export interface TriggerEvent {
+  readonly type: "trigger";
+  readonly identity: IdentityName;
+  readonly trigger: Trigger;
+}
+
 /** Any event the stream sends. */
 export type CookoutEvent =
   | InboxItemEvent
@@ -234,6 +260,7 @@ export type CookoutEvent =
   | NudgeReadEvent
   | DeactivationOfferEvent
   | DeactivatedQuietAgentEvent
+  | AgentJoinRequestsEvent
   | ReadPositionEvent
   | ReadPositionMovedBackEvent
   | MessageEvent
@@ -248,7 +275,9 @@ export type CookoutEvent =
   | AgentSessionEvent
   | SubscriptionEvent
   | PresenceEvent
-  | OfflineAlertEvent;
+  | OfflineAlertEvent
+  | TriggerEvent
+  | ScheduledMessageEvent;
 
 /**
  * `GET /v1/events`: the caller's Server-Sent Events stream, one per connection. With `allChannelsQuery` as its query

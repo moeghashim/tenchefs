@@ -1,5 +1,5 @@
-import type { ActionMenuParts, MenuChoice, MessageMenuParts, ReactionChoice, ThreadChoice } from "./menu-parts.ts";
-import type { AvatarParts, PresenceShown, SuggestionOptionParts } from "./avatar-parts.ts";
+import type { AvatarParts, PresenceShown } from "./avatar-parts.ts";
+import type { ActionMenuParts } from "./menu-parts.ts";
 import type { PanelEdgeParts } from "./panel-edge-parts.ts";
 import type { ReactNode } from "react";
 
@@ -15,8 +15,15 @@ interface ListParts extends Parts {
   readonly label: string;
 }
 
+interface FeedParts extends ListParts {
+  readonly feed?: string;
+  readonly more: boolean;
+  readonly busy: boolean;
+}
+
 interface ButtonParts extends Parts {
   readonly disabled?: boolean;
+  readonly focused?: boolean;
   readonly onClick: () => void;
 }
 
@@ -26,33 +33,34 @@ interface FormParts extends Parts {
   readonly onSubmit: (value: string) => void;
 }
 
-interface TextFieldParts {
+interface FieldParts {
   readonly label: string;
   readonly name: string;
 }
 
-interface DataAreaParts extends TextFieldParts {
+interface TextFieldParts extends FieldParts {
+  readonly focused?: boolean;
+}
+
+interface DataAreaParts extends FieldParts {
   readonly value: string;
   readonly onEdit: (text: string) => void;
 }
 
-interface TextAreaParts extends TextFieldParts {
+interface TextAreaParts extends FieldParts {
   readonly value: string;
   readonly caret: number;
   readonly onEdit: (text: string, caret: number) => void;
   readonly choosing: boolean;
+  readonly list: string;
+  readonly highlighted: number;
   readonly onPick: () => void;
   readonly onMove: (direction: "down" | "up") => void;
   readonly focused: boolean;
   readonly focusRequests: number;
   readonly onClose: () => void;
-}
-
-interface SuggestionsParts {
-  readonly label: string;
-  readonly options: readonly SuggestionOptionParts[];
-  readonly highlighted: number;
-  readonly onChoose: (option: string) => void;
+  readonly onPasteFiles: (files: readonly File[]) => void;
+  readonly required: boolean;
 }
 
 interface TagParts {
@@ -79,6 +87,7 @@ interface IdentityRowParts {
   readonly active: boolean;
   readonly detail: string;
   readonly note: string | null;
+  readonly tabbable: boolean;
   readonly children?: ReactNode;
 }
 
@@ -187,36 +196,6 @@ interface MessageTimeParts {
   readonly receipt: string | null;
 }
 
-interface MessageLayoutParts extends Parts {
-  readonly name: string;
-  readonly nameHref: string;
-  readonly displayName: string | null;
-  readonly note: string | null;
-  readonly agent: boolean;
-  readonly presence: PresenceShown | null;
-  readonly grouped: boolean;
-  readonly time: MessageTimeParts;
-  readonly actionHref: string | null;
-  readonly actionLabel: string;
-  readonly onAction: (() => void) | null;
-  readonly replyOnHover: boolean;
-  readonly choices: readonly MenuChoice[];
-  readonly reactions: readonly ReactionChoice[];
-  readonly thread: ThreadChoice | null;
-}
-
-interface MessageItemParts extends Omit<MessageLayoutParts, "choices" | "reactions" | "thread"> {
-  readonly menu: MessageMenuParts;
-  readonly threadOnHover: boolean;
-  readonly mark: "for-you" | "open" | "linked" | "none";
-  readonly day: string | null;
-  readonly unreadLine: boolean;
-}
-
-interface StandaloneMessageParts extends MessageItemParts {
-  readonly label: string;
-}
-
 interface MentionParts extends Parts {
   readonly mine: boolean;
 }
@@ -271,12 +250,10 @@ export type {
   CallChipParts,
   ChannelStartParts,
   MentionParts,
+  MessageTimeParts,
   MessageHeaderParts,
-  MessageLayoutParts,
-  MessageItemParts,
   ShownTimeParts,
   SeparatorParts,
-  StandaloneMessageParts,
   ButtonParts,
   ChoiceGroupParts,
   NavLinkParts,
@@ -289,10 +266,10 @@ export type {
   DataBlockParts,
   FormParts,
   LinkParts,
+  FeedParts,
   ListParts,
   Parts,
   SkeletonParts,
-  SuggestionsParts,
   TextAreaParts,
   TextFieldParts,
 };

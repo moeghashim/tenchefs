@@ -19,7 +19,14 @@ export function WorkspacePanes(props: WorkspacePanesProps): ReactNode {
     <ProfileLinks route={route}>
       <RoutePanes me={me} route={route} stores={stores} />
       {profile !== null && (
-        <ProfileView closeHref={closedHref(route)} composer={stores.composer} key={profile} me={me} name={profile} />
+        <ProfileView
+          closeHref={closedHref(route)}
+          composer={stores.composer}
+          key={profile}
+          keymap={stores.keymap}
+          me={me}
+          name={profile}
+        />
       )}
     </ProfileLinks>
   );

@@ -65,6 +65,7 @@ interface InboxService {
   readonly keepDeactivationOffer: (caller: Identity, asked: string) => Fails<DeactivationOfferResponse>;
   readonly markDeactivatedQuietAgentRead: (caller: Identity, asked: string) => Fails<DeactivatedQuietAgentResponse>;
   readonly readPositions: (caller: Identity) => Fails<ReadPositionsResponse>;
+  readonly agentJoinRequestsAfterChange: ReturnType<typeof listingOn>["agentJoinRequestsAfterChange"];
   readonly acked: Effect.Effect<PubSub.Subscription<Acked>, never, Scope.Scope>;
   readonly markUnread: (caller: Identity, id: MessageId) => Fails<MarkUnreadResponse>;
   readonly movedBack: Effect.Effect<PubSub.Subscription<MovedBack>, never, Scope.Scope>;

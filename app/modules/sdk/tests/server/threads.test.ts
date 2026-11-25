@@ -47,6 +47,20 @@ function replyEachSecond(agent: TestIdentity, replyTo: MessageId): Effect.Effect
   );
 }
 
+function repliesInTurn(replyTo: MessageId, seen: MessageId, repliers: readonly TestIdentity[]): Effect.Effect<void> {
+  return Arr.match(repliers, {
+    onEmpty: () => Effect.void,
+    onNonEmpty: ([replier, ...rest]) =>
+      Effect.andThen(
+        TestClock.adjust("1 minute"),
+        Effect.flatMap(
+          answer(() => replier.client.createMessage({ channel: "grill", replyTo, seen, text: "reply" })),
+          ({ message }) => repliesInTurn(replyTo, message.id, rest),
+        ),
+      ),
+  });
+}
+
 it.effect("a reply joins the message's thread and updates its reply count and latest reply", () =>
   Effect.gen(function* replyJoinsThread() {
     const cookout = yield* TestCookout;
@@ -57,7 +71,7 @@ it.effect("a reply joins the message's thread and updates its reply count and la
       other.client.createMessage({ channel: "grill", replyTo: parent.id, text: "first" }),
     );
     const { message: second } = yield* answer(() =>
-      agent.client.createMessage({ channel: "grill", replyTo: parent.id, text: "second" }),
+      agent.client.createMessage({ channel: "grill", replyTo: parent.id, seen: first.id, text: "second" }),
     );
     const { messages } = yield* answer(() => agent.client.listMessages("grill"));
 
@@ -95,17 +109,7 @@ it.effect("a top-level message names who replied, latest first, and when, in its
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const grace = yield* cookout.createIdentity("grace", { kind: "human" });
     const { message: parent } = yield* answer(() => agent.client.createMessage({ channel: "grill", text: "parent" }));
-    yield* pipe(
-      [ada, agent, grace, ada],
-      Effect.forEach(
-        (replier) =>
-          Effect.andThen(
-            TestClock.adjust("1 minute"),
-            answer(() => replier.client.createMessage({ channel: "grill", replyTo: parent.id, text: "reply" })),
-          ),
-        ONE_AT_A_TIME,
-      ),
-    );
+    yield* repliesInTurn(parent.id, parent.id, [ada, agent, grace, ada]);
     const { messages } = yield* answer(() => agent.client.listMessages("grill"));
     const thread = yield* answer(() => agent.client.getThread(parent.id));
 

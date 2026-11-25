@@ -1,40 +1,15 @@
 import type { Message, ServerSentEvent } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
-import type { Live } from "../../live/index.ts";
-import { createLive } from "../../live/index.ts";
 import { messagesIn } from "./messages.ts";
 import { openWithClockStopped } from "./clock.ts";
 import { screen } from "@testing-library/react";
+import { scriptedLive } from "../../testing/web.ts";
 
 interface ScriptedView {
   readonly parent: Message;
   readonly send: (...events: readonly ServerSentEvent[]) => void;
   readonly close: () => void;
-}
-
-interface Scripted {
-  readonly live: Live;
-  readonly send: (...events: readonly ServerSentEvent[]) => void;
-}
-
-function scripted(): Scripted {
-  const opened: ((event: ServerSentEvent) => void)[] = [];
-  const live = createLive({
-    open: (onEvent) => {
-      opened.push(onEvent);
-    },
-  });
-  return {
-    live,
-    send: (...events) => {
-      for (const onEvent of opened) {
-        for (const event of events) {
-          onEvent(event);
-        }
-      }
-    },
-  };
 }
 
 function sent(message: Message): ServerSentEvent {
@@ -66,7 +41,7 @@ async function openScripted(channel: string, at: (parent: Message) => string): P
   const reader = await newIdentity({ kind: "human", name: `${channel}-reader` });
   await adminClient().createChannel({ name: channel });
   const parent = await post(channel, "The parent");
-  const { live, send } = scripted();
+  const { live, send } = scriptedLive();
   const close = openWithClockStopped({ client: reader.client, hash: at(parent), live });
   await screen.findByText("The parent");
   return { close, parent, send };

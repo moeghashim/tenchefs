@@ -1,7 +1,7 @@
 import type { AgentSessionResponse, JoinRequest } from "../../index.ts";
 import { DateTime, Effect, Option } from "effect";
 import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
-import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
+import type { Storage, StorageUnavailable, StoredAgentSession } from "../../../storage/server.ts";
 import { agentSessionLive, idleExpiryTooLong } from "./refusals.ts";
 import { defaultIdleSeconds, idleSecondsOf } from "./idle-expiry.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -31,6 +31,7 @@ interface Issue {
   readonly force: boolean;
   readonly idleSeconds: number;
   readonly host: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
 function idleSecondsFor({ ceilingSeconds, maxIdle }: On, asked: string): Effect.Effect<number, Refusal> {
@@ -41,20 +42,35 @@ function idleSecondsFor({ ceilingSeconds, maxIdle }: On, asked: string): Effect.
   return Effect.succeed(idleSeconds);
 }
 
+interface Stored {
+  readonly joined: StoredAgentSession;
+  readonly host: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
+}
+
+function storedSession({ host, joined, sessionUrl }: Stored): StoredAgentSession {
+  const from = Option.match(host, { onNone: () => joined, onSome: (named) => ({ ...joined, host: named }) });
+  return Option.match(sessionUrl, { onNone: () => from, onSome: (url) => ({ ...from, sessionUrl: url }) });
+}
+
 function issuer({ secrets, storage }: On) {
-  return ({ agent, created, force, host, idleSeconds }: Issue): Fails<AgentSessionResponse> =>
+  return ({ agent, created, force, host, idleSeconds, sessionUrl }: Issue): Fails<AgentSessionResponse> =>
     Effect.gen(function* issueAgentSession() {
       const agentSessionToken = yield* secrets.newToken;
       const hash = yield* secrets.hashToken(agentSessionToken);
       const now = yield* DateTime.now;
       const times = { expiresAt: isoTimeOf(DateTime.add(now, { seconds: idleSeconds })), issuedAt: isoTimeOf(now) };
-      const joined = { ...times, hash, identity: agent.name, idleSeconds };
-      const session = Option.match(host, { onNone: () => joined, onSome: (from) => ({ ...joined, host: from }) });
+      const session = storedSession({
+        host,
+        joined: { ...times, hash, identity: agent.name, idleSeconds },
+        sessionUrl,
+      });
       const issued = yield* storage.issueAgentSession({ force, session });
       if (issued.status === "live") {
         return yield* Effect.fail(agentSessionLive({ expiresAt: issued.expiresAt, identity: agent.name }));
       }
-      return { ...times, agentSessionToken, created, identity: agent.name };
+      const answer = { ...times, agentSessionToken, created, identity: agent.name };
+      return Option.match(sessionUrl, { onNone: () => answer, onSome: (url) => ({ ...answer, sessionUrl: url }) });
     });
 }
 
@@ -68,7 +84,9 @@ function joiner(on: On) {
         onSome: (asked) => idleSecondsFor(on, asked),
       });
       const host = Option.fromUndefinedOr(request.host);
-      const issued = yield* issue({ agent, created, force: request.force === true, host, idleSeconds });
+      const sessionUrl = Option.fromUndefinedOr(request.sessionUrl);
+      const force = request.force === true;
+      const issued = yield* issue({ agent, created, force, host, idleSeconds, sessionUrl });
       return yield* Effect.as(on.publishSession(agent.name), issued);
     });
 }

@@ -7,6 +7,8 @@
         "app/dev.ts!",
         "app/modules/sdk/index.ts!",
         "app/web.tsx!",
+        "app/modules/probe/index.ts!",
+        "app/modules/probe/web.ts!",
         "app/modules/testing/lib/server/storage.ts!",
         "app/modules/webhook-fake/server.ts!",
         "scripts/*.{ts,mjs}!"

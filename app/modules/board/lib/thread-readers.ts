@@ -6,7 +6,6 @@ interface ThreadReaders {
   readonly any: () => boolean;
   readonly acking: () => boolean;
   readonly ackingSinceAsked: () => boolean;
-  readonly notify: () => void;
 }
 
 function createThreadReaders(): ThreadReaders {
@@ -28,11 +27,6 @@ function createThreadReaders(): ThreadReaders {
       }
     },
     any: () => listeners.size > NONE,
-    notify: () => {
-      for (const listener of listeners) {
-        listener();
-      }
-    },
     remove: (listener) => {
       listeners.delete(listener);
       ackers.delete(listener);

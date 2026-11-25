@@ -1,7 +1,7 @@
 import type { DeactivatedQuietAgents, DeactivatedQuietAgentsState } from "../../unread/index.ts";
 import type { DeactivatedQuietAgent } from "../../sdk/index.ts";
 import { DeactivatedQuietAgentRow } from "./deactivated-quiet-agent-row.tsx";
-import { FeedList } from "../../design-system/index.tsx";
+import { FeedList } from "../../design-system/feed.tsx";
 import type { Identities } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 import { TokenShown } from "./token-shown.tsx";

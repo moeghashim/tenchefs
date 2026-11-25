@@ -1,4 +1,4 @@
-import { Button } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { IdentityActions } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";

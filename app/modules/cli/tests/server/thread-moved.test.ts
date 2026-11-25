@@ -23,7 +23,7 @@ function runAll(
 }
 
 it.effect(
-  "cookout message post warns thread_moved on stderr until --seen covers the newer reply; --seen alone is refused",
+  "cookout message post is refused thread_moved, replies on stderr, until --seen covers the newer reply; --seen alone is refused",
   () =>
     Effect.gen(function* postWithSeen() {
       const cookout = yield* TestCookout;
@@ -47,9 +47,15 @@ it.effect(
 
       expect(results).toMatchObject([
         {
-          exitCode: 0,
-          stderrJson: { warning: "The thread has 1 newer reply you haven't seen. Read it before you post again." },
-          stdoutJson: { warning: { code: "thread_moved", details: { replies: [{ id: newer.message.id }] } } },
+          exitCode: 1,
+          stderrJson: {
+            error: {
+              code: "thread_moved",
+              details: { replies: [{ id: newer.message.id, text: "on it" }] },
+              message: "The thread has 1 newer reply you haven't seen. Read it before you post again.",
+            },
+          },
+          stdout: "",
         },
         { exitCode: 0, stderr: "", stdoutJson: { message: { text: "ok" } } },
         { exitCode: 1, stderrJson: { error: { code: "usage" } }, stdout: "" },

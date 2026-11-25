@@ -1,4 +1,4 @@
-import { Alert, ItemList, ItemRow } from "../../design-system/index.tsx";
+import { Alert, ItemList, ItemRow } from "../../design-system/content.tsx";
 import type { CallState, SchemaProblem } from "../../board/index.ts";
 import type { PromptField } from "./prompt-fields.ts";
 import type { ReactNode } from "react";

@@ -1,6 +1,6 @@
 import type { Message } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
-import { ReactionChips } from "../../design-system/index.tsx";
+import { ReactionChips } from "../../design-system/messages.tsx";
 import { ReactionEntry } from "./reaction-entry.tsx";
 import { useShownReactions } from "./use-reactions.ts";
 

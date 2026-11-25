@@ -1,24 +1,25 @@
-import { AuthorList } from "./author-list.ts";
+import { Announcer } from "./announcer.ts";
+import { AuthorCards } from "./author-cards.tsx";
 import type { BoardStore } from "../../board/index.ts";
-import { IdentityCards } from "../../design-system/index.tsx";
-import { PresenceList } from "./presence-list.ts";
+import { BoardStoreContext } from "./use-board.ts";
+import type { Keymap } from "../../keymap/index.ts";
 import type { ReactNode } from "react";
-import { createIdentityCards } from "./identity-cards.ts";
-import { useMemo } from "react";
 
 interface AuthorsProps {
   readonly boardStore: BoardStore;
+  readonly keymap: Keymap;
   readonly children: ReactNode;
 }
 
 export function Authors(props: AuthorsProps): ReactNode {
   const { boardStore } = props;
-  const cards = useMemo(() => createIdentityCards(boardStore), [boardStore]);
   return (
-    <AuthorList value={boardStore}>
-      <PresenceList value={boardStore}>
-        <IdentityCards value={cards}>{props.children}</IdentityCards>
-      </PresenceList>
-    </AuthorList>
+    <BoardStoreContext value={boardStore}>
+      <Announcer value={props.keymap.announce}>
+        <AuthorCards boardStore={boardStore} keymap={props.keymap}>
+          {props.children}
+        </AuthorCards>
+      </Announcer>
+    </BoardStoreContext>
   );
 }

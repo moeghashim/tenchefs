@@ -8,7 +8,7 @@ interface IdentityNameLineParts {
 export function IdentityNameLine(parts: IdentityNameLineParts): ReactNode {
   const { row } = parts;
   return (
-    <span className="flex min-w-0 items-center gap-2 text-sm">
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
       {row.displayName === null && <span className="truncate font-semibold">{row.name}</span>}
       {row.displayName !== null && (
         <>

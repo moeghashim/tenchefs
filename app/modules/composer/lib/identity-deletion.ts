@@ -41,6 +41,9 @@ function createIdentityDeletion(store: Pick<BoardStore, "snapshot" | "subscribe"
   let notice: IdentityName | null = null;
 
   function show(next: IdentityName | null): void {
+    if (next === notice) {
+      return;
+    }
     notice = next;
     for (const listener of listeners) {
       listener();

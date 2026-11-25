@@ -2,6 +2,7 @@ import type { EventStream, MessageId } from "../../sdk/index.ts";
 import { expect, it, vi } from "vitest";
 import { feedOf, idOf, postedIn } from "./feed.ts";
 import type { Posted } from "./feed.ts";
+import { answering } from "./answering.ts";
 import { inThread } from "./regions.ts";
 import { openAt } from "./render.tsx";
 import { watched } from "./watched.ts";
@@ -18,8 +19,10 @@ async function feedShows(shown: readonly string[]): Promise<void> {
 
 async function openLive(posted: Posted, hash: string): Promise<() => Promise<void>> {
   const { live, stream } = watched(posted.reader);
-  const unmount = openAt({ client: posted.reader, hash, live });
+  const { answered, client } = answering(posted.reader);
+  const unmount = openAt({ client, hash, live });
   const events: EventStream = await stream;
+  await answered("listMessages");
   await feedShows(UNFOLDED);
   return async () => {
     unmount();

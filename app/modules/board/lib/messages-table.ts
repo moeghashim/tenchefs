@@ -2,10 +2,12 @@ import type { BeforeState, PageState, ThreadLoaded, ThreadState } from "./messag
 import type {
   ChannelName,
   CookoutEvent,
+  InboxItem,
   Message,
   MessageId,
   ReadReceipt,
   Reply,
+  SearchResult,
   TopLevelMessage,
 } from "../../sdk/index.ts";
 import { LOADING } from "./message-states.ts";
@@ -19,6 +21,7 @@ interface MessagesHeld {
   readonly pages: ReadonlyMap<ChannelName, PageState>;
   readonly threads: ReadonlyMap<string, ThreadState>;
   readonly before: ReadonlyMap<string, BeforeState>;
+  readonly threadsClosed: ReadonlyMap<MessageId, boolean>;
 }
 
 interface Fresh {
@@ -50,6 +53,7 @@ const NOTHING_HELD: MessagesHeld = {
   receipts: new Map(),
   table: new Map(),
   threads: new Map(),
+  threadsClosed: new Map(),
 };
 
 function same(one: unknown, other: unknown): boolean {
@@ -145,11 +149,20 @@ function withReplyInThreads(held: MessagesHeld, reply: Reply): MessagesHeld {
   return { ...held, table: freshTable(held.table, [reply]), threads };
 }
 
+function withThreadClosed(held: MessagesHeld, parent: MessageId, closed: boolean): MessagesHeld {
+  const known = held.threadsClosed.get(parent) ?? null;
+  if (known === null || known === closed) {
+    return held;
+  }
+  return { ...held, threadsClosed: withEntry({ key: parent, map: held.threadsClosed, value: closed }) };
+}
+
 function withMessage(held: MessagesHeld, message: Message): MessagesHeld {
   if (message.kind === "top-level") {
     return withTopLevel(held, message);
   }
-  return withReplyInThreads(withRepliedParent(held, message), message);
+  const reopened = withThreadClosed(held, message.replyTo, false);
+  return withReplyInThreads(withRepliedParent(reopened, message), message);
 }
 
 function withReceipt(held: MessagesHeld, receipt: ReadReceipt): MessagesHeld {
@@ -163,7 +176,8 @@ function withReceipt(held: MessagesHeld, receipt: ReadReceipt): MessagesHeld {
   return { ...held, receipts };
 }
 
-function withClosing(held: MessagesHeld, parent: TopLevelMessage): MessagesHeld {
+function withClosing(searched: MessagesHeld, parent: TopLevelMessage): MessagesHeld {
+  const held = withThreadClosed(searched, parent.id, typeof parent.closedAt === "string");
   const message = topLevelIn(held, parent.id);
   if (message === null) {
     return held;
@@ -173,6 +187,53 @@ function withClosing(held: MessagesHeld, parent: TopLevelMessage): MessagesHeld 
     return held;
   }
   return { ...held, table: withEntry({ key: parent.id, map: held.table, value: closed }) };
+}
+
+function messagesOfItems(items: readonly InboxItem[]): readonly Message[] {
+  const messages = new Map<MessageId, Message>();
+  for (const { message, parent } of items) {
+    messages.set(parent.id, parent);
+    messages.set(message.id, message);
+  }
+  return [...messages.values()];
+}
+
+function withItemMessages(held: MessagesHeld, items: readonly InboxItem[]): MessagesHeld {
+  const table = freshTable(held.table, messagesOfItems(items));
+  if (table === held.table) {
+    return held;
+  }
+  return { ...held, table };
+}
+
+function threadOfMessage(message: Message): MessageId {
+  if (message.kind === "reply") {
+    return message.replyTo;
+  }
+  return message.id;
+}
+
+interface Searched {
+  readonly held: MessagesHeld;
+  readonly results: readonly SearchResult[];
+}
+
+function withSearched({ held, results }: Searched): MessagesHeld {
+  const table = freshTable(
+    held.table,
+    results.map((result) => result.message),
+  );
+  let { threadsClosed } = held;
+  for (const { message, threadClosed } of results) {
+    const thread = threadOfMessage(message);
+    if (threadsClosed.get(thread) !== threadClosed) {
+      threadsClosed = withEntry({ key: thread, map: threadsClosed, value: threadClosed });
+    }
+  }
+  if (table === held.table && threadsClosed === held.threadsClosed) {
+    return held;
+  }
+  return { ...held, table, threadsClosed };
 }
 
 function appliedToMessages({ event, held }: HeldEvent): MessagesHeld {
@@ -185,6 +246,9 @@ function appliedToMessages({ event, held }: HeldEvent): MessagesHeld {
   if (event.type === "thread") {
     return withClosing(held, event.parent);
   }
+  if (event.type === "inbox-item") {
+    return withItemMessages(held, [event.item]);
+  }
   return held;
 }
 
@@ -192,4 +256,14 @@ function heldTopLevel({ held, id }: { readonly held: MessagesHeld; readonly id: 
   return topLevelIn(held, id);
 }
 
-export { type MessagesHeld, NOTHING_HELD, appliedToMessages, heldTopLevel, withEntry, withFresh };
+export {
+  type MessagesHeld,
+  NOTHING_HELD,
+  appliedToMessages,
+  heldTopLevel,
+  messagesOfItems,
+  threadOfMessage,
+  withEntry,
+  withFresh,
+  withSearched,
+};

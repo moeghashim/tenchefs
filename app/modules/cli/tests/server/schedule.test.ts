@@ -10,6 +10,7 @@ import {
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { Scope } from "effect";
+import { TestClock } from "effect/testing";
 
 type Run = (args: readonly string[]) => ReturnType<typeof runCookout>;
 
@@ -17,6 +18,9 @@ const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const FIRST_ID = "1";
 const SEQUENTIAL = { concurrency: 1 } as const;
+const SETTLE = "30 millis";
+
+const settled: Effect.Effect<void> = TestClock.withLive(Effect.sleep(SETTLE));
 
 const services = Layer.merge(testCookout(), commandLineServices);
 
@@ -68,6 +72,20 @@ it.effect("cookout schedule pause, resume and delete change a Scheduled message 
     ]);
     expect(listed).toMatchObject({ stdoutJson: { scheduledMessages: [] } });
     expect(badId.exitCode).not.toBe(EXIT_SUCCESS);
+  }).pipe(Effect.provide(services)),
+);
+
+it.effect("cookout inbox shows a schedule's tag of its own creator as an unread mention", () =>
+  Effect.gen(function* scheduledSelfTag() {
+    const run = yield* adaRuns;
+    yield* run(["schedule", "create", "grill", "@ada standup", "--cron", "0 9 * * *", "--tz", "UTC"]);
+    yield* Effect.andThen(Effect.andThen(settled, TestClock.adjust("9 hours")), settled);
+    const inbox = yield* run(["inbox"]);
+
+    expect(inbox).toMatchObject({
+      exitCode: EXIT_SUCCESS,
+      stdoutJson: { items: [{ message: { text: "@ada standup" }, reasons: ["mention"] }] },
+    });
   }).pipe(Effect.provide(services)),
 );
 

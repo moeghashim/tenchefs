@@ -43,6 +43,14 @@ const agentJoinRequestNotFound: Refusal = {
   status: NOT_FOUND,
 };
 
+const FORBIDDEN = 403;
+
+const agentJoinRequestDenied: Refusal = {
+  code: "agent_join_request_denied",
+  message: "This agent join request was dismissed by someone who could approve it. Ask them before joining again.",
+  status: FORBIDDEN,
+};
+
 const now: Effect.Effect<IsoTime> = Effect.map(DateTime.now, isoTimeOf);
 
 const lifetime: Effect.Effect<Lifetime> = Effect.map(DateTime.now, (started) => ({
@@ -113,4 +121,15 @@ function liveRequest({ storage }: On) {
     );
 }
 
-export { type Terms, agentJoinRequestNotFound, lifetime, liveExpiryOf, liveRequest, lowered, now, termsAsked, viewOf };
+export {
+  type Terms,
+  agentJoinRequestDenied,
+  agentJoinRequestNotFound,
+  lifetime,
+  liveExpiryOf,
+  liveRequest,
+  lowered,
+  now,
+  termsAsked,
+  viewOf,
+};

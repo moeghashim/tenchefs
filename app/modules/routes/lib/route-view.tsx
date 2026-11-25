@@ -1,5 +1,5 @@
-import { AgentJoinApprovalView, Authors, LoginApprovalView, LoginView, Reacting } from "../../views/index.tsx";
-import { AppShell } from "../../design-system/index.tsx";
+import { AgentJoinApprovalView, Authors, LoginApprovalView, LoginView } from "../../views/index.tsx";
+import { AppShell } from "../../design-system/layout.tsx";
 import type { Place } from "../../paths/index.ts";
 import type { ReactNode } from "react";
 import { SignedInView } from "./signed-in-view.tsx";
@@ -18,7 +18,7 @@ export function RouteView(props: RouteViewProps): ReactNode {
     stores: { session },
   } = props;
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
-  usePageTitle({ route, session, unread: props.stores.unread });
+  usePageTitle({ board: props.stores.boardStore, route });
   if (state.status !== "logged-in") {
     return (
       <AppShell>
@@ -41,10 +41,8 @@ export function RouteView(props: RouteViewProps): ReactNode {
     );
   }
   return (
-    <Authors boardStore={props.stores.boardStore}>
-      <Reacting boardStore={props.stores.boardStore}>
-        <SignedInView identity={state.identity} profile={profile} route={route} stores={props.stores} />
-      </Reacting>
+    <Authors boardStore={props.stores.boardStore} keymap={props.stores.keymap}>
+      <SignedInView identity={state.identity} profile={profile} route={route} stores={props.stores} />
     </Authors>
   );
 }

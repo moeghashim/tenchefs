@@ -1,4 +1,5 @@
-import { Button, Notice } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
+import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { Reader } from "../../unread/index.ts";
 import { useSyncExternalStore } from "react";

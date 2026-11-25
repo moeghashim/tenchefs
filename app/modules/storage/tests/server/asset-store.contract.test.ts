@@ -60,7 +60,7 @@ it.effect.each(assetStoreLayers)(
       expect(read).toStrictEqual(bytes);
       expect(missing).toMatchObject({
         _tag: "StorageUnavailable",
-        message: `The asset store holds no bytes for attachment ${MISSING}.`,
+        message: `The asset store holds no bytes for asset ${MISSING}.`,
       });
     }).pipe(Effect.provide(layer)),
 );
@@ -101,7 +101,7 @@ it.effect("asset store (s3): a bucket that refuses the credentials fails every o
 
     expect([put, read, removed]).toMatchObject(
       Arr.map(["PUT", "GET", "DELETE"], (method) => ({
-        message: `The asset store's S3 bucket answered 403 to ${method} for attachment ${NOTES}.`,
+        message: `The asset store's S3 bucket answered 403 to ${method} for asset ${NOTES}.`,
       })),
     );
   }).pipe(Effect.provide(secretsLive)),

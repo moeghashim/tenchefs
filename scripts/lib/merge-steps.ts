@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 type Command = readonly string[];
 
 interface Stopped {
+  readonly cutOff?: true;
   readonly files: readonly string[];
   readonly jobs: readonly string[];
   readonly kind: "stopped";

@@ -5,27 +5,17 @@ import {
   answer,
   commandLineServices,
   freshStateFolder,
-  newMessageFixture,
   runCookout,
   testCookout,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { Attachment } from "../../../attachments/index.ts";
 import type { Scope } from "effect";
-import { isAttachmentId } from "../../../attachments/index.ts";
 
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
 const FAILED = 1;
 const OVER_MAXIMUM_BYTES = 10_000_001;
 const NOTES = "the notes";
 const LOG = "a log line";
-const SHOT: Attachment = {
-  contentType: "application/octet-stream",
-  id: Option.getOrThrow(Option.liftPredicate("shot-id", isAttachmentId)),
-  image: false,
-  name: "shot.bin",
-  size: NOTES.length,
-};
 
 interface Desk {
   readonly ann: TestIdentity;
@@ -84,24 +74,27 @@ it.effect("cookout message post --attach, repeated, posts each file by its base 
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("cookout reads a message with attachments and no text, which the server won't take a post of yet", () =>
+it.effect("cookout message post --attach with no text posts the files alone, and with neither it is refused", () =>
   Effect.gen(function* attachmentsOnly() {
     const cookout = yield* TestCookout;
     const { env, folder } = yield* desk(cookout);
-    const stored = yield* cookout.seedMessage({
-      ...newMessageFixture("grill", "", { author: { name: "ann" } }),
-      attachments: [SHOT],
-    });
     const results = yield* runAll(env, [
       ["message", "post", "grill", "--attach", `${folder}/notes.txt`],
+      ["message", "post", "grill", "--reply-to", "1", "--attach", `${folder}/log.txt`],
+      ["message", "post", "grill"],
       ["message", "list", "grill"],
-      ["thread", "get", String(stored.id)],
+      ["thread", "get", "1"],
     ]);
 
     expect(results).toMatchObject([
-      { exitCode: FAILED, stderrJson: { error: { code: "message_empty" } } },
-      { exitCode: 0, stdoutJson: { messages: [{ attachments: [SHOT], text: "" }] } },
-      { exitCode: 0, stdoutJson: { parent: { attachments: [SHOT], text: "" } } },
+      { exitCode: 0, stdoutJson: { message: { attachments: [{ name: "notes.txt", size: NOTES.length }], text: "" } } },
+      { exitCode: 0, stdoutJson: { message: { attachments: [{ name: "log.txt" }], replyTo: 1, text: "" } } },
+      { exitCode: FAILED, stderrJson: { error: { code: "invalid_request" } } },
+      { exitCode: 0, stdoutJson: { messages: [{ attachments: [{ name: "notes.txt" }], text: "" }] } },
+      {
+        exitCode: 0,
+        stdoutJson: { parent: { text: "" }, replies: [{ attachments: [{ name: "log.txt" }], text: "" }] },
+      },
     ]);
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );

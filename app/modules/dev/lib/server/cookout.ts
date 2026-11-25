@@ -32,7 +32,7 @@ function databaseInTempFolder(): Effect.Effect<string, never, Needs> {
   });
 }
 
-function devCookoutOn(port: number): Effect.Effect<Omit<DevCookout, "clockUrl">, never, Needs> {
+function devCookoutOn(port: number, probe: boolean): Effect.Effect<Omit<DevCookout, "clockUrl">, never, Needs> {
   return Effect.gen(function* startDevCookout() {
     const database = yield* databaseInTempFolder();
     const live = yield* Layer.build(
@@ -43,7 +43,7 @@ function devCookoutOn(port: number): Effect.Effect<Omit<DevCookout, "clockUrl">,
     const server = yield* Layer.build(cookoutServer({ adminToken, host: LOCAL, port }).pipe(Layer.provide(backing)));
     const fake = yield* Layer.build(webhookFake);
     const url = yield* Effect.provideContext(serverUrl, server);
-    const webUrl = yield* viteDevServer(url);
+    const webUrl = yield* viteDevServer({ cookoutUrl: url, probe });
     const relay = yield* cuttableRelay(webUrl);
     return {
       adminToken,
@@ -56,10 +56,15 @@ function devCookoutOn(port: number): Effect.Effect<Omit<DevCookout, "clockUrl">,
   }).pipe(Effect.orDie);
 }
 
-function devCookout(port: number): Effect.Effect<DevCookout, never, Needs> {
+interface DevCookoutOptions {
+  readonly port: number;
+  readonly probe: boolean;
+}
+
+function devCookout({ port, probe }: DevCookoutOptions): Effect.Effect<DevCookout, never, Needs> {
   return Effect.gen(function* startOnAdjustableClock() {
     const { clock, url } = yield* adjustableClock();
-    const dev = yield* Effect.provideService(devCookoutOn(port), Clock.Clock, clock);
+    const dev = yield* Effect.provideService(devCookoutOn(port, probe), Clock.Clock, clock);
     return { ...dev, clockUrl: url };
   });
 }

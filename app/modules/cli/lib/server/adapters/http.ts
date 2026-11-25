@@ -1,4 +1,4 @@
-import { Array as Arr, Effect, Option, Predicate, String as Str } from "effect";
+import { Array as Arr, Console, Effect, Option, Predicate, String as Str } from "effect";
 import { EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { CookoutError } from "../../../../sdk/index.ts";
 import type { CookoutErrorCode } from "../../../../sdk/index.ts";
@@ -93,4 +93,44 @@ const throughProxy: Effect.Effect<void, never, Scope.Scope> = Effect.gen(functio
   );
 });
 
-export { throughProxy, toFailure, toFailureAt };
+interface IgnoredForProxy {
+  readonly joinedAs: Option.Option<string>;
+  readonly token: string;
+}
+
+interface Ignored {
+  readonly fix: string;
+  readonly what: string;
+}
+
+function tokenIgnored(token: string): Option.Option<Ignored> {
+  if (token === "") {
+    return Option.none();
+  }
+  return Option.some({ fix: "unset COOKOUT_TOKEN", what: "COOKOUT_TOKEN" });
+}
+
+function joinedIgnored(joinedAs: Option.Option<string>): Option.Option<Ignored> {
+  return Option.map(joinedAs, (identity) => ({
+    fix: "run `cookout leave` without COOKOUT_AUTH",
+    what: `the session joined as ${identity}`,
+  }));
+}
+
+function noteIgnoredForProxy({ joinedAs, token }: IgnoredForProxy): Effect.Effect<void> {
+  const ignored = Arr.getSomes([tokenIgnored(token), joinedIgnored(joinedAs)]);
+  if (!Arr.isArrayNonEmpty(ignored)) {
+    return Effect.void;
+  }
+  const what = Arr.join(
+    Arr.map(ignored, (each) => each.what),
+    " and ",
+  );
+  const fix = Arr.join(
+    Arr.map(ignored, (each) => each.fix),
+    " and ",
+  );
+  return Console.error(`${what} ignored: with COOKOUT_AUTH=proxy the proxy adds the credential; to stop this, ${fix}`);
+}
+
+export { noteIgnoredForProxy, throughProxy, toFailure, toFailureAt };

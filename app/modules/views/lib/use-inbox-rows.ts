@@ -1,8 +1,9 @@
 import type { InboxRow, Unread, UnreadState } from "../../unread/index.ts";
-import { rowKey, rowsOf } from "../../unread/index.ts";
+import { inboxRows, rowKey, rowsOf } from "../../board/index.ts";
 import { useMemo, useSyncExternalStore } from "react";
 import type { InboxItem } from "../../sdk/index.ts";
 import type { InboxSelection } from "../../paths/index.ts";
+import { useBoardInbox } from "./use-board-inbox.ts";
 
 interface InboxRows {
   readonly rows: readonly InboxRow[];
@@ -14,13 +15,6 @@ interface RowsOf {
   readonly state: UnreadState;
   readonly me: string;
   readonly selected: InboxSelection | null;
-}
-
-function itemsOf(unread: UnreadState): readonly InboxItem[] {
-  if (unread.status === "loaded") {
-    return unread.items;
-  }
-  return [];
 }
 
 interface Choice {
@@ -56,13 +50,11 @@ function shownWith(rows: readonly InboxRow[], held: InboxRow | null): InboxRows 
   };
 }
 
-function useInboxRows({ me, selected, state, unread }: RowsOf): InboxRows {
+function useInboxRows({ me, selected, unread }: RowsOf): InboxRows {
   const selection = unread.selection(selected);
   const { items: kept } = useSyncExternalStore(selection.subscribe, selection.snapshot);
-  return useMemo(() => {
-    const rows = rowsOf({ items: itemsOf(state), me });
-    return shownWith(rows, heldOf({ kept, me, rows, selected }));
-  }, [kept, me, selected, state]);
+  const rows = useBoardInbox((state) => inboxRows({ me, state }));
+  return useMemo(() => shownWith(rows, heldOf({ kept, me, rows, selected })), [kept, me, rows, selected]);
 }
 
 function heldKey(rows: InboxRows): string | null {

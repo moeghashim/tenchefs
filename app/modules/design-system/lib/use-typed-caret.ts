@@ -17,7 +17,7 @@ interface Caret {
 
 export function useTypedCaret(typed: Typed): Caret {
   const { caret, focusRequests, onEdit, value } = typed;
-  const box = useFocusOnOpen(typed.focused);
+  const box = useFocusOnOpen<HTMLTextAreaElement>(typed.focused);
   const seen = useRef({ caret, focusRequests, value });
   const handleEdit = useCallback(() => {
     const element = box.current;
@@ -26,6 +26,12 @@ export function useTypedCaret(typed: Typed): Caret {
       onEdit(element.value, element.selectionStart);
     }
   }, [box, onEdit]);
+  useLayoutEffect(() => {
+    const element = box.current;
+    if (element !== null) {
+      element.setSelectionRange(element.value.length, element.value.length);
+    }
+  }, [box]);
   useLayoutEffect(() => {
     const element = box.current;
     const { current } = seen;

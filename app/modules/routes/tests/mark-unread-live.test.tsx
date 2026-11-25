@@ -2,6 +2,7 @@ import type { CookoutClient, MessageId } from "../../sdk/index.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { rowsOf, subscribedReader } from "./inbox-reader.ts";
+import { agentShown } from "./identities.ts";
 import { messagesIn } from "./messages.ts";
 import { openAt } from "./render.tsx";
 import { watched } from "./watched.ts";
@@ -91,7 +92,7 @@ it("a mark unread the server refuses closes the menu and leaves the messages rea
 
   expect([screen.queryAllByRole("menu"), await messagesIn("Messages")]).toStrictEqual([
     [],
-    [`${channel}-posteragentOnly`],
+    [`${agentShown(`${channel}-poster`)}agentOnly`],
   ]);
 
   unmount();

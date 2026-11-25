@@ -3,7 +3,6 @@ import { StorageUnavailable, sqliteStorage } from "../../server.ts";
 import {
   appendTo,
   channelFixture,
-  commandFixture,
   freshDatabasePath,
   handlerFixture,
   identityFixture,
@@ -11,6 +10,7 @@ import {
   isoTime,
   newMessageFixture,
   openStore,
+  webhookCommandFixture,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { MessageId } from "../../../messages/index.ts";
@@ -265,9 +265,9 @@ it.effect("an agent without an owner is refused by the database, and nothing is 
     const { storage } = yield* openStore(sqliteStorage(path));
     const handler = handlerFixture("ownerless");
     Reflect.set(handler, "owner", null);
-    const error = yield* Effect.flip(storage.addCommand(commandFixture("ownerless"), handler));
+    const error = yield* Effect.flip(storage.addWebhookCommand(webhookCommandFixture("ownerless"), handler));
     const identities = yield* storage.listIdentities();
-    const commands = yield* storage.listCommands;
+    const commands = yield* storage.listWebhookCommands;
 
     expect(error).toBeInstanceOf(StorageUnavailable);
     expect({ commands, identities }).toStrictEqual({ commands: [], identities: [] });

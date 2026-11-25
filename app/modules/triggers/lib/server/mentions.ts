@@ -11,23 +11,16 @@ import {
   Struct,
 } from "effect";
 import type { Message, MessageId } from "../../../messages/index.ts";
-import type { PubSub, Scope } from "effect";
+import type { Services, Watching } from "./watching.ts";
 import type { Storage, StorageUnavailable, StoredTrigger } from "../../../storage/server.ts";
 import type { TriggerFailure, TriggerResult } from "../../index.ts";
 import type { IdentityName } from "../../../identities/index.ts";
-import type { OfflineAlerts } from "../../../inbox/server.ts";
-import type { PresenceRegistry } from "../../../presence/server.ts";
-import type { TriggerCallerService } from "./caller.ts";
+import type { Scope } from "effect";
 import { hrefOf } from "../../../paths/index.ts";
 import { isOkStatus } from "../../index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
-
-interface Services {
-  readonly storage: Storage["Service"];
-  readonly presence: PresenceRegistry["Service"];
-  readonly alerts: OfflineAlerts["Service"];
-  readonly caller: TriggerCallerService;
-}
+import { mentionsOwnAuthor } from "../../../storage/server.ts";
+import { shownTrigger } from "./wire.ts";
 
 interface Mentioned {
   readonly message: Message;
@@ -36,12 +29,6 @@ interface Mentioned {
 
 interface Settling extends Mentioned {
   readonly result: TriggerResult;
-}
-
-interface Watching {
-  readonly services: Services;
-  readonly publicUrl: string;
-  readonly posted: Effect.Effect<PubSub.Subscription<Message>, never, Scope.Scope>;
 }
 
 const TIMEOUT_SECONDS = 10;
@@ -57,17 +44,21 @@ function threadOf(message: Message): MessageId {
   return message.id;
 }
 
-function textFor(publicUrl: string, message: Message): string {
+function textFor(boardUrl: string, message: Message): string {
   const href = hrefOf({ channel: message.channel, message: message.id, name: "thread", thread: threadOf(message) });
-  return `${publicUrl}/${href}\n\n${message.text}`;
+  return `${boardUrl}/${href}\n\n${message.text}`;
 }
 
-function callable(storage: Storage["Service"], author: IdentityName) {
+function isMentionedBy(message: Message, agent: IdentityName): boolean {
+  return agent !== message.author.name || mentionsOwnAuthor(message);
+}
+
+function callable(storage: Storage["Service"], message: Message) {
   return (agent: IdentityName): Effect.Effect<readonly StoredTrigger[], StorageUnavailable> =>
     Effect.gen(function* findCallable() {
       const identity = yield* storage.findIdentityByName(agent);
       const active = Predicate.isNotUndefined(identity) && identity.kind === "agent" && identity.deactivated !== true;
-      if (!active || agent === author) {
+      if (!active || !isMentionedBy(message, agent)) {
         return [];
       }
       const trigger = yield* storage.findTrigger(agent);
@@ -76,7 +67,7 @@ function callable(storage: Storage["Service"], author: IdentityName) {
 }
 
 function mentionedIn(storage: Storage["Service"], message: Message): Effect.Effect<readonly Mentioned[]> {
-  return Effect.forEach(message.mentions, callable(storage, message.author.name), ONE_AT_A_TIME).pipe(
+  return Effect.forEach(message.mentions, callable(storage, message), ONE_AT_A_TIME).pipe(
     Effect.map((found: readonly (readonly StoredTrigger[])[]) =>
       Arr.map(Arr.flatten(found), (trigger) => ({ message, trigger })),
     ),
@@ -89,15 +80,16 @@ function resultOf(at: TriggerResult["at"], status: number): TriggerResult {
 }
 
 function callMade(
-  caller: TriggerCallerService,
-  publicUrl: string,
+  caller: Services["caller"],
+  boardUrl: Effect.Effect<string>,
   { message, trigger }: Mentioned,
 ): Effect.Effect<TriggerResult> {
   return Effect.gen(function* callTrigger() {
     const now = yield* DateTime.now;
     const at = isoTimeOf(now);
-    const text = textFor(publicUrl, message);
-    return yield* caller.call({ text, token: trigger.token, url: trigger.url }).pipe(
+    const base = yield* boardUrl;
+    const text = textFor(base, message);
+    return yield* caller.call({ headers: trigger.headers ?? [], text, token: trigger.token, url: trigger.url }).pipe(
       Effect.timeoutOrElse({ duration: Duration.seconds(TIMEOUT_SECONDS), orElse: () => Effect.fail(TIMED_OUT) }),
       Effect.match({
         onFailure: (error): TriggerResult => ({ at, error, ok: false }),
@@ -107,8 +99,19 @@ function callMade(
   });
 }
 
+function headerLines({ headers = [] }: StoredTrigger): string {
+  return Arr.join(
+    Arr.map(headers, ({ name, value }) => `${name}: ${value}`),
+    "\n",
+  );
+}
+
+function sameSecrets(stored: StoredTrigger, made: StoredTrigger): boolean {
+  return stored.token === made.token && headerLines(stored) === headerLines(made);
+}
+
 function sameTrigger(stored: StoredTrigger | undefined, made: StoredTrigger): stored is StoredTrigger {
-  return Predicate.isNotUndefined(stored) && stored.url === made.url && stored.token === made.token;
+  return Predicate.isNotUndefined(stored) && stored.url === made.url && sameSecrets(stored, made);
 }
 
 function failedBefore(stored: StoredTrigger): boolean {
@@ -131,6 +134,16 @@ function alerted(services: Services, settling: Settling, stored: StoredTrigger):
   return Effect.void;
 }
 
+function announced(services: Services, stored: StoredTrigger): Effect.Effect<void, StorageUnavailable> {
+  return Effect.flatMap(services.storage.findIdentityByName(stored.agent), (agent) =>
+    Effect.forEach(
+      Option.toArray(Option.fromUndefinedOr(agent)),
+      (found) => services.changes.publish({ agent: found, trigger: shownTrigger(stored) }),
+      IN_TURN,
+    ),
+  );
+}
+
 function settled(services: Services, settling: Settling): Effect.Effect<void, StorageUnavailable> {
   return Effect.gen(function* settle() {
     const { agent } = settling.trigger;
@@ -142,16 +155,17 @@ function settled(services: Services, settling: Settling): Effect.Effect<void, St
     yield* services.storage.recordTriggerResult(agent, settling.result);
     yield* services.presence.setReach(agent, Option.some({ lastResult: settling.result }));
     yield* alerted(services, settling, stored);
+    yield* announced(services, { ...stored, lastResult: settling.result });
   });
 }
 
-function watchMentions({ posted, publicUrl, services }: Watching): Effect.Effect<void, never, Scope.Scope> {
+function watchMentions({ boardUrl, posted, services }: Watching): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* callOnMentions() {
     const running = yield* FiberSet.make();
     const settling = yield* Semaphore.make(ONE_PERMIT);
     function callAndSettle(mentioned: Mentioned): Effect.Effect<void> {
       const unstored = `The result of a trigger call to ${mentioned.trigger.agent} wasn't stored.`;
-      return Effect.flatMap(callMade(services.caller, publicUrl, mentioned), (result) =>
+      return Effect.flatMap(callMade(services.caller, boardUrl, mentioned), (result) =>
         settling.withPermits(ONE_PERMIT)(settled(services, { ...mentioned, result })),
       ).pipe(Effect.ignore({ log: "Warn", message: unstored }));
     }
@@ -165,4 +179,4 @@ function watchMentions({ posted, publicUrl, services }: Watching): Effect.Effect
   });
 }
 
-export { type Services, type Watching, watchMentions };
+export { watchMentions };

@@ -1,6 +1,6 @@
 import type { IdentityActions } from "../../composer/index.ts";
 import type { IdentityName } from "../../sdk/index.ts";
-import { LineForm } from "../../design-system/index.tsx";
+import { LineForm } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 

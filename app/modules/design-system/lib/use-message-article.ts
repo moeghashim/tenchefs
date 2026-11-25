@@ -1,7 +1,6 @@
+import { useEffect, useRef } from "react";
 import type { MessageMenuParts } from "./menu-parts.ts";
 import type { RefObject } from "react";
-import { useEffect } from "react";
-import { useReactionKeys } from "./use-reaction-keys.ts";
 
 const INTERACTIVE =
   "a, button, input, select, textarea, summary, label, [role=button], [role=link], [role=menuitem], [tabindex], [contenteditable]";
@@ -29,7 +28,7 @@ function pressed(event: MouseEvent): void {
 }
 
 export function useMessageArticle(menu: MessageMenuParts): RefObject<HTMLElement | null> {
-  const article = useReactionKeys(menu.reactions);
+  const article = useRef<HTMLElement>(null);
   const { onMarkUnread } = menu;
   useEffect(() => {
     const shown = article.current;

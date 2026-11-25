@@ -1,8 +1,10 @@
+import type { Avatar, AvatarId } from "../../../avatars/index.ts";
 import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import { isDisplayName, isIdentityName, isOwner } from "../../../identities/index.ts";
 import type { Description } from "../../../identities/client.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import { Schema } from "effect";
+import { isAvatarId } from "../../../avatars/index.ts";
 import { isDescription } from "../../../identities/client.ts";
 
 type FindIdentity = (name: IdentityName) => Identity | undefined;
@@ -12,7 +14,8 @@ const ADMIN = 1;
 const ACTIVE = 0;
 const DEACTIVATED = 1;
 
-const IDENTITY_COLUMNS = "name, kind, owner, admin, created_at, display_name, description, deactivated, brought_in_by";
+const IDENTITY_COLUMNS =
+  "name, kind, owner, admin, created_at, display_name, description, deactivated, brought_in_by, avatar";
 
 const OwnerColumn = Schema.String.pipe(Schema.refine(isOwner));
 
@@ -22,8 +25,11 @@ const DescriptionColumn = Schema.String.pipe(Schema.refine(isDescription));
 
 const IdentityNameColumn = Schema.String.pipe(Schema.refine(isIdentityName));
 
+const AvatarIdColumn = Schema.String.pipe(Schema.refine(isAvatarId));
+
 const sharedColumns = {
   admin: Schema.Literals([NOT_ADMIN, ADMIN]),
+  avatar: Schema.NullOr(AvatarIdColumn),
   created_at: IsoTimeSchema,
   deactivated: Schema.Literals([ACTIVE, DEACTIVATED]),
   display_name: Schema.NullOr(DisplayNameColumn),
@@ -55,6 +61,13 @@ function displayNameOf(row: typeof IdentityRow.Type): { readonly displayName?: D
   return { displayName: row.display_name };
 }
 
+function avatarOf(avatar: AvatarId | null): { readonly avatar?: Avatar } {
+  if (avatar === null) {
+    return {};
+  }
+  return { avatar: { id: avatar } };
+}
+
 function descriptionOf(description: Description | null): { readonly description?: Description } {
   if (description === null) {
     return {};
@@ -83,6 +96,7 @@ function toIdentity(row: typeof IdentityRow.Type): Identity {
     name: row.name,
     ...displayNameOf(row),
     ...deactivatedOf(row),
+    ...avatarOf(row.avatar),
   };
   if (row.kind === "human") {
     return { ...fields, kind: "human" };

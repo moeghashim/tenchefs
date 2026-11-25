@@ -1,5 +1,6 @@
-import { Alert, FeedNote, MoreButton } from "../../design-system/index.tsx";
 import type { Earlier, EarlierState } from "../../unread/index.ts";
+import { FeedNote, MoreButton } from "../../design-system/feed.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 
 const NONE = 0;

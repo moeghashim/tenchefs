@@ -41,7 +41,7 @@ function channelRow(page: Page, channel: string): Locator {
 async function openQuestion(page: Page, row: Locator): Promise<void> {
   await row.click();
   const question = page
-    .getByRole("list", { name: "Messages" })
+    .getByRole("feed", { name: "Messages" })
     .getByRole("article")
     .filter({ hasText: /Can you review the deploy/u });
   await question.hover();
@@ -59,11 +59,11 @@ async function leaveForTheInbox(page: Page): Promise<void> {
 async function replyMentioning(page: Page, cookout: BrowserRun, { agent, channel }: Board): Promise<void> {
   await openQuestion(page, channelRow(page, channel));
   await page.getByRole("textbox", { exact: true, name: "Reply" }).pressSequentially(`Over to @${cookout.prefix}-ag`);
-  const suggestions = page.getByRole("list", { name: "Mention suggestions" });
+  const suggestions = page.getByRole("listbox", { name: "Mention suggestions" });
 
-  await expect(suggestions.getByRole("button")).toHaveText([`@${agent.name}`]);
+  await expect(suggestions.getByRole("option")).toHaveText([`@${agent.name}`]);
 
-  await suggestions.getByRole("button", { name: `@${agent.name}` }).click();
+  await suggestions.getByRole("option", { name: `@${agent.name}` }).click();
   await page.keyboard.type("for the review.");
   await page.getByRole("form", { name: "Reply to the thread" }).getByRole("button", { name: "Send" }).click();
 }
@@ -91,7 +91,9 @@ async function readTheMention(page: Page, cookout: BrowserRun, { channel, person
 async function agentAnswers({ agent, channel, question }: Board, mentionReply: string): Promise<void> {
   await expect.poll(inboxOf(agent)).toStrictEqual([mentionReply]);
 
-  await agent.client.createMessage({ channel, replyTo: question.id, text: "Looking now." });
+  const { replies } = await agent.client.getThread(question.id);
+  const seen = Math.max(question.id, ...replies.map((reply) => reply.id));
+  await agent.client.createMessage({ channel, replyTo: question.id, seen, text: "Looking now." });
 }
 
 const test = base.extend(browserFixtures);
@@ -114,7 +116,7 @@ test("a person logs in, opens a mention's thread, replies with a picked @-mentio
   await replyMentioning(page, cookout, board);
   await agentAnswers(board, `Over to @${agent.name} for the review.`);
 
-  await expect(page.getByRole("list", { name: "Replies" }).getByRole("listitem")).toHaveText([
+  await expect(page.getByRole("feed", { name: "Replies" }).getByRole("article")).toHaveText([
     shownMessage({ body: `Over to @${agent.name} for the review.`, header: person.name }),
     shownMessage({ body: "Looking now.", header: `${agent.name}agent` }),
   ]);

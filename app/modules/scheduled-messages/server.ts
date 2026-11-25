@@ -13,6 +13,7 @@ import {
   ListScheduledMessagesQuerySchema,
   ListScheduledMessagesResponseSchema,
   PreviewScheduledMessageQuerySchema,
+  ScheduledMessageEventSchema,
   ScheduledMessagePreviewResponseSchema,
   ScheduledMessageResponseSchema,
 } from "./lib/server/wire.ts";
@@ -132,12 +133,16 @@ export const scheduledMessageRoutes: readonly Route<Caller | ScheduledMessages>[
  */
 export { scheduledMessagesLayer } from "./lib/server/layer.ts";
 
+/** The `scheduled-message` live event's Schema, for the events stream. */
+export { ScheduledMessageEventSchema } from "./lib/server/wire.ts";
+
 /** The `ScheduledMessages` service: create, list, get, edit, pause, resume and delete Scheduled messages. */
 export { ScheduledMessages } from "./lib/server/service.ts";
 
 /** The response Schemas of the Scheduled message routes, for the SDK's generated validators. */
 export const scheduledMessageResponseSchemas = {
   ListScheduledMessagesResponse: ListScheduledMessagesResponseSchema,
+  ScheduledMessageEvent: ScheduledMessageEventSchema,
   ScheduledMessagePreviewResponse: ScheduledMessagePreviewResponseSchema,
   ScheduledMessageResponse: ScheduledMessageResponseSchema,
 };

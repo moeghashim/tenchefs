@@ -1,4 +1,4 @@
-import { CheckField, InputField, PickField } from "../../design-system/index.tsx";
+import { CheckField, InputField, PickField } from "../../design-system/controls.tsx";
 import type { PromptField, Typed } from "./prompt-fields.ts";
 import type { ReactNode } from "react";
 import { textIn } from "./prompt-fields.ts";

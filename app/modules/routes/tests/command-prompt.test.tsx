@@ -46,7 +46,7 @@ it("typing / suggests the registered commands with their descriptions, narrowed 
   const narrowed = await suggestedFor("/web-suggest-de");
   type("/web-nothing-like-this");
 
-  expect([both, narrowed, screen.queryByRole("list", { name: "Command suggestions" })]).toStrictEqual([
+  expect([both, narrowed, screen.queryByRole("listbox", { name: "Command suggestions" })]).toStrictEqual([
     ["/web-suggest-deployShip a branch", "/web-suggest-docs"],
     ["/web-suggest-deployShip a branch"],
     null,
@@ -136,7 +136,7 @@ it("text starting with / that names no registered command posts as a message", {
 
   type("/shrug at the build");
   fireEvent.click(inPane().getByRole("button", { name: "Send" }));
-  await within(screen.getByRole("list", { name: "Messages" })).findByText("/shrug at the build");
+  await within(screen.getByRole("feed", { name: "Messages" })).findByText("/shrug at the build");
   const { messages } = await adminClient().listMessages("web-command-not-one");
 
   expect(messages.map(({ data = "no data", text }) => [text, data])).toStrictEqual([
@@ -155,7 +155,7 @@ it("a thread's reply box offers no commands", { timeout: 5000 }, async () => {
 
   fireEvent.change(await screen.findByRole("textbox", { name: "Reply" }), { target: { value: "/web-call-th" } });
   type("/web-call-th");
-  await screen.findByRole("list", { name: "Command suggestions" });
+  await screen.findByRole("listbox", { name: "Command suggestions" });
 
   expect(
     within(screen.getByRole("form", { name: "Reply to the thread" })).queryByRole("list", {

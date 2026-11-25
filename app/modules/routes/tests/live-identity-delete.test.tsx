@@ -2,20 +2,44 @@ import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { EventStream } from "../../sdk/index.ts";
+import { boardStoreFor } from "./defaults.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { testAgentDisplayName } from "../../testing/index.ts";
 import { type } from "./commands.ts";
 import { watched } from "./watched.ts";
 
-async function openLiveAs(reader: string, hash: string): Promise<() => Promise<void>> {
+type BoardStore = ReturnType<typeof boardStoreFor>;
+
+interface OpenLive {
+  readonly boardStore: BoardStore;
+  readonly close: () => Promise<void>;
+}
+
+async function openBoardAs(reader: string, hash: string): Promise<OpenLive> {
   const { client } = await newIdentity({ kind: "human", name: reader });
   const { live, stream } = watched(client);
-  const unmount = openAt({ client, hash, live });
+  const boardStore = boardStoreFor({ client, live });
+  const unmount = openAt({ boardStore, client, hash, live });
   const events: EventStream = await stream;
-  return async () => {
-    unmount();
-    await events.close();
+  return {
+    boardStore,
+    close: async () => {
+      unmount();
+      await events.close();
+    },
   };
+}
+
+async function openLiveAs(reader: string, hash: string): Promise<() => Promise<void>> {
+  const { close } = await openBoardAs(reader, hash);
+  return close;
+}
+
+async function heardDeleted(boardStore: BoardStore, name: string): Promise<void> {
+  await waitFor(() => {
+    expect([...boardStore.snapshot().identities.deleted]).toContain(name);
+  });
 }
 
 async function deletedElsewhere(name: string): Promise<HTMLElement> {
@@ -33,13 +57,13 @@ async function leftPeople(name: string): Promise<void> {
 async function mentioning(text: string): Promise<void> {
   await screen.findByLabelText("Message");
   type(text);
-  await screen.findByRole("list", { name: "Mention suggestions" });
+  await screen.findByRole("listbox", { name: "Mention suggestions" });
 }
 
 function mentionNames(): readonly (string | null)[] {
-  const list = screen.queryByRole("list", { name: "Mention suggestions" });
+  const list = screen.queryByRole("listbox", { name: "Mention suggestions" });
   const shown: (string | null)[] = [];
-  for (const item of within(list ?? document.createElement("ul")).queryAllByRole("listitem")) {
+  for (const item of within(list ?? document.createElement("ul")).queryAllByRole("option")) {
     shown.push(item.textContent);
   }
   return shown;
@@ -52,7 +76,7 @@ it("an identity deleted elsewhere closes its open profile page with a notice and
 
   await newIdentity({ kind: "agent", name: "web-live-gone-bot" });
   const close = await openLiveAs("web-live-gone-reader", "#/people/web-live-gone-bot");
-  await inPane().findByRole("link", { name: /web-live-gone-bot/u });
+  await inPane().findByRole("link", { name: testAgentDisplayName("web-live-gone-bot") });
   const notice = await deletedElsewhere("web-live-gone-bot");
 
   expect([notice.textContent, globalThis.location.hash]).toStrictEqual([
@@ -98,10 +122,11 @@ it("an identity deleted elsewhere shows no notice on a page not open on its prof
   expect.hasAssertions();
 
   await newIdentity({ kind: "agent", name: "web-live-gone-other-bot" });
-  const close = await openLiveAs("web-live-gone-other-reader", "#/people");
-  await inPane().findByRole("link", { name: /web-live-gone-other-bot/u });
+  const { boardStore, close } = await openBoardAs("web-live-gone-other-reader", "#/people");
+  await inPane().findByRole("link", { name: testAgentDisplayName("web-live-gone-other-bot") });
   await adminClient().deleteIdentity("web-live-gone-other-bot");
   await leftPeople("web-live-gone-other-bot");
+  await heardDeleted(boardStore, "web-live-gone-other-bot");
 
   expect([screen.queryByText(/was deleted/u), globalThis.location.hash]).toStrictEqual([null, "#/people"]);
 

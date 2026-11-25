@@ -1,31 +1,16 @@
-import { Effect, Option, Predicate } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { SetTriggerRequestSchema, TriggerResponseSchema } from "./wire.ts";
-import type { Trigger, TriggerResponse } from "../../index.ts";
-import { identityTriggerPath, isTriggerToken } from "../../index.ts";
-import { ownedAgent, tokenMissing } from "./owner.ts";
+import { SetTriggerRequestSchema, TriggerResponseSchema, shown, withoutValues } from "./wire.ts";
 import { reached, unreached } from "./reach.ts";
 import type { Caller } from "../../../identities/server.ts";
+import { Effect } from "effect";
 import type { ReachNeeds } from "./reach.ts";
 import type { Route } from "../../../http/server.ts";
 import { Storage } from "../../../storage/server.ts";
-import type { StoredTrigger } from "../../../storage/server.ts";
-import { checkedUrl } from "./url.ts";
+import { checkedTrigger } from "./request.ts";
+import { identityTriggerPath } from "../../index.ts";
+import { ownedAgent } from "./owner.ts";
 
 type RouteNeeds = Caller | Storage | ReachNeeds;
-
-function shown(stored: StoredTrigger | undefined): TriggerResponse {
-  return Option.match(Option.fromUndefinedOr(stored), {
-    onNone: () => ({ trigger: null }),
-    onSome: ({ lastResult, url }): TriggerResponse => {
-      const trigger: Trigger = { url };
-      if (Predicate.isUndefined(lastResult)) {
-        return { trigger };
-      }
-      return { trigger: { ...trigger, lastResult } };
-    },
-  });
-}
 
 const triggerResponse = HttpServerResponse.schemaJson(TriggerResponseSchema);
 
@@ -46,13 +31,11 @@ const setRoute: Route<RouteNeeds> = {
     Effect.gen(function* setTriggerRoute() {
       const agent = yield* ownedAgent(params);
       const body = yield* HttpServerRequest.schemaBodyJson(SetTriggerRequestSchema);
-      const url = yield* checkedUrl(body.url);
-      const sent = Option.liftPredicate(body.token, isTriggerToken);
-      const token = yield* Effect.mapError(Effect.fromOption(sent), () => tokenMissing);
+      const checked = yield* checkedTrigger(body);
       const storage = yield* Storage;
-      yield* storage.setTrigger(agent.name, { token, url });
+      yield* storage.setTrigger(agent.name, checked);
       yield* reached(agent);
-      return yield* triggerResponse({ trigger: { url } });
+      return yield* triggerResponse({ trigger: withoutValues(checked) });
     }),
   method: "PUT",
   path: identityTriggerPath,

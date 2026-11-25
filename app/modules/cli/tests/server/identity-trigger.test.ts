@@ -65,3 +65,33 @@ it.effect("cookout identity trigger set with nothing on stdin is a usage error, 
     ]);
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
+
+it.effect("cookout identity trigger set --header sends each header, and get shows only the header names", () =>
+  Effect.gen(function* headerFlags() {
+    const env = yield* ownerEnv;
+    const args = ["identity", "trigger", "set", "triage", URL_OF, "--header", "anthropic-version: 2023-06-01"];
+    const set = yield* withStdin([...args, "--header", "X-Key:header-secret"], env, `${TOKEN}\n`);
+    const got = yield* runCookout({ args: ["identity", "trigger", "get", "triage"], env });
+    const shown = { trigger: { headerNames: ["anthropic-version", "x-key"], url: URL_OF } };
+
+    expect([set, got]).toMatchObject([
+      { ...succeeded, stdoutJson: shown },
+      { ...succeeded, stdoutJson: shown },
+    ]);
+    expect(`${set.stdout}${got.stdout}`).not.toContain("header-secret");
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
+it.effect("cookout identity trigger set --header without a colon is a usage error, and sets nothing", () =>
+  Effect.gen(function* headerWithoutColon() {
+    const env = yield* ownerEnv;
+    const args = ["identity", "trigger", "set", "triage", URL_OF, "--header", "anthropic-version"];
+    const refused = yield* withStdin(args, env, `${TOKEN}\n`);
+    const got = yield* runCookout({ args: ["identity", "trigger", "get", "triage"], env });
+
+    expect([refused, got]).toMatchObject([
+      { exitCode: EXIT_FAILURE, stderrJson: { error: { code: "usage" } } },
+      { stdoutJson: { trigger: null } },
+    ]);
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);

@@ -5,7 +5,8 @@
  * one JSON line with the URL, the admin token it made for the run, the database path,
  * the fake's URL, the URL of the Vite dev server for the web UI, which
  * passes `/v1` on to the cookout, and the URL of a relay in front of it that
- * a browser test can cut and restore (`cuttableRelay` in the http module). It runs on an adjustable clock, never
+ * a browser test can cut and restore (`cuttableRelay` in the http module). With `--probe`, the web UI's pages load the
+ * probe module's script first, as a browser test run with `COOKOUT_BROWSER_PROBE=1` asks. It runs on an adjustable clock, never
  * `serve`'s: it prints `clockUrl`, where `moveClockForward` from the testing module moves the clock days forward,
  * waking every job then due. `seed` fills the cookout at `COOKOUT_URL` with a small
  * board through the SDK, as the admin in `COOKOUT_TOKEN`, and prints it as

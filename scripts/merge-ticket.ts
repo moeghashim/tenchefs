@@ -1,9 +1,11 @@
+import { EXIT_CUT_OFF, cutOffLine, failedJobsOr, mergedLine, verdictOnExit } from "./lib/verdict.ts";
+import type { Landing, PullRequest } from "./lib/merge-pull-request.ts";
 import type { MergeOptions, Merged } from "./lib/merge-ticket.ts";
+import type { Step, Stopped } from "./lib/merge-steps.ts";
 import { continueMerge, mergeTicket } from "./lib/merge-ticket.ts";
-import { failedJobsOr, mergedLine, verdictOnExit } from "./lib/verdict.ts";
-import type { Step } from "./lib/merge-steps.ts";
 import { fail } from "./lib/tools.ts";
 import { mergeRules } from "./lib/merge-rules.ts";
+import { pullRequestOf } from "./lib/merge-pull-request.ts";
 import { spawnSync } from "node:child_process";
 import { waitForCi } from "./lib/ci-wait.ts";
 
@@ -17,6 +19,8 @@ const argument = process.argv.at(ARGUMENT) ?? "";
 const resuming = process.argv.includes("--continue");
 const fixesRedV1 = process.argv.includes("--fixes-red-v1");
 const reordersUndeployed = process.argv.includes("--reorders-undeployed-migrations");
+const APPROVED = "--approved=";
+const approvals = process.argv.filter((arg) => arg.startsWith(APPROVED)).map((arg) => arg.slice(APPROVED.length));
 
 function titleOf(ticket: number): string {
   const issue = spawnSync("gh", ["issue", "view", String(ticket), "--json", "title", "--jq", ".title"], {
@@ -29,11 +33,20 @@ function titleOf(ticket: number): string {
 }
 
 const ticket = Number(argument);
-if (!Number.isInteger(ticket) || ticket <= NONE) {
+const MESSAGE_ID = /^[1-9]\d*$/u;
+if (!Number.isInteger(ticket) || ticket <= NONE || approvals.some((approval) => !MESSAGE_ID.test(approval))) {
   fail(
     SCRIPT,
-    "usage: pnpm merge-ticket <N> [--continue] [--fixes-red-v1] [--reorders-undeployed-migrations], where ticket-N is a local branch.",
+    "usage: pnpm merge-ticket <N> [--continue] [--fixes-red-v1] [--reorders-undeployed-migrations] [--approved=<board msg id>], where ticket-N is a local branch.",
   );
+}
+
+function approvedOption(): { readonly approved?: string } {
+  const [approved = ""] = approvals;
+  if (approved === "") {
+    return {};
+  }
+  return { approved };
 }
 
 function run(options: MergeOptions): Merged {
@@ -60,6 +73,10 @@ function requireGreen(gate: Gate): void {
   const { advice, subject } = gate;
   verdict.failingAt(`${subject}'s Check run`);
   const step = waitForCi({ ...gate, log });
+  if (step.kind === "stopped" && step.cutOff === true) {
+    verdict.failingAt(`${subject}'s Check run: ${cutOffLine(step.jobs)}`);
+    fail(SCRIPT, `${step.reason}\nNothing was merged.`, EXIT_CUT_OFF);
+  }
   if (step.kind === "stopped") {
     verdict.failingAt(`${subject}'s Check run: ${failedJobsOr({ jobs: step.jobs, step: "not green" })}`);
     fail(SCRIPT, `${step.reason}\nNothing was merged. ${advice}`);
@@ -88,14 +105,6 @@ if (fixesRedV1) {
     vouchedBy: "merge-ticket-",
   });
 }
-requireGreen({
-  advice: `A red ticket-${ticket} run's failed jobs are rerun once, by a fresh run or --continue alike. If they failed again, fix ticket-${ticket}, push it and wait until every job of its Check run passes.`,
-  args: ["--branch", `ticket-${ticket}`, "--commit", gitOutput("rev-parse", `ticket-${ticket}`)],
-  base: ["--branch", "v1", "--commit", gitOutput("merge-base", `ticket-${ticket}`, "origin/v1")],
-  rerunRed: true,
-  subject: `ticket-${ticket}`,
-  vouchedBy: "",
-});
 
 function migrationsBase(): string {
   verdict.failingAt("migrations base");
@@ -119,8 +128,12 @@ const FAST_CHECKS = ["typecheck", "lint --base=origin/v1", "hygiene"]
   .map((script) => `pnpm run --silent ${script}`)
   .join(" && ");
 
-function ciOf(branch: string, sha: string, rerunRed: boolean): Step {
-  return waitForCi({ args: ["--branch", branch, "--commit", sha], base: [], log, rerunRed, subject: branch });
+function pullRequestFor(landing: Landing): PullRequest | Stopped {
+  return pullRequestOf({ landing, options: { cwd: process.cwd(), gh: ["gh"], log } });
+}
+
+function ciOf(branch: string, sha: string): Step {
+  return waitForCi({ args: ["--branch", branch, "--commit", sha], base: [], log, rerunRed: true, subject: branch });
 }
 
 function failedStepOf(files: readonly string[]): string {
@@ -132,6 +145,7 @@ function failedStepOf(files: readonly string[]): string {
 
 verdict.failingAt("gh issue view");
 const merged: Merged = run({
+  ...approvedOption(),
   attempts: ATTEMPTS,
   check: ["sh", "-c", FAST_CHECKS],
   ci: ciOf,
@@ -139,6 +153,7 @@ const merged: Merged = run({
   install: ["pnpm", "install", "--frozen-lockfile"],
   log,
   migrationsBase: migrationsBase(),
+  pullRequest: pullRequestFor,
   rules: mergeRules,
   ticket,
   title: titleOf(ticket),
@@ -147,6 +162,10 @@ const merged: Merged = run({
 function shaOf(outcome: Merged): string {
   if (outcome.ok) {
     return outcome.sha;
+  }
+  if ("cutOff" in outcome) {
+    verdict.failingAt(`merge-ticket-${ticket}'s Check run: ${cutOffLine(outcome.cutOff)}`);
+    return fail(SCRIPT, outcome.reason, EXIT_CUT_OFF);
   }
   verdict.failingAt(failedStepOf(outcome.files));
   return fail(SCRIPT, outcome.reason);

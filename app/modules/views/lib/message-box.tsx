@@ -1,10 +1,11 @@
-import { Alert, BoxFrame, Form, SendButton, Suggestions, TextArea } from "../../design-system/index.tsx";
-import { useCallback, useSyncExternalStore } from "react";
+import type { Outgoing, PostState } from "../../board/index.ts";
+import { Alert } from "../../design-system/content.tsx";
+import { AttachRefusal } from "./attach-refusal.tsx";
+import { BoxFrame } from "../../design-system/layout.tsx";
 import type { Draft } from "../../composer/index.ts";
-import type { PostState } from "../../board/index.ts";
+import { FileDrop } from "../../design-system/controls.tsx";
+import { MessageForm } from "./message-form.tsx";
 import type { ReactNode } from "react";
-import { ScheduleChoice } from "./schedule-choice.tsx";
-import { useSuggestions } from "./use-suggestions.ts";
 
 interface MessageBoxText {
   readonly field: string;
@@ -12,66 +13,31 @@ interface MessageBoxText {
   readonly posts: string;
 }
 
-const SEND = { posting: "Sending…", ready: "Send" } as const;
-const NONE = 0;
-
 interface MessageBoxProps {
   readonly draft: Draft;
   readonly post: PostState;
-  readonly onPost: (text: string, posted: () => void) => void;
+  readonly onPost: (outgoing: Outgoing, posted: () => void) => void;
   readonly onSchedule: (() => void) | null;
   readonly text: MessageBoxText;
   readonly focused: boolean;
 }
 
-function sendLabelOf(posting: boolean): string {
-  if (posting) {
-    return SEND.posting;
-  }
-  return SEND.ready;
-}
-
 export function MessageBox(props: MessageBoxProps): ReactNode {
-  const { draft, onPost, post, text } = props;
-  const { chooseHighlighted: handlePick, dismiss: handleClose, edit: handleEdit, highlight: handleMove } = draft;
-  const written = useSyncExternalStore(draft.subscribe, draft.snapshot);
-  const posting = post.status === "posting";
-  const handleSend = useCallback(
-    (sent: string) => {
-      onPost(sent, draft.clear);
-    },
-    [draft, onPost],
-  );
-  const shown = useSuggestions({ commands: written.commands, draft, suggestions: written.suggestions });
-  const choosing = shown.options.length > NONE;
-  const handleChoose = shown.onChoose;
+  const { draft, post, text } = props;
+  const handleFiles = draft.attachments.attach;
   return (
     <BoxFrame>
-      <Form field="text" label={text.form} onSubmit={handleSend}>
-        <TextArea
-          caret={written.caret}
-          choosing={choosing}
-          focusRequests={written.focusRequests}
+      <FileDrop onFiles={handleFiles}>
+        <MessageForm
+          draft={draft}
           focused={props.focused}
-          label={text.field}
-          name="text"
-          onClose={handleClose}
-          onEdit={handleEdit}
-          onMove={handleMove}
-          onPick={handlePick}
-          value={written.text}
+          onPost={props.onPost}
+          onSchedule={props.onSchedule}
+          posting={post.status === "posting"}
+          text={text}
         />
-        {choosing && (
-          <Suggestions
-            highlighted={written.highlighted}
-            label={shown.label}
-            onChoose={handleChoose}
-            options={shown.options}
-          />
-        )}
-        {props.onSchedule !== null && <ScheduleChoice onSchedule={props.onSchedule} />}
-        <SendButton disabled={posting} label={sendLabelOf(posting)} />
-      </Form>
+      </FileDrop>
+      <AttachRefusal attachments={draft.attachments} />
       {post.status === "failed" && <Alert>{`Couldn't post the ${text.posts} (${post.code}): ${post.message}`}</Alert>}
     </BoxFrame>
   );

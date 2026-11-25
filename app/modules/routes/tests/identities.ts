@@ -1,17 +1,14 @@
-import type { CookoutClient, CreateIdentityRequest, Token } from "../../sdk/index.ts";
+import type { CookoutClient, CreateIdentityRequest, IdentityWithTokenResponse, Token } from "../../sdk/index.ts";
+import { createTestAgent, testAgentDisplayName, testClient } from "../../testing/index.ts";
+import type { ClientMethod } from "./answering.ts";
 import type { Session } from "../../board/index.ts";
 import { createBoardStore } from "../../board/index.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { expect } from "vitest";
 import { waitFor } from "@testing-library/react";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
 const NONE = 0;
 const ONE = 1;
-
-type ClientMethod = {
-  readonly [Key in keyof CookoutClient]: CookoutClient[Key] extends (...args: never) => unknown ? Key : never;
-}[keyof CookoutClient];
 
 interface Tracked {
   readonly client: CookoutClient;
@@ -64,6 +61,16 @@ function tracked(client: CookoutClient): Tracked {
   };
 }
 
+async function created(by: CookoutClient, request: CreateIdentityRequest): Promise<IdentityWithTokenResponse> {
+  if (request.kind === "human") {
+    const human = await by.createIdentity(request);
+    return human;
+  }
+  const { kind: _kind, ...agent } = request;
+  const agentCreated = await createTestAgent({ by, ...agent });
+  return agentCreated;
+}
+
 interface Refusing {
   readonly client: CookoutClient;
   readonly refused: Promise<unknown>;
@@ -87,11 +94,11 @@ export function refusalNoticed(client: CookoutClient): Refusing {
 }
 
 export function anonymousClient(): CookoutClient {
-  return createCookoutClient({ env: {}, url: webTestCookout().url });
+  return testClient({ env: {}, url: webTestCookout().url });
 }
 
 export function clientWith(token: string): CookoutClient {
-  return createCookoutClient({ env: {}, token, url: webTestCookout().url });
+  return testClient({ env: {}, token, url: webTestCookout().url });
 }
 
 export function adminClient(): CookoutClient {
@@ -103,7 +110,7 @@ export function sessionOf(client: CookoutClient): Session {
 }
 
 export async function newIdentity(request: CreateIdentityRequest): Promise<NewIdentity> {
-  const { token } = await adminClient().createIdentity(request);
+  const { token } = await created(adminClient(), request);
   const { client, settled } = tracked(clientWith(token));
   return {
     client,
@@ -123,4 +130,12 @@ export async function revocableView({ methods, revoked, viewer }: Revocable): Pr
     Object.assign(client, { [method]: rotated.client[method] });
   }
   return { client, rotateToken: rotated.rotateToken };
+}
+
+export function agentShown(name: string): string {
+  return `${testAgentDisplayName(name)}@${name}`;
+}
+
+export function agentOption(name: string): string {
+  return `@${name}${testAgentDisplayName(name)}`;
 }

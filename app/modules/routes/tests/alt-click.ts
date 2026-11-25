@@ -1,9 +1,11 @@
 import type { CookoutClient, MessageId } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
+import { answeredUntil, answering } from "./answering.ts";
 import { fireEvent, screen, within } from "@testing-library/react";
+import type { Answering } from "./answering.ts";
+import type { Live } from "../../testing/web.ts";
 import { inSidebar } from "./regions.ts";
 import { openAt } from "./render.tsx";
-import { vi } from "vitest";
 import { watched } from "./watched.ts";
 
 const NONE = 0;
@@ -19,10 +21,14 @@ interface Posters {
   readonly reader: CookoutClient;
 }
 
-async function inboxEmptied(client: CookoutClient): Promise<void> {
-  await vi.waitUntil(async () => {
-    const inbox = await client.inbox();
-    return inbox.items.length === NONE;
+async function inboxEmptied(client: CookoutClient, answered: Answering["answered"]): Promise<void> {
+  await answeredUntil({
+    answered,
+    done: async () => {
+      const inbox = await client.inbox();
+      return inbox.items.length === NONE;
+    },
+    method: "ack",
   });
 }
 
@@ -49,14 +55,27 @@ async function unreadTextsOf(reader: CookoutClient): Promise<readonly string[]> 
   return inbox.items.map((item) => item.message.text);
 }
 
+interface ThreadOpening {
+  readonly hash: string;
+  readonly live: Live;
+  readonly reader: CookoutClient;
+}
+
+async function threadRead({ hash, live, reader }: ThreadOpening): Promise<() => void> {
+  const { answered, client } = answering(reader);
+  const unmount = openAt({ client, hash, live });
+  await Promise.all([answered("listMessages"), answered("getThread")]);
+  await Promise.all([screen.findByText("Or one"), screen.findByText("Third")]);
+  await inboxEmptied(reader, answered);
+  return unmount;
+}
+
 export async function boardOpen(channel: string): Promise<Board> {
   const posters = await postersIn(channel);
   const { reader } = posters;
   const parent = await postedThread(posters, channel);
   const { live, stream } = watched(reader);
-  const unmount = openAt({ client: reader, hash: `#/channels/${channel}/threads/${String(parent)}`, live });
-  await Promise.all([screen.findByText("Or one"), screen.findByText("Third")]);
-  await inboxEmptied(reader);
+  const unmount = await threadRead({ hash: `#/channels/${channel}/threads/${String(parent)}`, live, reader });
   const events = await stream;
   return {
     channel,
@@ -79,10 +98,11 @@ export function altClicked(element: () => HTMLElement): { readonly pressKeptItsD
 }
 
 export function newAbove(label: string): string | null {
-  const list = screen.getByRole("list", { name: label });
-  for (const item of within(list).queryAllByRole("listitem")) {
-    if (within(item).queryByRole("separator", { name: "New" }) !== null) {
-      return within(item).getByRole("article").textContent;
+  const feed = screen.getByRole("feed", { name: label });
+  for (const article of within(feed).queryAllByRole("article")) {
+    const item = article.parentElement;
+    if (item !== null && within(item).queryByRole("separator", { name: "New" }) !== null) {
+      return article.textContent;
     }
   }
   return null;

@@ -1,5 +1,6 @@
 import type { Channel, ChannelName, CreateChannelRequest, Refusal } from "../../sdk/index.ts";
 import { CookoutError, refusalOf } from "../../sdk/index.ts";
+import { sameSnapshot } from "./selected.ts";
 
 type CreationField = "name" | "description";
 
@@ -10,6 +11,7 @@ type CreationState =
 
 interface ChannelCreationSnapshot {
   readonly open: boolean;
+  readonly cancelled: boolean;
   readonly name: string;
   readonly description: string;
   readonly create: CreationState;
@@ -29,7 +31,13 @@ interface CreationOptions {
   readonly createChannel: (request: CreateChannelRequest) => Promise<Channel>;
 }
 
-const CLOSED: ChannelCreationSnapshot = { create: { status: "idle" }, description: "", name: "", open: false };
+const CLOSED: ChannelCreationSnapshot = {
+  cancelled: false,
+  create: { status: "idle" },
+  description: "",
+  name: "",
+  open: false,
+};
 
 function fieldOf(error: unknown): CreationField {
   if (!(error instanceof CookoutError)) {
@@ -76,6 +84,9 @@ function createChannelCreation(options: CreationOptions): ChannelCreation {
   let queue = Promise.resolve();
 
   function publish(next: ChannelCreationSnapshot): void {
+    if (sameSnapshot({ after: next, before: current })) {
+      return;
+    }
     current = next;
     for (const listener of listeners) {
       listener();
@@ -84,7 +95,7 @@ function createChannelCreation(options: CreationOptions): ChannelCreation {
 
   return {
     close: () => {
-      publish(CLOSED);
+      publish({ ...CLOSED, cancelled: current.open || current.cancelled });
     },
     create: (created) => {
       publish({ ...current, create: { status: "creating" } });
@@ -103,7 +114,7 @@ function createChannelCreation(options: CreationOptions): ChannelCreation {
       publish({ ...current, name });
     },
     open: () => {
-      publish({ ...current, open: true });
+      publish({ ...current, cancelled: false, open: true });
     },
     snapshot: () => current,
     subscribe: (listener) => {

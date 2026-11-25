@@ -1,5 +1,5 @@
 import type { CookoutClient, EventStream, Message } from "../../sdk/index.ts";
-import { adminClient, anonymousClient, sessionOf } from "./identities.ts";
+import { adminClient, agentShown, anonymousClient, sessionOf } from "./identities.ts";
 import { clockStoppedAt, openWithClockStopped } from "./clock.ts";
 import { expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -61,7 +61,7 @@ async function openWatched(channel: string): Promise<OpenInbox> {
 
 async function readAndComeBack(href: string): Promise<void> {
   globalThis.location.hash = href;
-  await screen.findByRole("list", { name: "Posts" });
+  await screen.findByRole("feed", { name: "Posts" });
   fireEvent.click(inConversation().getByRole("button", { name: "Mark conversation read" }));
   await inConversation().findByText("Marked as read");
   globalThis.location.hash = "#/inbox";
@@ -92,11 +92,11 @@ it("the inbox lists unread items for you, then activity, newest first, each with
   await waitFor(() => {
     expect([rowsOf("For you"), rowsOf("Activity")]).toStrictEqual([
       [
-        `#/inbox/${channel}/${String(parent.id)}/messages/${String(reply.id)} Mentioned you${channel}-posterreplied in a thread in#${channel}just nowre: Deploy at noon? The rollout notes are in the usual place and every da…${reply.text}`,
+        `#/inbox/${channel}/${String(parent.id)}/messages/${String(reply.id)} Mentioned you${agentShown(`${channel}-poster`)}replied in a thread in#${channel}just nowre: Deploy at noon? The rollout notes are in the usual place and every da…${reply.text}`,
       ],
       [
-        `#/inbox/${channel} New in #${channel}${channel}-posterposted in#${channel}just now${other.text}`,
-        `#/inbox/${also} New in #${also}${channel}-posterposted in#${also}just now${first.text}`,
+        `#/inbox/${channel} New in #${channel}${agentShown(`${channel}-poster`)}posted in#${channel}just now${other.text}`,
+        `#/inbox/${also} New in #${also}${agentShown(`${channel}-poster`)}posted in#${also}just now${first.text}`,
       ],
     ]);
   });
@@ -120,7 +120,7 @@ it("a live mention appears under For you, and reading it moves it to Earlier", {
   await readAndComeBack(String(row.getAttribute("href")));
 
   expect([rowsOf("Earlier"), screen.getByText("You're all caught up.").tagName]).toStrictEqual([
-    [`#/inbox/${channel} Mentioned you${channel}-posterposted in#${channel}just now${message.text}`],
+    [`#/inbox/${channel} Mentioned you${agentShown(`${channel}-poster`)}posted in#${channel}just now${message.text}`],
     "P",
   ]);
 

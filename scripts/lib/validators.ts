@@ -49,9 +49,16 @@ function compile(entries: readonly Entry[]): string {
   return standaloneCode(ajv, Object.fromEntries(entries.map(({ name }) => [`is${name}`, name])));
 }
 
+function entryPointOf(module: string): string {
+  if (module.endsWith(".ts")) {
+    return module;
+  }
+  return `${module}/index.ts`;
+}
+
 function typeImport([module, group]: readonly [string, readonly Entry[] | undefined]): string {
   const names = (group ?? []).map(({ name }) => name).join(", ");
-  return `import type { ${names} } from "../../../${module}/index.ts";`;
+  return `import type { ${names} } from "../../../${entryPointOf(module)}";`;
 }
 
 function declare(entries: readonly Entry[]): string {

@@ -133,11 +133,18 @@ function answerFailure(failure: unknown): Effect.Effect<HttpServerResponse.HttpS
   return respond(toRefusal(failure));
 }
 
+function isHealthCheck(method: string, url: string): boolean {
+  return method === "GET" && new URL(url, "http://health.invalid").pathname === healthPath;
+}
+
 function guardRequest(
   publicUrl: string,
 ): Effect.Effect<void, Refusal, HttpServerRequest.HttpServerRequest | HttpServer.HttpServer> {
   return Effect.gen(function* guardHostAndOrigin() {
     const request = yield* HttpServerRequest.HttpServerRequest;
+    if (isHealthCheck(request.method, request.url)) {
+      return yield* Effect.void;
+    }
     const server = yield* HttpServer.HttpServer;
     const { host = "", origin = "" } = request.headers;
     const address = HttpServer.formatAddress(server.address);
@@ -157,6 +164,12 @@ function guardRequest(
  */
 export { cuttableRelay } from "./lib/server/cuttable-relay.ts";
 export type { Gate, Route } from "./lib/server/router.ts";
+
+/**
+ * The one Content-Security-Policy every response of the cookout carries, and the one the dev program's Vite server
+ * sends with the web UI, so a page the CSP blocks fails in dev and in browser tests as it does on the live board.
+ */
+export { contentSecurityPolicy } from "./lib/server/wire.ts";
 export type { Listen, Serving };
 
 /** The response Schemas of `/v1/health`, of every refusal and of an `invalid_request` refusal's details, for the SDK's generated validators. */
@@ -199,7 +212,8 @@ export function nodeHttpServer(listen: Listen): NodeHttp {
  * `publicUrl` too, the page's `og:image` and `og:url` paths are made absolute
  * against it, since link-preview services can't follow a relative one. Every request
  * goes through the web guards first: a `Host` that isn't the server's own
- * (or the host of `publicUrl`) is refused with 421 `foreign_host`, a write from another site's `Origin` with
+ * (or the host of `publicUrl`) is refused with 421 `foreign_host`, except at `GET /v1/health`, which shows no
+ * data and answers any `Host` so a platform's probe needs none (mattpocock/cookout#489), a write from another site's `Origin` with
  * 403 `foreign_origin`, and every response carries a strict CSP and refuses framing.
  * @param serving The port and host to listen on, the folder of the built web UI if it serves one, and the public URL if it has one.
  * @param routes Every route but `/v1/health`: the `gated` ones, and the `open` ones that need no token and never go through `gate`.

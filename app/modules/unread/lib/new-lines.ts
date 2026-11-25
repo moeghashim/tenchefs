@@ -2,14 +2,13 @@ import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import { createSelections } from "./selection.ts";
 
 const NONE = 0;
-const BEFORE_EVERY_MESSAGE = 0;
 
 interface Scope {
   readonly channel: ChannelName;
   readonly thread: MessageId | null;
 }
 
-type ReadPositionOf = (channel: ChannelName, thread: MessageId | null) => MessageId | null;
+type LineOf = (channel: ChannelName, thread: MessageId | null) => number | null;
 
 type MovesBackOf = (channel: ChannelName, thread: MessageId | null) => number;
 
@@ -18,7 +17,7 @@ interface CountsStore {
   readonly snapshot: () => { readonly status: string };
 }
 
-type WithNewLines<Store> = Omit<Store, "movesBack" | "readPosition"> & {
+type WithNewLines<Store> = Omit<Store, "heard" | "lineAt" | "movesBack"> & {
   readonly newLine: (channel: ChannelName, thread: MessageId | null) => NewLine;
   readonly selection: ReturnType<typeof createSelections>;
 };
@@ -30,44 +29,44 @@ interface NewLine {
 
 interface Lining {
   readonly counts: CountsStore;
-  readonly readPosition: ReadPositionOf;
+  readonly heard: CountsStore["subscribe"];
+  readonly lineAt: LineOf;
   readonly movesBack: MovesBackOf;
   readonly scope: Scope;
 }
 
-function lineOf(position: MessageId | null, movedBack: number): number | null {
-  if (position === null && movedBack > NONE) {
-    return BEFORE_EVERY_MESSAGE;
-  }
-  return position;
-}
-
-function createNewLine({ counts, movesBack, readPosition, scope }: Lining): NewLine {
+function createNewLine({ counts, heard, lineAt, movesBack, scope }: Lining): NewLine {
   const listeners = new Set<() => void>();
   let line: number | null = null;
   let taken = false;
   let moves = NONE;
   let stop: (() => void) | null = null;
 
+  function put(next: number | null): void {
+    if (next === line) {
+      return;
+    }
+    line = next;
+    for (const listener of listeners) {
+      listener();
+    }
+  }
+
   function take(): void {
-    const state = counts.snapshot();
     const movedBack = movesBack(scope.channel, scope.thread);
-    if ((taken && moves === movedBack) || state.status !== "loaded") {
+    if ((taken && moves === movedBack) || counts.snapshot().status !== "loaded") {
       return;
     }
     taken = true;
     moves = movedBack;
-    line = lineOf(readPosition(scope.channel, scope.thread), movedBack);
-    for (const listener of listeners) {
-      listener();
-    }
+    put(lineAt(scope.channel, scope.thread));
   }
 
   return {
     snapshot: () => line,
     subscribe: (listener) => {
       listeners.add(listener);
-      stop ??= counts.subscribe(take);
+      stop ??= heard(take);
       take();
       return () => {
         listeners.delete(listener);
@@ -82,11 +81,16 @@ function createNewLine({ counts, movesBack, readPosition, scope }: Lining): NewL
   };
 }
 
-type Lines<Store> = Store & { readonly readPosition: ReadPositionOf; readonly movesBack: MovesBackOf };
+type Lines<Store> = Store & {
+  readonly heard: CountsStore["subscribe"];
+  readonly lineAt: LineOf;
+  readonly movesBack: MovesBackOf;
+};
 
 function withNewLines<Store extends CountsStore>({
+  heard,
+  lineAt,
   movesBack,
-  readPosition,
   ...counts
 }: Lines<Store>): WithNewLines<Lines<Store>> {
   const lines = new Map<string, NewLine>();
@@ -94,7 +98,7 @@ function withNewLines<Store extends CountsStore>({
     ...counts,
     newLine: (channel, thread) => {
       const key = `${channel}/${String(thread)}`;
-      const line = lines.get(key) ?? createNewLine({ counts, movesBack, readPosition, scope: { channel, thread } });
+      const line = lines.get(key) ?? createNewLine({ counts, heard, lineAt, movesBack, scope: { channel, thread } });
       lines.set(key, line);
       return line;
     },

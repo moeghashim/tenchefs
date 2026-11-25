@@ -1,6 +1,7 @@
-import { Alert, Button } from "../../design-system/index.tsx";
 import type { Identity, IdentityName } from "../../sdk/index.ts";
 import { useCallback, useSyncExternalStore } from "react";
+import { Alert } from "../../design-system/content.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { Identities } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 

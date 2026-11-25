@@ -1,4 +1,5 @@
-import { Alert, CardBody, Muted } from "../../design-system/index.tsx";
+import { Alert, Muted } from "../../design-system/content.tsx";
+import { CardBody } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 import type { Refusal } from "../../sdk/index.ts";
 

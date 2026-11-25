@@ -1,9 +1,9 @@
-import type { ChannelMessages, ChannelMessagesState, ThreadClosing } from "../../board/index.ts";
+import type { ChannelMessagesState, ThreadClosing } from "../../board/index.ts";
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
 import { FoldEntry } from "./fold-entry.tsx";
 import { MessageEntry } from "./message-entry.tsx";
-import { MessageList } from "../../design-system/index.tsx";
+import { MessageList } from "../../design-system/messages.tsx";
 import { MessageRefusals } from "./message-refusals.tsx";
 import type { ReactNode } from "react";
 import { feedRows } from "./feed-rows.ts";
@@ -12,8 +12,8 @@ type Loaded = Extract<ChannelMessagesState, { readonly status: "loaded" }>;
 
 interface FeedStreamProps {
   readonly label: string;
+  readonly feed: string;
   readonly state: Loaded;
-  readonly messages: ChannelMessages;
   readonly me: string;
   readonly held: ReadonlySet<MessageId>;
   readonly readPosition: number | null;
@@ -35,7 +35,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
   });
   return (
     <>
-      <MessageList label={props.label}>
+      <MessageList busy={state.older.status === "loading"} feed={props.feed} label={props.label} more={state.hasMore}>
         {rows.map((row) => {
           if (row.kind === "fold") {
             return (
@@ -43,8 +43,8 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
                 day={row.day}
                 expanded={state.expanded}
                 fold={row.fold}
+                channel={props.channel}
                 key={`fold-${row.fold.run.join("-")}`}
-                messages={props.messages}
               />
             );
           }
@@ -59,6 +59,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
               news={props.threads.get(row.row.message.id) ?? null}
               open={props.open}
               parent={null}
+              threadParent={null}
               receipts={state.receipts}
               reply={null}
               row={row.row}

@@ -1,8 +1,10 @@
 import type { ChannelName, IsoTime, Refusal } from "../../sdk/index.ts";
 import type {
   CreateScheduledMessageRequest,
+  EditScheduledMessageRequest,
   PreviewScheduledMessageQuery,
   ScheduledMessage,
+  ScheduledMessageId,
 } from "../../scheduled-messages/index.ts";
 import type { Clock } from "../../format/index.ts";
 import { refusalOf } from "../../sdk/index.ts";
@@ -23,6 +25,7 @@ type ScheduleSaveState =
 interface SchedulingSnapshot {
   readonly open: boolean;
   readonly channel: ChannelName | null;
+  readonly editing: ScheduledMessageId | null;
   readonly text: string;
   readonly kind: ScheduleKind;
   readonly cron: string;
@@ -36,6 +39,7 @@ interface SchedulingSnapshot {
 
 interface SchedulingOptions {
   readonly create: (request: CreateScheduledMessageRequest) => Promise<ScheduledMessage>;
+  readonly edit: (id: ScheduledMessageId, request: EditScheduledMessageRequest) => Promise<ScheduledMessage>;
   readonly preview: (query: PreviewScheduledMessageQuery) => Promise<readonly IsoTime[]>;
   readonly clock: Clock;
   readonly pause: number;
@@ -64,6 +68,7 @@ function closedIn(timeZone: string): SchedulingSnapshot {
     channel: null,
     cron: "",
     date: "",
+    editing: null,
     kind: "once",
     open: false,
     preview: WAITING,
@@ -156,10 +161,20 @@ function createSaving(held: Held): (saved: () => void) => void {
   const { current, options, publish } = held;
   let sending = Promise.resolve();
 
-  async function send(request: CreateScheduledMessageRequest, saved: () => void): Promise<void> {
-    try {
+  async function sent(request: CreateScheduledMessageRequest, editing: ScheduledMessageId | null): Promise<void> {
+    if (editing === null) {
       const scheduled = await options.create(request);
       publish({ ...closedIn(options.timeZone), scheduled });
+      return;
+    }
+    const { channel: _channel, ...edited } = request;
+    await options.edit(editing, edited);
+    publish(closedIn(options.timeZone));
+  }
+
+  async function send(request: CreateScheduledMessageRequest, saved: () => void): Promise<void> {
+    try {
+      await sent(request, current().editing);
       saved();
     } catch (error: unknown) {
       publish({ ...current(), save: { ...refusalOf(error), status: "failed" } });

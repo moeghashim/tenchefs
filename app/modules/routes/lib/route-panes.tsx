@@ -39,17 +39,26 @@ export function RoutePanes(props: RoutePanesProps): ReactNode {
     return <PagePanes me={props.me} route={route} stores={stores} />;
   }
   if (isPeople(route)) {
-    return <PeoplePanes composer={stores.composer} layout={stores.layout} me={props.me} route={route} />;
+    return (
+      <PeoplePanes
+        composer={stores.composer}
+        keymap={stores.keymap}
+        layout={stores.layout}
+        me={props.me}
+        route={route}
+      />
+    );
   }
   if (isChannel(route)) {
     return (
       <ChannelPanes
-        board={stores.board}
         composer={stores.composer}
         key={route.channel}
+        keymap={stores.keymap}
         layout={stores.layout}
         me={props.me}
         route={route}
+        scheduling={stores.scheduling}
         unread={stores.unread}
       />
     );

@@ -1,13 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import { inDialog, inProfile } from "./regions.ts";
 import type { Page } from "@playwright/test";
 import { logIn } from "./login.ts";
 import { newIdentity } from "./people.ts";
+import { probeFixtures } from "./probe.ts";
+import { unique } from "./names.ts";
 
-const owner = "browser-confirm-owner";
-const agent = "browser-confirm-bot";
+const test = base.extend(probeFixtures);
+
+function agentName(): string {
+  return unique("browser-confirm-bot");
+}
 
 async function openAgentProfile(page: Page): Promise<void> {
+  const owner = unique("browser-confirm-owner");
+  const agent = agentName();
   const { token } = await newIdentity({ kind: "human", name: owner });
   await newIdentity({ kind: "agent", name: agent, owner });
   await logIn({ page, token });
@@ -39,10 +46,11 @@ test("the confirmation dialog keeps focus inside while open, and Escape gives it
   page,
 }) => {
   await openAgentProfile(page);
+  const agent = agentName();
   const deactivate = inProfile(page).getByRole("button", { exact: true, name: "Deactivate" });
   await deactivate.click();
 
-  await expect(inDialog(page).getByRole("button", { name: "Cancel" })).toBeFocused();
+  await expect(inDialog(page).getByRole("button", { exact: true, name: "Cancel" })).toBeFocused();
 
   await expect(tabOrder(page)).resolves.toStrictEqual([`Deactivate @${agent}`, "Cancel", `Deactivate @${agent}`]);
 

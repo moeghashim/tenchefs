@@ -1,7 +1,7 @@
 import {
   appendTo,
   channelFixture as channel,
-  commandFixture as command,
+  webhookCommandFixture as command,
   handlerFixture as handler,
   identityName,
   isoTime,
@@ -22,17 +22,17 @@ it.effect.each(storageLayers)(
   ({ layer }) =>
     Effect.gen(function* foundByHash() {
       const { storage } = yield* openStore(layer);
-      yield* storage.addCommand(command("deploy"), handler("deploy"));
+      yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
       yield* storage.createChannel(channel("grill"));
       const call = yield* appendTo(storage)(newMessage("grill", "/deploy"));
-      yield* storage.addCommandToken({
+      yield* storage.addWebhookCommandToken({
         expiresAt,
         handler: identityName("deploy"),
         hash: tokenHash("hash:command"),
         threadId: call.id,
       });
-      const found = yield* storage.findCommandToken(tokenHash("hash:command"));
-      const missing = yield* storage.findCommandToken(tokenHash("hash:other"));
+      const found = yield* storage.findWebhookCommandToken(tokenHash("hash:command"));
+      const missing = yield* storage.findWebhookCommandToken(tokenHash("hash:other"));
 
       expect(found).toStrictEqual({ expiresAt, handler: handler("deploy"), threadId: call.id });
       expect(missing).toBeUndefined();
@@ -44,10 +44,10 @@ it.effect.each(storageLayers)(
   ({ layer }) =>
     Effect.gen(function* handlerDeactivated() {
       const { storage } = yield* openStore(layer);
-      yield* storage.addCommand(command("deploy"), handler("deploy"));
+      yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
       yield* storage.createChannel(channel("grill"));
       const call = yield* appendTo(storage)(newMessage("grill", "/deploy"));
-      yield* storage.addCommandToken({
+      yield* storage.addWebhookCommandToken({
         expiresAt,
         handler: identityName("deploy"),
         hash: tokenHash("hash:command"),
@@ -55,7 +55,7 @@ it.effect.each(storageLayers)(
       });
       yield* storage.deactivateIdentity(identityName("deploy"));
       yield* storage.reactivateIdentity(identityName("deploy"), tokenHash("hash:fresh"));
-      const found = yield* storage.findCommandToken(tokenHash("hash:command"));
+      const found = yield* storage.findWebhookCommandToken(tokenHash("hash:command"));
 
       expect(found).toBeUndefined();
     }),
@@ -70,7 +70,7 @@ it.effect.each(storageLayers)(
       const hash = tokenHash("hash:command");
       const grant = { expiresAt, handler: identityName("deploy"), hash, threadId: messageId(ANY_THREAD) };
       const failures = yield* Effect.all(
-        [Effect.flip(storage.addCommandToken(grant)), Effect.flip(storage.findCommandToken(hash))],
+        [Effect.flip(storage.addWebhookCommandToken(grant)), Effect.flip(storage.findWebhookCommandToken(hash))],
         { concurrency: 1 },
       );
 

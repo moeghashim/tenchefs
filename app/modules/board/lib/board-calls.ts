@@ -13,8 +13,10 @@ import type {
 import type { ClosingClient, ClosingRefusal } from "./thread-closing.ts";
 import type {
   CreateScheduledMessageRequest,
+  EditScheduledMessageRequest,
   PreviewScheduledMessageQuery,
   ScheduledMessage,
+  ScheduledMessageId,
 } from "../../scheduled-messages/index.ts";
 import type { SearchAnswer } from "../../search/web.ts";
 import { createMessageAcks } from "./message-acks.ts";
@@ -23,7 +25,20 @@ import { refusedAs } from "./subscriptions-slice.ts";
 
 type CallsClient = ClosingClient &
   SubscriptionsClient &
-  Pick<CookoutClient, "ack" | "createChannel" | "createScheduledMessage" | "previewScheduledMessage" | "search">;
+  Pick<
+    CookoutClient,
+    | "ack"
+    | "createChannel"
+    | "createScheduledMessage"
+    | "deleteScheduledMessage"
+    | "editScheduledMessage"
+    | "pauseScheduledMessage"
+    | "previewScheduledMessage"
+    | "resumeScheduledMessage"
+    | "search"
+  >;
+
+type ScheduleChange = "pause" | "resume" | "remove";
 
 interface BoardCalls {
   readonly createChannel: (request: CreateChannelRequest) => Promise<Channel>;
@@ -35,6 +50,11 @@ interface BoardCalls {
   readonly search: (request: SearchRequest) => Promise<SearchAnswer>;
   readonly createScheduledMessage: (request: CreateScheduledMessageRequest) => Promise<ScheduledMessage>;
   readonly previewScheduledMessage: (query: PreviewScheduledMessageQuery) => Promise<readonly IsoTime[]>;
+  readonly editScheduledMessage: (
+    id: ScheduledMessageId,
+    request: EditScheduledMessageRequest,
+  ) => Promise<ScheduledMessage>;
+  readonly changeScheduledMessage: (id: ScheduledMessageId, change: ScheduleChange) => Promise<void>;
 }
 
 interface CallsOptions {
@@ -42,6 +62,7 @@ interface CallsOptions {
   readonly heard: (event: CookoutEvent) => void;
   readonly subscriptionChanged: (change: SubscriptionChange) => void;
   readonly changed: () => void;
+  readonly keepResults: (asked: Promise<SearchAnswer>) => Promise<SearchAnswer>;
 }
 
 async function send(client: SubscriptionsClient, channel: ChannelName, wanted: boolean): Promise<SubscriptionResponse> {
@@ -83,6 +104,40 @@ function subscribing(options: CallsOptions): BoardCalls["setSubscribed"] {
   };
 }
 
+async function changed(client: CallsClient, id: ScheduledMessageId, change: ScheduleChange): Promise<ScheduledMessage> {
+  if (change === "pause") {
+    const { scheduledMessage } = await client.pauseScheduledMessage(id);
+    return scheduledMessage;
+  }
+  if (change === "resume") {
+    const { scheduledMessage } = await client.resumeScheduledMessage(id);
+    return scheduledMessage;
+  }
+  const { scheduledMessage } = await client.deleteScheduledMessage(id);
+  return scheduledMessage;
+}
+
+type ScheduleCalls = Pick<BoardCalls, "changeScheduledMessage" | "createScheduledMessage" | "editScheduledMessage">;
+
+function scheduleCalls({ client, heard }: CallsOptions): ScheduleCalls {
+  return {
+    changeScheduledMessage: async (id, change) => {
+      const scheduledMessage = await changed(client, id, change);
+      heard({ deleted: change === "remove", scheduledMessage, type: "scheduled-message" });
+    },
+    createScheduledMessage: async (request) => {
+      const { scheduledMessage } = await client.createScheduledMessage(request);
+      heard({ deleted: false, scheduledMessage, type: "scheduled-message" });
+      return scheduledMessage;
+    },
+    editScheduledMessage: async (id, request) => {
+      const { scheduledMessage } = await client.editScheduledMessage(id, request);
+      heard({ deleted: false, scheduledMessage, type: "scheduled-message" });
+      return scheduledMessage;
+    },
+  };
+}
+
 function createBoardCalls(options: CallsOptions): BoardCalls {
   const { client, heard } = options;
   const closing = createThreadClosing({
@@ -93,6 +148,7 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
     refused: options.changed,
   });
   return {
+    ...scheduleCalls(options),
     ack: createMessageAcks(client),
     close: closing.close,
     closingRefusal: closing.refusal,
@@ -102,21 +158,19 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
       heard({ subscription: { channel: channel.name, subscribed: true }, type: "subscription" });
       return channel;
     },
-    createScheduledMessage: async (request) => {
-      const { scheduledMessage } = await client.createScheduledMessage(request);
-      return scheduledMessage;
-    },
     previewScheduledMessage: async (query) => {
       const { nextRuns } = await client.previewScheduledMessage(query);
       return nextRuns;
     },
     reopen: closing.reopen,
     search: async (request) => {
-      const answer = await answerOf(client, request);
+      const answer = await options.keepResults(answerOf(client, request));
       return answer;
     },
     setSubscribed: subscribing(options),
   };
 }
 
-export { type BoardCalls, type CallsClient, createBoardCalls };
+type ThreadClosing = Pick<BoardCalls, "close" | "reopen">;
+
+export { type BoardCalls, type CallsClient, type ScheduleChange, type ThreadClosing, createBoardCalls };

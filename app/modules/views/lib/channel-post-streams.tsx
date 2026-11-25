@@ -45,6 +45,7 @@ export function ChannelPostStreams(props: ChannelPostStreamsProps): ReactNode {
   return (
     <>
       <MessageStream
+        closing={null}
         after={null}
         channel={null}
         label={TEXT.posts}
@@ -56,12 +57,14 @@ export function ChannelPostStreams(props: ChannelPostStreamsProps): ReactNode {
         receipts={receipts}
         reply={props.reply}
         threads={NO_THREADS}
+        threadParent={null}
       />
       {props.replies.length > NONE && (
         <PostReplies me={me} menu={menu} post={post} receipts={props.replyReceipts} replies={props.replies} />
       )}
       {later.length > NONE && (
         <MessageStream
+          closing={null}
           after={post}
           channel={null}
           label={TEXT.later}
@@ -73,6 +76,7 @@ export function ChannelPostStreams(props: ChannelPostStreamsProps): ReactNode {
           receipts={receipts}
           reply={props.reply}
           threads={NO_THREADS}
+          threadParent={null}
         />
       )}
     </>

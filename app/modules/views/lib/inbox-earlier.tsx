@@ -1,7 +1,8 @@
-import { Alert, FeedHeading, Skeleton } from "../../design-system/index.tsx";
+import { Alert, Skeleton } from "../../design-system/content.tsx";
 import { EarlierItems } from "./earlier-items.tsx";
 import { EarlierMore } from "./earlier-more.tsx";
 import { EarlierNotices } from "./earlier-notices.tsx";
+import { FeedHeading } from "../../design-system/feed.tsx";
 import type { Identities } from "../../composer/index.ts";
 import type { InboxRows } from "./use-inbox-rows.ts";
 import type { InboxSelection } from "../../paths/index.ts";

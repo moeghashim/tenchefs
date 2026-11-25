@@ -6,6 +6,7 @@ import { alertSaying } from "./alerts.ts";
 import { inPane } from "./regions.ts";
 import { messagesIn } from "./messages.ts";
 import { openAt } from "./render.tsx";
+import { testAgentDisplayName } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 
 const NONE = 0;
@@ -45,9 +46,10 @@ function sendMessage(): void {
 
 async function postWithMention(): Promise<void> {
   typeMessage("Please look, @web-post-r");
-  fireEvent.click(await inPane().findByRole("button", { name: /^@web-post-reviewer/u }));
+  const reviewer = new RegExp(`^${testAgentDisplayName("web-post-reviewer")}, @web-post-reviewer`, "u");
+  fireEvent.mouseDown(await inPane().findByRole("option", { name: reviewer }));
   sendMessage();
-  await within(screen.getByRole("list", { name: "Messages" })).findByText(/Please look/u);
+  await within(screen.getByRole("feed", { name: "Messages" })).findByText(/Please look/u);
 }
 
 async function openedThenRevoked(name: string, channel: string): Promise<() => void> {

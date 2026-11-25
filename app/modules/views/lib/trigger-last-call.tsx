@@ -1,4 +1,4 @@
-import { Muted } from "../../design-system/index.tsx";
+import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { TriggerResult } from "../../sdk/index.ts";
 import { useTimeAgo } from "./use-time-ago.ts";

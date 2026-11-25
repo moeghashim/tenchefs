@@ -1,5 +1,6 @@
-import { Button, ButtonRow, Muted, TokenText } from "../../design-system/index.tsx";
+import { Button, ButtonRow, TokenText } from "../../design-system/controls.tsx";
 import type { IdentityActions } from "../../composer/index.ts";
+import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 
@@ -27,7 +28,9 @@ export function TokenShown(props: TokenShownProps): ReactNode {
       <TokenText label={TEXT.label} token={token} />
       <Muted>{TEXT.warning}</Muted>
       <ButtonRow>
-        <Button onClick={handleCopy}>{TEXT.copy}</Button>
+        <Button focused onClick={handleCopy}>
+          {TEXT.copy}
+        </Button>
         <Button onClick={handleDone}>{TEXT.done}</Button>
       </ButtonRow>
     </>

@@ -1,3 +1,4 @@
+import { alertRaised, inboxCounts, inboxOfOwnerWithWatchingAgent } from "./owned-agent.ts";
 import { anonymousClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
@@ -84,6 +85,18 @@ it("the title leads with how many unread messages are for you", { timeout: 10_00
   });
 
   close();
+});
+
+it("the title counts an offline alert for you, as the sidebar's Inbox badge does", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const open = await inboxOfOwnerWithWatchingAgent({ owner: "web-title-alert" });
+  await alertRaised(open);
+  const title = await shownTitle("(1) Inbox · cookout");
+
+  expect([title, inboxCounts()]).toStrictEqual(["(1) Inbox · cookout", ["1 for you"]]);
+
+  await open.close();
 });
 
 it("logged out, and on an approval page, the title says what the page is for", { timeout: 10_000 }, async () => {

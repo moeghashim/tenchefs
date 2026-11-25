@@ -1,6 +1,6 @@
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { firstRowSelected, focusedHref, focusedTag, pressed, typedHere, unreadSettledAt } from "./inbox-keys.ts";
-import { fireEvent } from "@testing-library/react";
 import { inConversation } from "./regions.ts";
 
 const NONE = 0;
@@ -46,7 +46,7 @@ it("the @ suggestions keep the up and down arrows and Enter while they show", { 
   });
   pressed("r");
   fireEvent.change(replyBox(), { target: { value: `Ping @${channel}-po` } });
-  await inConversation().findByRole("list", { name: "Mention suggestions" });
+  await inConversation().findByRole("listbox", { name: "Mention suggestions" });
   const taken = [typedHere("ArrowDown"), typedHere("ArrowUp"), typedHere("Enter")];
 
   expect([taken, globalThis.location.hash, replyBox()]).toStrictEqual([
@@ -86,6 +86,40 @@ it("enter on a focused button is left to the button, not taken to the reply box"
   inConversation().getByRole("button", { name: "Mark unread" }).focus();
 
   expect([typedHere("Enter"), focusedTag()]).toStrictEqual([true, "BUTTON"]);
+
+  unmount();
+});
+
+async function namedKeysOf(control: () => HTMLElement): Promise<readonly (string | null)[]> {
+  act(() => {
+    control().focus();
+  });
+  const tooltip = await screen.findByRole("tooltip");
+  const named = [control().getAttribute("aria-keyshortcuts"), tooltip.textContent];
+  act(() => {
+    control().blur();
+  });
+  await waitFor(() => {
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+  return named;
+}
+
+it("mark read, Mark unread and Open thread name their keys in aria-keyshortcuts and their tooltips", {
+  timeout: 8000,
+}, async () => {
+  expect.hasAssertions();
+
+  const { unmount } = await firstRowSelected({ channel: "web-inbox-keys-named", section: "Earlier" });
+  const read = await namedKeysOf(() => inConversation().getByRole("button", { name: "Mark conversation read" }));
+  const unread = await namedKeysOf(() => inConversation().getByRole("button", { name: "Mark unread" }));
+  const open = await namedKeysOf(() => inConversation().getByRole("link", { name: "Open thread" }));
+
+  expect([read, unread, open]).toStrictEqual([
+    ["e", "Mark read (e)"],
+    ["u", "Mark unread (u)"],
+    ["o", "Open thread (o)"],
+  ]);
 
   unmount();
 });

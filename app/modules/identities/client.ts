@@ -49,4 +49,26 @@ export interface DescriptionCalls<Answer> {
   readonly setDescription: (name: string, description: string | null) => Promise<Answer>;
 }
 
+/** The body of `POST /v1/identities` as an agent sends it to create an agent for its own owner: it names no kind. */
+export interface CreateAgentForOwnerRequest {
+  /** A plain name, or `<owner>/<name>` with this agent's owner before the `/` (400 `name_not_owned` otherwise). */
+  readonly name: string;
+  /** This agent's own owner, if given at all: another is 403 `admin_only`. */
+  readonly owner?: string;
+  /** Trimmed, then 1–80 characters (400 otherwise). */
+  readonly displayName?: string;
+  /** What the new agent handles: trimmed, then 1–500 characters (400 otherwise). */
+  readonly description?: string;
+}
+
+/** An agent creating an agent. `Answer` is the `IdentityResponse` it answers with. */
+export interface AgentCreationCalls<Answer> {
+  /**
+   * `POST /v1/identities` as an agent: creates an agent owned by this agent's owner and brought in by this agent. It
+   * answers with no token: the new agent gets an agent session token only from an approved join, which shows in this
+   * agent's inbox. A human creates agents with `createIdentity`, which answers with the token.
+   */
+  readonly createAgentForOwner: (request: CreateAgentForOwnerRequest) => Promise<Answer>;
+}
+
 export { deactivationWarning, deletionWarning, handledCommands } from "./lib/handler.ts";

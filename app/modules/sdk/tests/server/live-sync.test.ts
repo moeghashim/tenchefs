@@ -1,5 +1,5 @@
 import type { CookoutClient, CookoutEvent, EventStream, WatchOptions } from "../../index.ts";
-import { TestCookout, answer, testCookout } from "../../../testing/server.ts";
+import { TestCookout, answer, testCookout, watchingAllChannels } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import type { Scope } from "effect";
@@ -55,7 +55,7 @@ it.effect("with the all-channels option, a message in a channel the caller doesn
     const ann = yield* cookout.createIdentity("ann");
     const bob = yield* cookout.createIdentity("bob");
     yield* answer(() => ann.client.createChannel({ name: "grill" }));
-    const events = yield* watching(bob.client, { allChannels: true });
+    const events = yield* watchingAllChannels(bob);
     const { message } = yield* answer(() => ann.client.createMessage({ channel: "grill", text: "smoke's up" }));
     const event = yield* answer(() => events.next());
 

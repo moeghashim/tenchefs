@@ -1,4 +1,5 @@
 export { FeedRowClosed } from "./feed-row-closed.tsx";
+export { ScheduledMark } from "./scheduled-mark.tsx";
 export { MoreButton } from "./more-button.tsx";
 export { Feed } from "./feed.tsx";
 export { FeedHeading } from "./feed-heading.tsx";

@@ -9,9 +9,9 @@ import {
   silentConnection,
   startServe,
 } from "../../../testing/server.ts";
+import { createTestAgent, testClient } from "../../../testing/index.ts";
 import { expect, it } from "@effect/vitest";
 import { NodeServices } from "@effect/platform-node";
-import { createCookoutClient } from "../../../sdk/index.ts";
 import { secretsLive } from "../../../secrets/server.ts";
 import { storageLayer } from "../../../storage/server.ts";
 
@@ -46,8 +46,8 @@ function filesNextTo(database: string): Effect.Effect<StoredFiles, never, FileSy
 
 function issueTokens(url: string, adminToken: string): Effect.Effect<readonly string[]> {
   return Effect.gen(function* createAndRotate() {
-    const admin = createCookoutClient({ env: {}, token: adminToken, url });
-    const created = yield* answer(() => admin.createIdentity({ kind: "agent", name: "agent" }));
+    const admin = testClient({ env: {}, token: adminToken, url });
+    const created = yield* answer(() => createTestAgent({ by: admin, displayName: "agent", name: "agent" }));
     const rotated = yield* answer(() => admin.rotateToken("agent"));
     return [adminToken, created.token, rotated.token];
   });
@@ -57,7 +57,7 @@ it.effect("a fresh board's admin works with COOKOUT_ADMIN_TOKEN, and serve print
   Effect.gen(function* adminTokenFromSetting() {
     const database = yield* freshDatabasePath;
     const server = yield* startServe({ database });
-    const whoami = yield* answer(createCookoutClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
+    const whoami = yield* answer(testClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
 
     expect(whoami.identity).toMatchObject({ admin: true, name: "admin" });
     expect(server.stdout).not.toContain(server.adminToken);
@@ -71,8 +71,8 @@ it.effect("restarting a board with a different COOKOUT_ADMIN_TOKEN makes the new
     const first = yield* startServe({ database });
     yield* first.stop;
     const second = yield* startServe({ adminToken: NEW_ADMIN_TOKEN, database });
-    const whoami = yield* answer(createCookoutClient({ env: {}, token: NEW_ADMIN_TOKEN, url: second.url }).whoami);
-    const old = yield* refusal(createCookoutClient({ env: {}, token: first.adminToken, url: second.url }).whoami);
+    const whoami = yield* answer(testClient({ env: {}, token: NEW_ADMIN_TOKEN, url: second.url }).whoami);
+    const old = yield* refusal(testClient({ env: {}, token: first.adminToken, url: second.url }).whoami);
 
     expect(whoami.identity).toMatchObject({ admin: true, name: "admin" });
     expect(old).toMatchObject({ status: UNAUTHORIZED });
@@ -85,7 +85,7 @@ it.effect("a stopping board drops a connection that never sent a request instead
     const database = yield* freshDatabasePath;
     const server = yield* startServe({ database });
     const silent = yield* silentConnection(server.url);
-    const whoami = yield* answer(createCookoutClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
+    const whoami = yield* answer(testClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
     yield* server.stop;
     yield* silent.dropped;
 
@@ -135,8 +135,8 @@ it.effect("cookout serve gives the admin token to COOKOUT_ADMIN_NAME, and to adm
   Effect.gen(function* adminNameFromSetting() {
     const named = yield* startServe({ database: yield* freshDatabasePath, env: { COOKOUT_ADMIN_NAME: "matt" } });
     const empty = yield* startServe({ database: yield* freshDatabasePath, env: { COOKOUT_ADMIN_NAME: "" } });
-    const matt = yield* answer(createCookoutClient({ env: {}, token: named.adminToken, url: named.url }).whoami);
-    const admin = yield* answer(createCookoutClient({ env: {}, token: empty.adminToken, url: empty.url }).whoami);
+    const matt = yield* answer(testClient({ env: {}, token: named.adminToken, url: named.url }).whoami);
+    const admin = yield* answer(testClient({ env: {}, token: empty.adminToken, url: empty.url }).whoami);
 
     expect(matt.identity).toMatchObject({ admin: true, kind: "human", name: "matt" });
     expect(admin.identity).toMatchObject({ admin: true, kind: "human", name: "admin" });
@@ -223,8 +223,8 @@ it.effect("cookout serve refuses a COOKOUT_ADMIN_NAME that names an agent, namin
   Effect.gen(function* refusesAgentAdminName() {
     const database = yield* freshDatabasePath;
     const first = yield* startServe({ database });
-    const admin = createCookoutClient({ env: {}, token: first.adminToken, url: first.url });
-    yield* answer(() => admin.createIdentity({ kind: "agent", name: "release-bot" }));
+    const admin = testClient({ env: {}, token: first.adminToken, url: first.url });
+    yield* answer(() => createTestAgent({ by: admin, displayName: "release-bot", name: "release-bot" }));
     yield* first.stop;
     const refused = yield* runServe({ database, env: { COOKOUT_ADMIN_NAME: "release-bot" } });
 
@@ -239,7 +239,7 @@ it.effect("cookout serve without DATABASE_URL opens the SQLite file at COOKOUT_D
     const fs = yield* FileSystem.FileSystem;
     const database = yield* freshDatabasePath;
     const server = yield* startServe({ env: { COOKOUT_DB: database } });
-    const whoami = yield* answer(createCookoutClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
+    const whoami = yield* answer(testClient({ env: {}, token: server.adminToken, url: server.url }).whoami);
     const made = yield* fs.exists(database);
 
     expect(whoami.identity).toMatchObject({ name: "admin" });

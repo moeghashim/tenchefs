@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * The example handler program: the one place its effects run. It reads
- * `COOKOUT_COMMAND_SECRET` (the command's HMAC secret, shown once by
+ * `COOKOUT_COMMAND_SECRET` (the Webhook command's HMAC secret, shown once by
  * `cookout command add`), `COOKOUT_URL` (the cookout it posts result replies
  * to), `HOST` (default `0.0.0.0`) and `PORT` (default 8787), and serves
  * until stopped.

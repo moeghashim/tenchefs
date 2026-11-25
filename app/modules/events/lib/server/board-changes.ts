@@ -1,18 +1,20 @@
 import { AgentSessionEventSchema, ChannelDeletedEventSchema, CommandEventSchema } from "./wire.ts";
 import type { Connected, EventSource, StreamRequest } from "./source.ts";
 import { Effect, Stream } from "effect";
+import { ScheduledMessageEventSchema, ScheduledMessages } from "../../../scheduled-messages/server.ts";
 import { AgentSessions } from "../../../agent-sessions/server.ts";
 import { Channels } from "../../../channels/server.ts";
-import { CommandChanges } from "../../../commands/server.ts";
 import type { Identity } from "../../../identities/index.ts";
+import { WebhookCommandChanges } from "../../../webhook-commands/server.ts";
 import { asksForAllChannels } from "./all-channels.ts";
 import { sseEvent } from "./source.ts";
 
-type BoardChangesNeeds = Channels | CommandChanges | AgentSessions;
+type BoardChangesNeeds = Channels | WebhookCommandChanges | AgentSessions | ScheduledMessages;
 
 const channelDeletedEvent = sseEvent(ChannelDeletedEventSchema);
-const commandEvent = sseEvent(CommandEventSchema);
+const webhookCommandEvent = sseEvent(CommandEventSchema);
 const agentSessionEvent = sseEvent(AgentSessionEventSchema);
+const scheduledMessageEvent = sseEvent(ScheduledMessageEventSchema);
 
 function channelDeletions(request: StreamRequest): Connected<Channels> {
   return Effect.gen(function* subscribeToChannelDeletions() {
@@ -27,15 +29,15 @@ function channelDeletions(request: StreamRequest): Connected<Channels> {
   });
 }
 
-function commands(request: StreamRequest): Connected<CommandChanges> {
-  return Effect.gen(function* subscribeToCommands() {
+function commands(request: StreamRequest): Connected<WebhookCommandChanges> {
+  return Effect.gen(function* subscribeToWebhookCommands() {
     if (!asksForAllChannels(request)) {
       return Stream.empty;
     }
-    const changes = yield* CommandChanges;
+    const changes = yield* WebhookCommandChanges;
     const changed = yield* changes.changed;
     return Stream.fromSubscription(changed).pipe(
-      Stream.mapEffect((command) => commandEvent({ command, type: "command" })),
+      Stream.mapEffect((command) => webhookCommandEvent({ command, type: "command" })),
     );
   });
 }
@@ -58,6 +60,21 @@ function agentSessions(request: StreamRequest): Connected<AgentSessions> {
   });
 }
 
-const boardChanges: readonly EventSource<BoardChangesNeeds>[] = [channelDeletions, commands, agentSessions];
+function scheduledMessages(): Connected<ScheduledMessages> {
+  return Effect.gen(function* subscribeToScheduledMessages() {
+    const service = yield* ScheduledMessages;
+    const changed = yield* service.changed;
+    return Stream.fromSubscription(changed).pipe(
+      Stream.mapEffect((change) => scheduledMessageEvent({ ...change, type: "scheduled-message" })),
+    );
+  });
+}
+
+const boardChanges: readonly EventSource<BoardChangesNeeds>[] = [
+  channelDeletions,
+  commands,
+  agentSessions,
+  scheduledMessages,
+];
 
 export { type BoardChangesNeeds, boardChanges };

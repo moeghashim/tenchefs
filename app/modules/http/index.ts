@@ -8,11 +8,11 @@ import { messageErrorCodes, scheduledMessageErrorCodes } from "../scheduled-mess
 import type { IsoTime } from "../time/index.ts";
 import { agentSessionErrorCodes } from "../agent-sessions/index.ts";
 import { channelErrorCodes } from "../channels/index.ts";
-import { commandErrorCodes } from "../commands/index.ts";
 import { identityErrorCodes } from "../identities/index.ts";
 import { limitErrorCodes } from "../limits/index.ts";
 import { presenceErrorCodes } from "../presence/index.ts";
 import { searchErrorCodes } from "../search/index.ts";
+import { webhookCommandErrorCodes } from "../webhook-commands/index.ts";
 
 type Same<Left, Right> = [Left] extends [Right] ? ([Right] extends [Left] ? true : false) : false;
 type SameShape<Left, Right> = Same<Left, Right> extends true ? Same<keyof Left, keyof Right> : false;
@@ -21,6 +21,7 @@ type Matching<Schema extends { readonly Type: unknown }, Wire> =
 
 const ECHO_LIMIT = 100;
 const ECHO_START = 0;
+const WEB_PROTOCOLS: ReadonlySet<string> = new Set(["http:", "https:"]);
 
 /** The path of the health check, the one route without a token. */
 export const healthPath = "/v1/health";
@@ -58,7 +59,7 @@ export const errorCodes = [
   ...deactivationOfferErrorCodes,
   ...deactivatedQuietAgentErrorCodes,
   ...agentSessionErrorCodes,
-  ...commandErrorCodes,
+  ...webhookCommandErrorCodes,
   ...limitErrorCodes,
   ...presenceErrorCodes,
   ...searchErrorCodes,
@@ -67,6 +68,7 @@ export const errorCodes = [
   "attachment_empty",
   "attachment_unnamed",
   "message_empty",
+  "thread_moved",
   "attachment_not_found",
   ...scheduledMessageErrorCodes,
   "not_found",
@@ -125,6 +127,16 @@ export function echoed(value: string): string {
     return value;
   }
   return `${value.slice(ECHO_START, ECHO_LIMIT)}…`;
+}
+
+/**
+ * Whether `text` is an absolute http or https URL, the one web-URL check the
+ * wire Schemas share.
+ * @param text The text the caller sent.
+ * @returns `true` if it parses as a URL whose protocol is `http:` or `https:`.
+ */
+export function isWebUrl(text: string): boolean {
+  return URL.canParse(text) && WEB_PROTOCOLS.has(new URL(text).protocol);
 }
 
 /**

@@ -1,8 +1,11 @@
+import type { CookoutClient, Message } from "../../sdk/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
-import type { Message } from "../../sdk/index.ts";
+import { avatarPng } from "../../testing/index.ts";
 import { openAt } from "./render.tsx";
+import { watched } from "./watched.ts";
+import { withNodeForms } from "./attachment-posts.ts";
 
 interface Drawn {
   readonly agent: string | null;
@@ -29,14 +32,14 @@ function drawn(rows: () => readonly HTMLElement[]): readonly Drawn[] {
 }
 
 function messageRows(): readonly Drawn[] {
-  const list = screen.getByRole("list", { name: "Messages" });
+  const list = screen.getByRole("feed", { name: "Messages" });
   return drawn(() => within(list).getAllByRole("article"));
 }
 
 function threadRows(): readonly Drawn[] {
   const panel = screen.getByRole("complementary", { name: "Thread" });
   const parent = within(panel).getByRole("article", { name: "Parent message" });
-  return drawn(() => [parent, ...within(within(panel).getByRole("list", { name: "Replies" })).getAllByRole("article")]);
+  return drawn(() => [parent, ...within(within(panel).getByRole("feed", { name: "Replies" })).getAllByRole("article")]);
 }
 
 async function botThread(): Promise<Message> {
@@ -100,4 +103,118 @@ it("a deactivated author is drawn as an agent if the message carries an owner, e
   });
 
   close();
+});
+
+interface Opened {
+  readonly region: () => HTMLElement;
+  readonly close: () => Promise<void>;
+}
+
+interface Opening {
+  readonly hash: string;
+  readonly region: () => Promise<HTMLElement>;
+  readonly shown: string;
+}
+
+function displayNameOf(name: string): string {
+  return `Face of ${name}`;
+}
+
+async function openWatching({ hash, region, shown }: Opening): Promise<Opened> {
+  const { live, stream } = watched(adminClient());
+  const unmount = openAt({ client: adminClient(), hash, live });
+  const found = await region();
+  await within(found).findByText(shown);
+  const events = await stream;
+  return {
+    close: async () => {
+      unmount();
+      await events.close();
+    },
+    region: () => found,
+  };
+}
+
+async function setAvatarOf(name: string, client: CookoutClient): Promise<string> {
+  const { identity } = await withNodeForms(async () => {
+    const answer = await client.setAvatar(name, avatarPng());
+    return answer;
+  });
+  const avatar = identity.avatar ?? null;
+  if (avatar === null) {
+    throw new TypeError(`${name} came back with no avatar after setting one.`);
+  }
+  return `/v1/avatars/${avatar.id}`;
+}
+
+async function postedBy(name: string): Promise<CookoutClient> {
+  const person = await newIdentity({ displayName: displayNameOf(name), kind: "human", name });
+  await adminClient().createChannel({ name });
+  await person.client.createMessage({ channel: name, text: "Watch my face" });
+  return person.client;
+}
+
+interface Faces {
+  readonly sources: readonly (string | null)[];
+  readonly initials: boolean;
+}
+
+function facesIn(region: () => HTMLElement, name: string): Faces {
+  const sources: (string | null)[] = [];
+  for (const image of within(region()).queryAllByRole("img", { name: displayNameOf(name) })) {
+    sources.push(image.getAttribute("src"));
+  }
+  return { initials: region().querySelector("[data-initials]") !== null, sources };
+}
+
+it("an avatar set while the board is open replaces the identity's initials beside its messages, without a reload", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const name = "web-avatar-live";
+  const person = await postedBy(name);
+  const { close, region } = await openWatching({
+    hash: `#/channels/${name}`,
+    region: async () => {
+      const feed = await screen.findByRole("feed", { name: "Messages" });
+      return feed;
+    },
+    shown: "Watch my face",
+  });
+  const before = facesIn(region, name);
+  const shown = await setAvatarOf(name, person);
+
+  await waitFor(() => {
+    expect([before, facesIn(region, name)]).toStrictEqual([
+      { initials: true, sources: [] },
+      { initials: false, sources: [shown] },
+    ]);
+  });
+
+  await close();
+});
+
+it("an avatar set while the people list is open shows on the identity's row at once", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const name = "web-avatar-live-row";
+  const person = await postedBy(name);
+  const { close, region } = await openWatching({
+    hash: "#/people",
+    region: async () => {
+      const list = await screen.findByRole("list", { name: "Identities" });
+      return list;
+    },
+    shown: displayNameOf(name),
+  });
+  const shown = await setAvatarOf(name, person);
+
+  await waitFor(() => {
+    expect(facesIn(region, name).sources).toStrictEqual([shown]);
+  });
+
+  await close();
 });

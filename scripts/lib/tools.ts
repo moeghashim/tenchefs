@@ -14,9 +14,9 @@ export interface Diagnostic {
 }
 export type Outcome<A> = { readonly ok: true; readonly value: A } | { readonly ok: false; readonly reason: string };
 
-export const fail = (script: string, reason: string): never => {
+export const fail = (script: string, reason: string, code = 1): never => {
   console.error(`${script}: ${reason}`);
-  process.exit(1);
+  process.exit(code);
 };
 
 export const unwrap = <A>(script: string, outcome: Outcome<A>): A =>

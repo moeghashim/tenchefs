@@ -1,8 +1,7 @@
 import { expect, it, vi } from "vitest";
-import { feedOf, postedIn } from "./feed.ts";
+import { feedOf, feedOpened, postedIn } from "./feed.ts";
 import { fireEvent } from "@testing-library/react";
 import { inPane } from "./regions.ts";
-import { openAt } from "./render.tsx";
 
 const SIXTEEN = 16;
 const FOLDED = 6;
@@ -27,7 +26,7 @@ it("three consecutive closed threads show as one divider", { timeout: 5000 }, as
     closed: ["Done a.", "Done b.", "Done c."],
     texts,
   });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await feedOpened({ hash: `#/channels/${channel}`, reader });
 
   await feedShows(texts, ["Open one.", "<3 closed threads>", "Open two."]);
 
@@ -43,7 +42,7 @@ it("an open thread between closed ones splits them into two dividers", { timeout
     closed: ["Done a.", "Done b.", "Done c."],
     texts,
   });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await feedOpened({ hash: `#/channels/${channel}`, reader });
 
   await feedShows(texts, ["<2 closed threads>", "Open one.", "<1 closed thread>"]);
 
@@ -58,7 +57,7 @@ it('a run of 16 expands to the 10 nearest the newest end, then "6 more" shows th
   const closed = notes(SIXTEEN);
   const texts = [...closed, "Still open."];
   const { channel, reader } = await postedIn({ channel: "web-fold-sixteen", closed, texts });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await feedOpened({ hash: `#/channels/${channel}`, reader });
   fireEvent.click(await inPane().findByRole("button", { name: "16 closed threads" }));
 
   await feedShows(texts, ["<6 more>", ...closed.slice(FOLDED), "Still open."]);
@@ -79,9 +78,10 @@ it("after Load older, a run spanning both pages is one divider", { timeout: 5000
     closed: ["Done a.", "Done b.", "Done c.", "Done d."],
     texts,
   });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}`, pageSize: 3 });
+  const { close, pageRead } = await feedOpened({ hash: `#/channels/${channel}`, pageSize: 3, reader });
   await feedShows(texts, ["<2 closed threads>", "Open one."]);
   fireEvent.click(inPane().getByRole("button", { name: "Load older messages" }));
+  await pageRead();
 
   await feedShows(texts, ["<4 closed threads>", "Open one."]);
 

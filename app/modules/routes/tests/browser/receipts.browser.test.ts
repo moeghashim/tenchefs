@@ -1,12 +1,16 @@
 import type { Browser, Page } from "@playwright/test";
 import { adminClient, newIdentity } from "./people.ts";
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Person } from "./people.ts";
 import { logInWithStream } from "./login.ts";
+import { probeFixtures } from "./probe.ts";
+import { unique } from "./names.ts";
 
-const channel = "browser-receipts";
-const ann = `${channel}-ann`;
-const bob = `${channel}-bob`;
+const test = base.extend(probeFixtures);
+
+function bobName(): string {
+  return `${unique("browser-receipts")}-bob`;
+}
 
 interface Opening {
   readonly browser: Browser;
@@ -29,9 +33,10 @@ async function openAs({ browser, hash, token }: Opening): Promise<Page> {
 }
 
 async function answered(): Promise<Answered> {
+  const channel = unique("browser-receipts");
   await adminClient().createChannel({ name: channel });
-  const asker = await newIdentity({ kind: "human", name: bob });
-  const answerer = await newIdentity({ kind: "human", name: ann });
+  const asker = await newIdentity({ kind: "human", name: bobName() });
+  const answerer = await newIdentity({ kind: "human", name: `${channel}-ann` });
   const { message: parent } = await asker.client.createMessage({ channel, text: "Deploy at noon?" });
   await answerer.client.createMessage({ channel, replyTo: parent.id, text: "Noon works" });
   return { ann: answerer, bob: asker, hash: `#/channels/${channel}/threads/${String(parent.id)}` };
@@ -40,15 +45,15 @@ async function answered(): Promise<Answered> {
 test("when the second person opens the thread, the first sees that they have seen the reply", async ({ browser }) => {
   const opened = await answered();
   const annPage = await openAs({ browser, hash: opened.hash, token: opened.ann.token });
-  const reply = annPage.getByRole("list", { name: "Replies" }).getByRole("article");
+  const reply = annPage.getByRole("feed", { exact: true, name: "Replies" }).getByRole("article");
 
   await reply.locator("time").focus();
 
-  await expect(annPage.getByRole("tooltip")).toContainText(`Not seen yet: @${bob}`);
+  await expect(annPage.getByRole("tooltip")).toContainText(`Not seen yet: @${bobName()}`);
   await expect(reply).not.toContainText("Not seen yet");
 
   const bobPage = await openAs({ browser, hash: opened.hash, token: opened.bob.token });
 
-  await expect(bobPage.getByRole("list", { name: "Replies" })).toContainText("Noon works");
-  await expect(annPage.getByRole("tooltip")).toContainText(`Seen by @${bob} just now`);
+  await expect(bobPage.getByRole("feed", { exact: true, name: "Replies" })).toContainText("Noon works");
+  await expect(annPage.getByRole("tooltip")).toContainText(`Seen by @${bobName()} just now`);
 });

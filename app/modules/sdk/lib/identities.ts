@@ -1,15 +1,7 @@
-import type { AgentJoinCalls, JoinCodeCalls } from "../../agent-sessions/index.ts";
-import type {
-  AttachmentCalls,
-  ClosedThreadCalls,
-  OpenThreadCalls,
-  ScheduledMessageCalls,
-  SearchCalls,
-} from "../../messages/client.ts";
+import type { AgentCreationCalls, DescriptionCalls } from "../../identities/client.ts";
 import type {
   CreateIdentityRequest,
   DeactivateIdentityResponse,
-  IdentityMessageCountResponse,
   IdentityResponse,
   IdentityWithTokenResponse,
   ListIdentitiesQuery,
@@ -38,11 +30,12 @@ import {
   isListIdentitiesResponse,
 } from "./generated/validators.js";
 import type { ClientConnection } from "./request.ts";
-import type { DescriptionCalls } from "../../identities/client.ts";
-import type { EventCalls } from "./events.ts";
 import type { HealthResponse } from "../../http/index.ts";
+import type { IdentityAvatarCalls } from "./avatars.ts";
+import type { IdentityDeletionCalls } from "./call-groups.ts";
 import type { LoginCalls } from "./logins.ts";
 import type { TriggerCalls } from "./triggers.ts";
+import { avatarCalls } from "./avatars.ts";
 import { healthPath } from "../../http/index.ts";
 import { loginCalls } from "./logins.ts";
 import { triggerCalls } from "./triggers.ts";
@@ -88,6 +81,20 @@ function setDisplayNameCall(server: ClientConnection): IdentityCalls["setDisplay
       path: identityDisplayNamePath,
     });
     return answer;
+  };
+}
+
+function agentCreationCalls(server: ClientConnection): AgentCreationCalls<IdentityResponse> {
+  return {
+    createAgentForOwner: async (request) => {
+      const { identity } = await send(server, {
+        body: { ...request, kind: "agent" },
+        isExpected: isIdentityResponse,
+        method: "POST",
+        path: identitiesPath,
+      });
+      return { identity };
+    },
   };
 }
 
@@ -149,11 +156,6 @@ function deactivationCalls(server: ClientConnection): Pick<IdentityCalls, "deact
       return reactivated;
     },
   };
-}
-
-interface IdentityDeletionCalls {
-  readonly deleteIdentity: (name: string) => Promise<IdentityResponse>;
-  readonly countMessagesBy: (name: string) => Promise<IdentityMessageCountResponse>;
 }
 
 function deletionCalls(server: ClientConnection): IdentityDeletionCalls {
@@ -229,20 +231,22 @@ function ownIdentityCalls(server: ClientConnection): IdentityCalls & IdentityDel
 
 function identityCalls(
   server: ClientConnection,
-): IdentityCalls & IdentityDeletionCalls & IdentityDescriptionCalls & LoginCalls & TriggerCalls {
-  return { ...loginCalls(server), ...ownIdentityCalls(server), ...descriptionCalls(server), ...triggerCalls(server) };
+): IdentityCalls &
+  IdentityDeletionCalls &
+  DescriptionCalls<IdentityResponse> &
+  AgentCreationCalls<IdentityResponse> &
+  LoginCalls &
+  TriggerCalls &
+  IdentityAvatarCalls {
+  return {
+    ...avatarCalls(server),
+    ...agentCreationCalls(server),
+    ...loginCalls(server),
+    ...ownIdentityCalls(server),
+    ...descriptionCalls(server),
+    ...triggerCalls(server),
+  };
 }
 
-type ApprovalCalls = LoginCalls & AgentJoinCalls & JoinCodeCalls;
-type IdentityDescriptionCalls = DescriptionCalls<IdentityResponse>;
-export type CallGroups = ApprovalCalls &
-  AttachmentCalls &
-  IdentityDeletionCalls &
-  IdentityDescriptionCalls &
-  ClosedThreadCalls &
-  OpenThreadCalls &
-  SearchCalls &
-  ScheduledMessageCalls &
-  TriggerCalls &
-  Pick<EventCalls, "presence">;
 export { identityCalls };
+export type { CallGroups } from "./call-groups.ts";

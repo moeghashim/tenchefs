@@ -2,8 +2,8 @@ import { adminClient, sessionOf } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { inSidebar, inTopBar } from "./regions.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { openAt } from "./render.tsx";
+import { unreachableClient } from "../../testing/index.ts";
 
 it("a channel's messages scroll in their own region, and a message sent after scrolling still joins the list", {
   timeout: 5000,
@@ -26,7 +26,7 @@ it("a channel's messages scroll in their own region, and a message sent after sc
 it("a channel whose messages can't be loaded says why in its pane", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const client = createCookoutClient({ env: {}, token: "cookout_any", url: "http://127.0.0.1:1" });
+  const client = unreachableClient({ token: "cookout_any" });
   const close = openAt({ client, hash: "#/channels/web-pane-unreachable", session: sessionOf(adminClient()) });
 
   const region = await screen.findByRole("region", { name: "Messages in #web-pane-unreachable" });

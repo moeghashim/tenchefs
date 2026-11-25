@@ -1,7 +1,6 @@
 import type {
   AgentJoinCalls,
   AgentSessionResponse,
-  JoinCodeCalls,
   JoinRequest,
   LeaveResponse,
   ListAgentSessionsResponse,
@@ -9,28 +8,32 @@ import type {
 } from "../../agent-sessions/index.ts";
 import {
   agentJoinRequestApprovalPath,
+  agentJoinRequestDenialPath,
   agentJoinRequestPath,
   agentJoinRequestsPath,
   agentSessionPath,
   collectAgentJoinRequestPath,
   identityAgentSessionPath,
-  joinCodesPath,
-  redeemJoinCodePath,
 } from "../../agent-sessions/index.ts";
 import {
   isAgentJoinCollectedResponse,
   isAgentJoinRequestResponse,
   isAgentJoinRequestStartedResponse,
   isAgentSessionResponse,
+  isDenyAgentJoinResponse,
   isJoinCodeResponse,
   isLeaveResponse,
   isListAgentSessionsResponse,
   isRevokeAgentSessionResponse,
 } from "./generated/validators.js";
+import { joinCodesPath, redeemJoinCodePath } from "../../agent-sessions/join-codes.ts";
 import type { ClientConnection } from "./request.ts";
+import type { JoinCodeCalls } from "../../agent-sessions/join-codes.ts";
 import { send } from "./request.ts";
 
-interface AgentSessionCalls extends AgentJoinCalls, JoinCodeCalls {
+type AgentApprovalCalls = AgentJoinCalls & JoinCodeCalls;
+
+interface AgentSessionCalls extends AgentApprovalCalls {
   readonly join: (request: JoinRequest) => Promise<AgentSessionResponse>;
   readonly leave: () => Promise<LeaveResponse>;
   readonly listAgentSessions: (agent: string) => Promise<ListAgentSessionsResponse>;
@@ -57,6 +60,15 @@ function agentJoinCalls(server: ClientConnection): AgentJoinCalls {
         path: collectAgentJoinRequestPath,
       });
       return collected;
+    },
+    denyAgentJoin: async (userCode) => {
+      const denied = await send(server, {
+        isExpected: isDenyAgentJoinResponse,
+        method: "PUT",
+        params: { code: userCode },
+        path: agentJoinRequestDenialPath,
+      });
+      return denied;
     },
     getAgentJoinRequest: async (userCode) => {
       const found = await send(server, {
@@ -141,4 +153,4 @@ function agentSessionCalls(server: ClientConnection): AgentSessionCalls {
 }
 
 export type { AgentSessionResponse, JoinRequest, LeaveResponse } from "../../agent-sessions/index.ts";
-export { type AgentSessionCalls, agentSessionCalls };
+export { type AgentApprovalCalls, type AgentSessionCalls, agentSessionCalls };

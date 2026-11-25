@@ -4,8 +4,8 @@ import { expect, it } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { openAt, openBoard } from "./render.tsx";
 import { createBoardStore } from "../../board/index.ts";
-import { createCookoutClient } from "../../sdk/index.ts";
 import { inSidebar } from "./regions.ts";
+import { unreachableClient } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
@@ -215,7 +215,7 @@ it("a message in a channel created after the list loaded adds that channel to th
 it("the sidebar's channel list says so when the server can't be reached", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const client = createCookoutClient({ env: {}, token: "cookout_any", url: "http://127.0.0.1:1" });
+  const client = unreachableClient({ token: "cookout_any" });
   const close = openAt({ client, hash: "#/", session: sessionOf(adminClient()) });
 
   const alert = await within(await screen.findByRole("navigation", { name: "Sidebar" })).findByRole("alert");

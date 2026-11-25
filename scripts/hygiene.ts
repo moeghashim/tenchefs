@@ -89,17 +89,17 @@ function adrNumbers(): readonly string[] {
   return duplicateNumbers(git(["ls-files", "docs/adr"]));
 }
 
-const BASE_FLAG = "--base=";
+const STAGED = process.argv.includes("--staged");
 
-function givenBase(): string {
-  const flag = process.argv.find((arg) => arg.startsWith(BASE_FLAG)) ?? BASE_FLAG;
-  return flag.slice(BASE_FLAG.length);
+function stagedBase(): string {
+  const merging = git(["rev-parse", "--quiet", "--verify", "MERGE_HEAD"]);
+  const [mergeBase = ""] = git(["merge-base", "origin/v1", "HEAD", ...merging]);
+  return mergeBase;
 }
 
 function comparedBase(): string {
-  const given = givenBase();
-  if (given !== "") {
-    return given;
+  if (STAGED) {
+    return stagedBase();
   }
   const [mergeBase = ""] = git(["merge-base", "HEAD", "origin/v1"]);
   const [head = ""] = git(["rev-parse", "HEAD"]);
@@ -107,6 +107,13 @@ function comparedBase(): string {
     return "HEAD~";
   }
   return mergeBase;
+}
+
+function adrSides(): readonly string[] {
+  if (STAGED) {
+    return ["--cached", comparedBase()];
+  }
+  return [comparedBase()];
 }
 
 const ADRS = "docs/adr/*.md";
@@ -120,9 +127,9 @@ function originalLines(file: string): readonly string[] {
 }
 
 function appendOnlyAdrs(): readonly string[] {
-  const base = comparedBase();
-  const changed = git(["diff", "--name-only", "--no-renames", "--diff-filter=M", base, "--", ADRS]);
-  const diff = git(["diff", "--no-renames", "--unified=0", "--no-color", base, "--", ADRS]);
+  const base = adrSides();
+  const changed = git(["diff", "--name-only", "--no-renames", "--diff-filter=M", ...base, "--", ADRS]);
+  const diff = git(["diff", "--no-renames", "--unified=0", "--no-color", ...base, "--", ADRS]);
   return adrEdits({
     diff: diff.join("\n"),
     locked: new Set(git(["ls-tree", "--name-only", "origin/v1", "--", "docs/adr/"])),
@@ -168,15 +175,24 @@ function isMergeOnV1(): boolean {
 }
 
 function change(line: string): Change {
-  const [status = "", file = ""] = line.split("\t");
-  return { file, status };
+  const [status = "", ...files] = line.split("\t");
+  const [kind = ""] = status;
+  const [file = ""] = files.toReversed();
+  return { file, status: kind };
+}
+
+function changesetSides(): readonly string[] {
+  if (STAGED) {
+    return ["--cached", comparedBase()];
+  }
+  return [comparedBase(), "HEAD"];
 }
 
 async function changesets(): Promise<readonly string[]> {
-  if (isMergeOnV1()) {
+  if (!STAGED && isMergeOnV1()) {
     return [];
   }
-  const changes = git(["diff", "--name-status", "--no-renames", comparedBase(), "HEAD"]).map((line) => change(line));
+  const changes = git(["diff", "--name-status", "--find-renames", ...changesetSides()]).map((line) => change(line));
   return changesetMissing({ changes, ships: await packageShips() });
 }
 

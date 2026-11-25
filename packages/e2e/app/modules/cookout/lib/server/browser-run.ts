@@ -3,7 +3,7 @@ import { Context, Effect, Layer, ManagedRuntime, String as Str } from "effect";
 import { CookoutUnderTest, cookoutUnderTest } from "./cookout-under-test.ts";
 import type { Fixtures, Page, PlaywrightTestArgs } from "@playwright/test";
 import type { CookoutUnderTestService } from "./cookout-under-test.ts";
-import { requireExampleCommand } from "./example-command.ts";
+import { requireExampleWebhookCommand } from "./example-command.ts";
 
 interface BrowserRun {
   readonly url: string;
@@ -42,7 +42,7 @@ function browserRun(cookout: CookoutUnderTestService, page: Page): BrowserRun {
     createHuman: (name) => bridge.runPromise(cookout.createHuman(name)),
     logIn: logIn(page, cookout.url),
     prefix: cookout.prefix,
-    requireExampleCommand: () => bridge.runPromise(requireExampleCommand(cookout)),
+    requireExampleCommand: () => bridge.runPromise(requireExampleWebhookCommand(cookout)),
     url: cookout.url,
   };
 }

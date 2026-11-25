@@ -1,18 +1,13 @@
-import { Button, Notice } from "../../design-system/index.tsx";
-import type { Board } from "../../board/index.ts";
+import { useBoardStore, useDeletedChannelNotice } from "./use-board.ts";
+import { Button } from "../../design-system/controls.tsx";
+import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
-import { useSyncExternalStore } from "react";
 
 const TEXT = { dismiss: "Dismiss" } as const;
 
-interface DeletedNoticeProps {
-  readonly board: Board;
-}
-
-export function DeletedNotice(props: DeletedNoticeProps): ReactNode {
-  const { board } = props;
-  const { notice } = useSyncExternalStore(board.subscribe, board.snapshot);
-  const handleDismiss = board.dismissNotice;
+export function DeletedNotice(): ReactNode {
+  const notice = useDeletedChannelNotice();
+  const handleDismiss = useBoardStore().dismissNotice;
   if (notice === null) {
     return null;
   }

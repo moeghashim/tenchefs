@@ -63,7 +63,7 @@ async function threadRead(channel: string): Promise<() => void> {
 }
 
 async function firstMoreActions(list: string): Promise<HTMLElement> {
-  const [first] = within(await screen.findByRole("list", { name: list })).getAllByRole("button", {
+  const [first] = within(await screen.findByRole("feed", { name: list })).getAllByRole("button", {
     name: "More actions",
   });
   if (!(first instanceof HTMLElement)) {

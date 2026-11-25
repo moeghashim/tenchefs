@@ -1,4 +1,4 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { IdentityActions } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 import { refusalOf } from "./identity-questions.ts";

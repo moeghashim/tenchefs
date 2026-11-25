@@ -11,20 +11,22 @@
  */
 import { Array as Arr, Effect, Option, Predicate, String as Str, pipe } from "effect";
 import { AssetStore, Storage } from "../storage/server.ts";
-import type { Attachment, AttachmentContentType, AttachmentId, ImageContentType, NewAttachment } from "./index.ts";
+import type { Attachment, AttachmentId, ImageContentType, NewAttachment } from "./index.ts";
 import {
   assetPath,
-  attachmentLimits,
   attachmentNameMaximumLength,
+  attachmentTooLargeRefusal,
   hasContent,
   isAttachmentId,
   opaqueContentType,
+  tooManyAttachmentsRefusal,
 } from "./index.ts";
 import { HttpServerResponse } from "effect/http";
 import type { Refusal } from "../http/index.ts";
 import type { Route } from "../http/server.ts";
 import { Secrets } from "../secrets/server.ts";
 import type { StorageUnavailable } from "../storage/server.ts";
+import { imageSize } from "./lib/server/image-size.ts";
 
 const BAD_REQUEST = 400;
 const NOT_FOUND = 404;
@@ -32,7 +34,6 @@ const TOO_LARGE = 413;
 const NO_BYTES = 0;
 const START = 0;
 const HEAD_LENGTH = 12;
-const BYTES_IN_A_MEGABYTE = 1_000_000;
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
 
 const IMAGE_SIGNATURES: readonly (readonly [ImageContentType, string])[] = [
@@ -48,13 +49,7 @@ const serving = {
   "x-content-type-options": "nosniff",
 };
 
-const megabytes = `${String(attachmentLimits.maximumBytes / BYTES_IN_A_MEGABYTE)} MB`;
-
-const tooMany: Refusal = {
-  code: "too_many_attachments",
-  message: `A message can have at most ${String(attachmentLimits.maximumCount)} attachments.`,
-  status: BAD_REQUEST,
-};
+const tooMany: Refusal = { ...tooManyAttachmentsRefusal, status: BAD_REQUEST };
 
 const unnamed: Refusal = {
   code: "attachment_unnamed",
@@ -64,7 +59,7 @@ const unnamed: Refusal = {
 
 const messageEmpty: Refusal = {
   code: "message_empty",
-  message: "A message needs text, with or without attachments.",
+  message: "A message needs text, at least one attachment, or both.",
   status: BAD_REQUEST,
 };
 
@@ -74,11 +69,7 @@ const attachmentNotFound: Refusal = {
   status: NOT_FOUND,
 };
 
-const tooLarge: Refusal = {
-  code: "attachment_too_large",
-  message: `An attachment is over ${megabytes}: each attachment can be at most ${megabytes} (${String(attachmentLimits.maximumBytes)} bytes).`,
-  status: TOO_LARGE,
-};
+const tooLarge: Refusal = { ...attachmentTooLargeRefusal, status: TOO_LARGE };
 
 function empty(name: string): Refusal {
   return {
@@ -88,14 +79,20 @@ function empty(name: string): Refusal {
   };
 }
 
-function detectContent(bytes: NewAttachment["bytes"]): Pick<Attachment, "contentType" | "image"> {
+type Content = Pick<Attachment, "contentType" | "image" | "width" | "height">;
+
+function detectContent(bytes: NewAttachment["bytes"]): Content {
   const head = String.fromCodePoint(...bytes.subarray(START, HEAD_LENGTH));
-  const found: Option.Option<AttachmentContentType> = Arr.findFirst(IMAGE_SIGNATURES, ([, signature]) =>
+  const found: Option.Option<ImageContentType> = Arr.findFirst(IMAGE_SIGNATURES, ([, signature]) =>
     new RegExp(signature, "u").test(head),
   ).pipe(Option.map(([type]) => type));
   return Option.match(found, {
-    onNone: () => ({ contentType: opaqueContentType, image: false }),
-    onSome: (contentType) => ({ contentType, image: true }),
+    onNone: (): Content => ({ contentType: opaqueContentType, image: false }),
+    onSome: (contentType): Content => ({
+      contentType,
+      image: true,
+      ...Option.getOrElse(imageSize({ bytes, contentType }), () => ({})),
+    }),
   });
 }
 
@@ -209,6 +206,33 @@ const assetRoute: Route<Storage | AssetStore> = {
   method: "GET",
   path: assetPath,
 };
+
+/** An upload's content when it is one of the four image types: its type, and its size if its header reads. */
+export interface ImageContent {
+  readonly contentType: ImageContentType;
+  readonly width?: number;
+  readonly height?: number;
+}
+
+/**
+ * What image `bytes` hold, judged by their first bytes alone and never by a name or a type header, with the width and
+ * height read from the image's header; none when they aren't a PNG, JPEG, GIF or WebP. An avatar's check uses it.
+ * @param bytes The uploaded bytes.
+ * @returns The image type and, if its header reads, its size.
+ */
+export function detectImage(bytes: Uint8Array): Option.Option<ImageContent> {
+  const { contentType, image, ...size } = detectContent(bytes);
+  if (!image || contentType === opaqueContentType) {
+    return Option.none();
+  }
+  return Option.some({ contentType, ...size });
+}
+
+/**
+ * The headers every served asset carries, so nothing uploaded can run in the board's origin: `nosniff`, a sandboxing
+ * `Content-Security-Policy`, and a private cache that may keep it for a year, since an ID's bytes never change.
+ */
+export const servingHeaders: Readonly<Record<string, string>> = serving;
 
 /** The refusal of a file over the size limit, for a multipart parse that stopped at the limit. */
 export const fileTooLarge: Refusal = tooLarge;

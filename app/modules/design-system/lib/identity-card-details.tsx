@@ -2,6 +2,7 @@ import type { IdentityCardBoxParts } from "./identity-card-parts.ts";
 import { IdentityCardButtons } from "./identity-card-buttons.tsx";
 import { IdentityCardFacts } from "./identity-card-facts.tsx";
 import { IdentityCardNames } from "./identity-card-names.tsx";
+import { IdentityCardSessionLink } from "./identity-card-session.tsx";
 import type { ReactNode } from "react";
 
 export function IdentityCardDetails(parts: IdentityCardBoxParts): ReactNode {
@@ -15,6 +16,7 @@ export function IdentityCardDetails(parts: IdentityCardBoxParts): ReactNode {
           {card.description}
         </p>
       )}
+      {card.agent && <IdentityCardSessionLink card={card} />}
       <IdentityCardButtons card={card} control={parts.control} />
     </div>
   );

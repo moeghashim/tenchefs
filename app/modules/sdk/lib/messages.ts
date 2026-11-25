@@ -94,12 +94,12 @@ function messageCalls(server: ClientConnection): MessageCalls {
     },
     react: reactionCall(server, "PUT"),
     reopenThread: closedCall(server, "DELETE"),
-    search: async ({ cursor, limit, query }) => {
+    search: async ({ cursor, limit, query, sort }) => {
       const page = await send(server, {
         isExpected: isSearchResponse,
         method: "GET",
         path: searchPath,
-        query: { cursor, limit, [searchQueryParam]: query },
+        query: { cursor, limit, [searchQueryParam]: query, sort },
       });
       return page;
     },

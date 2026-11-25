@@ -6,6 +6,11 @@
  */
 
 declare const brand: unique symbol;
+const NONE = 0;
+const BYTES_IN_A_MEGABYTE = 1_000_000;
+const MAXIMUM_BYTES = 10_000_000;
+const MAXIMUM_COUNT = 10;
+const megabytes = `${String(MAXIMUM_BYTES / BYTES_IN_A_MEGABYTE)} MB`;
 
 /** An attachment's ID: opaque and random, so it gives away nothing about how many the board holds. */
 export type AttachmentId = string & { readonly [brand]: "AttachmentId" };
@@ -47,6 +52,13 @@ export interface Attachment {
   readonly contentType: AttachmentContentType;
   /** Whether its content is a PNG, JPEG, GIF or WebP image, whatever its name says. */
   readonly image: boolean;
+  /**
+   * An image's width in pixels, read from its header when it was posted (#376). Absent on anything that isn't an
+   * image, on an image whose header couldn't be read, and on one posted before the cookout read sizes.
+   */
+  readonly width?: number;
+  /** An image's height in pixels, present exactly when `width` is. */
+  readonly height?: number;
 }
 
 /** The attachments on a message, as `MessageFields` carries them. */
@@ -68,21 +80,39 @@ export interface NewAttachment {
  * The limits a post's attachments are held to (Matt, 2026-11-24, board msg 3032): each at most 10 MB (10,000,000
  * bytes), at most 10 on one message, and none empty.
  */
-export const attachmentLimits = { maximumBytes: 10_000_000, maximumCount: 10 } as const;
+export const attachmentLimits = { maximumBytes: MAXIMUM_BYTES, maximumCount: MAXIMUM_COUNT } as const;
+
+/** A refusal of a post's attachments for a limit: the code and wording the server answers, and the web composer shows before sending. */
+export interface AttachmentLimitRefusal {
+  readonly code: "too_many_attachments" | "attachment_too_large";
+  readonly message: string;
+}
+
+/** The refusal of a post with more than `attachmentLimits.maximumCount` attachments. */
+export const tooManyAttachmentsRefusal: AttachmentLimitRefusal = {
+  code: "too_many_attachments",
+  message: `A message can have at most ${String(MAXIMUM_COUNT)} attachments.`,
+};
+
+/** The refusal of a post with an attachment over `attachmentLimits.maximumBytes`. */
+export const attachmentTooLargeRefusal: AttachmentLimitRefusal = {
+  code: "attachment_too_large",
+  message: `An attachment is over ${megabytes}: each attachment can be at most ${megabytes} (${String(MAXIMUM_BYTES)} bytes).`,
+};
 
 /** The longest name an attachment keeps, in UTF-16 code units. */
 export const attachmentNameMaximumLength = 255;
 
 /**
- * Whether a message may be posted with this text and these attachments. For now it needs text, attachments or not:
- * clients first learn to read a message with attachments and no text, and #398 lets one be posted in the release after
- * (Decision (2026-11-24), following ADR 0076; Matt's rule from board msg 3043 is text, attachments, or both). This is
- * the one place the rule lives.
+ * Whether a message with this text and these attachments may be posted: it needs text, at least one attachment, or
+ * both (Matt, 2026-11-24, board msg 3043). The 0.5.0 clients read a message with attachments and no text, so the
+ * server takes one from the release after (ADR 0076's two releases, mattpocock/cookout#398). This is the one place the
+ * rule lives.
  * @param message The message's text, empty when none was given, and its attachments.
  * @returns Whether the message has something in it.
  */
 export function hasContent(message: { readonly text: string; readonly attachments: readonly unknown[] }): boolean {
-  return message.text !== "";
+  return message.text !== "" || message.attachments.length > NONE;
 }
 
 /** `GET /v1/assets/:id`: an attachment's bytes, to any signed-in identity. */

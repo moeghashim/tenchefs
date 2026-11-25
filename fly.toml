@@ -11,7 +11,7 @@ primary_region = "lhr"
   PORT = "8080"
   COOKOUT_HOST = "::"
   COOKOUT_DB = "/data/cookout.db"
-  COOKOUT_PUBLIC_URL = "https://cookout.fly.dev"
+  # No COOKOUT_PUBLIC_URL: unset, it is https://$FLY_APP_NAME.fly.dev, so a new app deploys this file unedited.
 
 [mounts]
   source = "cookout_data"
@@ -28,11 +28,10 @@ primary_region = "lhr"
   auto_start_machines = true
   min_machines_running = 1
 
+  # /v1/health is answered whatever the Host, so the check needs no Host header.
   [[http_service.checks]]
     method = "GET"
     path = "/v1/health"
     interval = "15s"
     timeout = "3s"
     grace_period = "10s"
-    [http_service.checks.headers]
-      Host = "cookout.fly.dev"

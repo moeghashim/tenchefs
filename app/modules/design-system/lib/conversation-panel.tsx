@@ -1,5 +1,4 @@
 import { BackLink } from "./back-link.tsx";
-import { CONVERSATION_KEYS } from "./conversation-keys.ts";
 import { IdentityCardComposer } from "./identity-card-parts.ts";
 import type { IdentityCardComposerParts } from "./identity-card-parts.ts";
 import type { PanelAction } from "./panel-action-button.tsx";
@@ -8,6 +7,7 @@ import { PanelEdge } from "./panel-edge.tsx";
 import type { PanelEdgeParts } from "./panel-edge-parts.ts";
 import type { ReactNode } from "react";
 import { ShortcutLink } from "./shortcut-link.tsx";
+import type { ShortcutLinkParts } from "./shortcut-link.tsx";
 import { panelWidth } from "./panel-width.ts";
 
 const NO_ACTIONS: readonly PanelAction[] = [];
@@ -17,8 +17,7 @@ interface ConversationPanelParts {
   readonly detail: string;
   readonly backHref: string;
   readonly backLabel: string;
-  readonly openHref: string | null;
-  readonly openLabel: string;
+  readonly open: ShortcutLinkParts | null;
   readonly actions?: readonly PanelAction[];
   readonly edge: PanelEdgeParts | null;
   readonly message: IdentityCardComposerParts;
@@ -42,8 +41,8 @@ export function ConversationPanel(parts: ConversationPanelParts): ReactNode {
         {(parts.actions ?? NO_ACTIONS).map((action) => (
           <PanelActionButton action={action} key={action.label} />
         ))}
-        {parts.openHref !== null && (
-          <ShortcutLink href={parts.openHref} label={parts.openLabel} shortcut={CONVERSATION_KEYS.open} />
+        {parts.open !== null && (
+          <ShortcutLink href={parts.open.href} label={parts.open.label} shortcut={parts.open.shortcut} />
         )}
       </header>
       <IdentityCardComposer value={parts.message}>{parts.children}</IdentityCardComposer>

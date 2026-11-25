@@ -10,7 +10,7 @@
 # container's 8080, so the Host the suite sends is the local address's, not the deployed one's.
 # The example handler (packages/handler-example) runs as another container in the cookout's
 # network namespace, as the deployed one runs beside the deployed cookout: each leg adds the
-# command `example` (URL http://127.0.0.1:8787/webhook) through the cookout CLI, then starts the
+# Webhook command `example` (URL http://127.0.0.1:8787/webhook) through the cookout CLI, then starts the
 # handler with the secret that add shows once, posting its replies to http://127.0.0.1:8080.
 set -euo pipefail
 
@@ -146,7 +146,7 @@ run_leg() {
     --env COOKOUT_URL=http://127.0.0.1:8080 --env HOST=127.0.0.1 --env PORT=8787 "$handler_image" > /dev/null
   unset COOKOUT_COMMAND_SECRET
   wait_until 30 "the handler container listening" "$handler" logs_say "$handler" '^handler listening on '
-  echo "e2e:docker: [$store] added the command example; its handler is listening beside the cookout"
+  echo "e2e:docker: [$store] added the Webhook command example; its handler is listening beside the cookout"
 
   echo "e2e:docker: [$store] running packages/e2e against $url"
   rm -f .timings/e2e-tests.json .timings/e2e-browser.json

@@ -1,17 +1,14 @@
-import { Alert, CardBody, Muted, RepliesDivider, Skeleton } from "../../design-system/index.tsx";
-import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
+import { Alert, Skeleton } from "../../design-system/content.tsx";
 import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
-import type { MessageId } from "../../sdk/index.ts";
-import { MessageStream } from "./message-stream.tsx";
+import { CardBody } from "../../design-system/layout.tsx";
+import type { MessageMenu } from "../../unread/index.ts";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
 import { StandaloneEntry } from "./standalone-entry.tsx";
-import { replies } from "./message-marks.ts";
+import { THREAD_PANEL } from "./thread-panel.ts";
+import { ThreadReplies } from "./thread-replies.tsx";
 
-const NONE = 0;
-const NO_THREADS: ReadonlyMap<MessageId, ThreadNews> = new Map();
-
-const TEXT = { empty: "No replies yet.", parent: "Parent message", replies: "Replies" } as const;
+const TEXT = { parent: THREAD_PANEL.parent } as const;
 
 interface ThreadBodyProps {
   readonly state: ThreadMessagesState;
@@ -46,24 +43,15 @@ export function ThreadBody(props: ThreadBodyProps): ReactNode {
         receipts={state.receipts}
         reply={props.reply}
       />
-      <RepliesDivider>{replies(state.replies.length)}</RepliesDivider>
-      {state.replies.length === NONE && (
-        <CardBody>
-          <Muted>{TEXT.empty}</Muted>
-        </CardBody>
-      )}
-      <MessageStream
-        after={state.parent}
-        channel={null}
-        label={TEXT.replies}
+      <ThreadReplies
+        closing={props.closing}
         me={props.me}
         menu={props.menu}
-        messages={state.replies}
-        open={null}
+        parent={state.parent}
         readPosition={props.readPosition}
         receipts={state.receipts}
+        replies={state.replies}
         reply={props.reply}
-        threads={NO_THREADS}
       />
       {state.read.status === "failed" && (
         <Alert>{`Couldn't mark the thread read (${state.read.code}): ${state.read.message}`}</Alert>

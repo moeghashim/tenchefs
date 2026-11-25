@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { ThreadChoice } from "../../design-system/index.tsx";
+import type { ThreadChoice } from "../../design-system/messages.tsx";
 
 function chosen(): void {
   expect.fail("never chosen");

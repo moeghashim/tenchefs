@@ -1,5 +1,5 @@
 import type { Unread, UnreadState } from "../../unread/index.ts";
-import { Button } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { besideCountOf } from "./beside-count.ts";
 

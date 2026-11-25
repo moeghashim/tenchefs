@@ -26,9 +26,14 @@ const startDev: Started<DevProcess> = Effect.map(
   ({ line, stop }) => ({ ...line, stop }),
 );
 
+const startProbedDev: Started<DevProcess> = Effect.map(
+  startDevCommand({ args: ["start", "--probe"], isReady: Schema.is(DevStartLine) }),
+  ({ line, stop }) => ({ ...line, stop }),
+);
+
 const startFakeRoutine: Started<typeof FakeRoutineLine.Type> = Effect.map(
   startDevCommand({ args: ["fake-routine"], isReady: Schema.is(FakeRoutineLine) }),
   ({ line }) => line,
 );
 
-export { type DevProcess, startDev, startFakeRoutine };
+export { type DevProcess, startDev, startFakeRoutine, startProbedDev };

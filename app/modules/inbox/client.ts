@@ -1,5 +1,5 @@
 /**
- * The SDK's calls that mark one Nudge read, answer Keep on a Deactivation offer and mark an entry about a deactivated
+ * The SDK's calls that mark one offline alert or Nudge read, answer Keep on a Deactivation offer and mark an entry about a deactivated
  * quiet agent read. Their wire types and paths are in
  * `index.ts`.
  */
@@ -10,7 +10,18 @@ import type {
   DeactivationOfferResponse,
   NudgeId,
   NudgeResponse,
+  OfflineAlertId,
+  OfflineAlertResponse,
 } from "./index.ts";
+
+/** The SDK's call on an offline alert. */
+export interface OfflineAlertCalls {
+  /**
+   * `POST /v1/inbox/alerts/:id/read`: marks the caller's offline alert read, so it leaves the inbox and stays in its
+   * history. An alert the caller has none of is 404 `offline_alert_not_found`.
+   */
+  readonly markOfflineAlertRead: (id: OfflineAlertId) => Promise<OfflineAlertResponse>;
+}
 
 /** The SDK's call on a Nudge. */
 export interface NudgeCalls {

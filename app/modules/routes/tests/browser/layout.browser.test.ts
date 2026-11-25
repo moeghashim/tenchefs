@@ -1,9 +1,10 @@
 import { adminClient, newIdentity } from "./people.ts";
 import { expect, test } from "@playwright/test";
-import { inSidebar, inTopBar } from "./regions.ts";
+import { inSidebar, inTopBar, sidebarLink } from "./regions.ts";
 import type { Message } from "../../../sdk/index.ts";
 import type { Page } from "@playwright/test";
 import { logInToChannels } from "./login.ts";
+import { unique } from "./names.ts";
 
 const NARROW = { height: 900, width: 600 };
 const NONE = 0;
@@ -14,8 +15,8 @@ async function backgroundOf(page: Page): Promise<string> {
 }
 
 async function themeChosen(page: Page, theme: string): Promise<string> {
-  await inSidebar(page).getByRole("link", { name: "Settings" }).click();
-  await page.getByRole("region", { name: "Settings" }).getByText(theme, { exact: true }).click();
+  await inSidebar(page).getByRole("link", { exact: true, name: "Settings" }).click();
+  await page.getByRole("region", { exact: true, name: "Settings" }).getByText(theme, { exact: true }).click();
   const colour = await backgroundOf(page);
   return colour;
 }
@@ -30,16 +31,16 @@ async function reloaded(page: Page): Promise<string> {
 }
 
 async function narrowLogIn(page: Page): Promise<Message> {
-  const { token } = await newIdentity({ kind: "human", name: "browser-narrow" });
-  await adminClient().createChannel({ name: "browser-narrow" });
-  const { message } = await adminClient().createMessage({ channel: "browser-narrow", text: "Narrow parent" });
+  const { token } = await newIdentity({ kind: "human", name: unique("browser-narrow") });
+  await adminClient().createChannel({ name: unique("browser-narrow") });
+  const { message } = await adminClient().createMessage({ channel: unique("browser-narrow"), text: "Narrow parent" });
   await logInToChannels({ page, token });
   await page.setViewportSize(NARROW);
   return message;
 }
 
 async function widthOf(page: Page, name: string): Promise<number> {
-  const box = await page.getByRole("complementary", { name }).boundingBox();
+  const box = await page.getByRole("complementary", { exact: true, name }).boundingBox();
   if (box === null) {
     return NONE;
   }
@@ -53,14 +54,14 @@ test("on a narrow screen the sidebar hides behind a button, and the thread panel
 
   await expect(inSidebar(page)).toBeHidden();
 
-  await inTopBar(page).getByRole("button", { name: "Open the sidebar" }).click();
-  await inSidebar(page).getByRole("link", { name: "#browser-narrow" }).click();
+  await inTopBar(page).getByRole("button", { exact: true, name: "Open the sidebar" }).click();
+  await sidebarLink({ label: `#${unique("browser-narrow")}`, page }).click();
 
   await expect(inSidebar(page)).toBeHidden();
 
-  await page.goto(`/#/channels/browser-narrow/threads/${String(message.id)}`);
+  await page.goto(`/#/channels/${unique("browser-narrow")}/threads/${String(message.id)}`);
 
-  await expect(page.getByRole("complementary", { name: "Thread" })).toContainText("Narrow parent");
+  await expect(page.getByRole("complementary", { exact: true, name: "Thread" })).toContainText("Narrow parent");
   await expect
     .poll(async () => {
       const width = await widthOf(page, "Thread");
@@ -72,7 +73,7 @@ test("on a narrow screen the sidebar hides behind a button, and the thread panel
 test("the theme switch changes the theme at once, keeps it across a reload, and System follows the system", async ({
   page,
 }) => {
-  const { token } = await newIdentity({ kind: "human", name: "browser-theme" });
+  const { token } = await newIdentity({ kind: "human", name: unique("browser-theme") });
   await page.emulateMedia({ colorScheme: "dark" });
   await logInToChannels({ page, token });
   const systemDark = await backgroundOf(page);

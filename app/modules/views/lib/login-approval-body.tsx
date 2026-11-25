@@ -1,4 +1,5 @@
-import { Alert, CardBody, Skeleton } from "../../design-system/index.tsx";
+import { Alert, Skeleton } from "../../design-system/content.tsx";
+import { CardBody } from "../../design-system/layout.tsx";
 import type { LoginApproval } from "../../board/index.ts";
 import { LoginRequestShown } from "./login-request-shown.tsx";
 import type { ReactNode } from "react";

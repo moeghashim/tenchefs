@@ -3,7 +3,7 @@ import {
   appendTo,
   callId,
   channelFixture as channel,
-  commandFixture as command,
+  webhookCommandFixture as command,
   fixtureTime,
   handlerFixture as handler,
   identityFixture as identity,
@@ -103,19 +103,22 @@ it.effect.each(storageLayers)(
     Effect.gen(function* deleteHandler() {
       const { storage } = yield* openStore(layer);
       yield* storage.createChannel(channel("grill"));
-      yield* storage.addCommand(command("deploy"), handler("deploy"));
-      yield* storage.appendCommandCall({
+      yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
+      yield* storage.appendWebhookCommandCall({
         delivery: { ...DELIVERY, command: command("deploy").command.name },
         message: newMessage("grill", "/deploy", { author: { name: "matt" } }),
         token: { expiresAt: T60, handler: nameOf("deploy"), hash: hashD },
       });
       const deleted = yield* storage.deleteIdentity(nameOf("deploy"));
-      const found = yield* Effect.map(storage.findCommand(command("deploy").command.name), Predicate.isUndefined);
+      const found = yield* Effect.map(
+        storage.findWebhookCommand(command("deploy").command.name),
+        Predicate.isUndefined,
+      );
       const left = yield* Effect.all(
         [
-          storage.listCommands,
+          storage.listWebhookCommands,
           storage.listPendingDeliveries,
-          Effect.map(storage.findCommandToken(hashD), Predicate.isUndefined),
+          Effect.map(storage.findWebhookCommandToken(hashD), Predicate.isUndefined),
         ],
         ONE_AT_A_TIME,
       );

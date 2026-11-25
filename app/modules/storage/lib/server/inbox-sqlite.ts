@@ -16,7 +16,7 @@ import {
   readPositionsIn,
   receiptsOf,
 } from "./read-positions-sqlite.ts";
-import { followersOf, newestPerScope, reasonsIn } from "./inbox.ts";
+import { followersOf, mentionsOwnAuthor, newestPerScope, reasonsIn } from "./inbox.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { InboxReason } from "../../../inbox/index.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
@@ -77,10 +77,13 @@ const REASONS = `SELECT m.id AS id, 'followed-thread' AS reason
     FROM subscriptions AS s JOIN messages AS m ON m.channel = s.channel AND m.reply_to IS NULL
     WHERE s.identity_name = ?1`;
 
+const SHOWN = `(messages.author_name <> ?1
+    OR (reasons.reason = 'mention' AND messages.scheduled_message_id IS NOT NULL))`;
+
 function inboxSql(columns: string, ids: "messages.id > ?2" | "messages.id = ?2"): string {
   return `WITH reasons (id, reason) AS (${REASONS})
     SELECT ${columns}, reasons.reason AS reason, ${UNREAD} AS read FROM messages JOIN reasons USING (id)
-    WHERE messages.author_name <> ?1 AND ${ids} AND messages.id > ${MARKER}
+    WHERE ${SHOWN} AND ${ids} AND messages.id > ${MARKER}
     ORDER BY messages.id, reasons.reason`;
 }
 
@@ -96,7 +99,7 @@ function seenReactionsSql(db: SqlDatabase): string {
 function historySql(db: SqlDatabase, columns: string): string {
   return `WITH reasons (id, reason) AS (${REASONS}),
     listed (id, reason) AS (SELECT reasons.id, reasons.reason FROM reasons JOIN messages USING (id)
-      WHERE messages.author_name <> ?1 UNION ALL ${REACTED}),
+      WHERE ${SHOWN} UNION ALL ${REACTED}),
     page (id) AS (SELECT DISTINCT id FROM listed WHERE id < ?2 ORDER BY id DESC LIMIT ?3)
     SELECT ${columns}, listed.reason AS reason,
       CASE WHEN listed.reason = 'reaction' THEN ${seenReactionsSql(db)} ELSE messages.id <= ${MARKER} END AS read
@@ -118,6 +121,9 @@ function recordAppended({ db, message }: Appended): Fails<readonly ReadReceipt[]
       ONE_AT_A_TIME,
     );
     yield* Effect.forEach(followersOf(message), (name) => db.run(FOLLOW, name, thread), ONE_AT_A_TIME);
+    if (mentionsOwnAuthor(message)) {
+      return [];
+    }
     const { receipts } = yield* ackIn({ at: message.createdAt, db, identity: message.author.name, message });
     return receipts;
   });

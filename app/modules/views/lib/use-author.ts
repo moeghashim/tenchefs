@@ -1,10 +1,10 @@
 import type { Author, Identity } from "../../sdk/index.ts";
-import { useContext, useSyncExternalStore } from "react";
-import { AuthorList } from "./author-list.ts";
 import type { PresenceShown } from "./use-presence.ts";
 import { identityList } from "../../board/index.ts";
 import { useAuthorPresence } from "./use-presence.ts";
+import { useBoardStore } from "./use-board.ts";
 import { useProfileHref } from "./profile-base.ts";
+import { useSyncExternalStore } from "react";
 
 const DEACTIVATED = "(deactivated)";
 
@@ -25,7 +25,7 @@ interface Drawn {
 }
 
 function useEveryListed(): readonly Identity[] {
-  const store = useContext(AuthorList);
+  const store = useBoardStore();
   return useSyncExternalStore(store.subscribeShowing("identities"), () => identityList(store.snapshot()));
 }
 

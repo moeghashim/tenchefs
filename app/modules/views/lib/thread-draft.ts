@@ -1,12 +1,13 @@
 import type { ChannelName, IdentityName, MessageId } from "../../sdk/index.ts";
 import type { Composer, Draft } from "../../composer/index.ts";
-import type { ThreadMessages, ThreadMessagesState } from "../../board/index.ts";
+import type { Read } from "./use-board.ts";
+import type { ThreadMessagesState } from "../../board/index.ts";
 
 interface ThreadDraftOf {
   readonly composer: Composer;
   readonly channel: ChannelName;
   readonly thread: MessageId;
-  readonly messages: ThreadMessages;
+  readonly messages: Pick<Read<ThreadMessagesState>, "snapshot">;
   readonly me: string;
 }
 

@@ -13,7 +13,7 @@ export function Chip(parts: ChipParts): ReactNode {
   return (
     <button
       aria-pressed={parts.pressed}
-      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${chipStyle(parts.pressed)}`}
+      className={`inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium whitespace-nowrap transition-colors ${chipStyle(parts.pressed)}`}
       onClick={onClick}
       type="button"
     >

@@ -5,7 +5,7 @@ import type { Scope } from "effect";
 type EndedTokens =
   | { readonly kind: "agent session"; readonly hash: TokenHash }
   | { readonly kind: "agent sessions" }
-  | { readonly kind: "identity tokens" }
+  | { readonly kind: "identity tokens"; readonly loginCredentials: readonly TokenHash[] }
   | { readonly kind: "all" };
 
 interface TokensEnded {

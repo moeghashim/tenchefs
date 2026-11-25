@@ -23,6 +23,14 @@ interface CollectLoginRequest {
   readonly now: IsoTime;
 }
 
+interface IssueLoginCredential {
+  readonly credentialHash: TokenHash;
+  readonly identity: IdentityName;
+  readonly host: string;
+  readonly now: IsoTime;
+  readonly madeWith: TokenHash;
+}
+
 type LoginCollection =
   | { readonly status: "pending" }
   | { readonly status: "collected"; readonly identity: Identity }
@@ -37,8 +45,10 @@ interface LoginRequestsSection {
     now: IsoTime,
   ) => Fails<"approved" | "not_found">;
   readonly collectLoginRequest: (collect: CollectLoginRequest) => Fails<LoginCollection>;
+  readonly issueLoginCredential: (issue: IssueLoginCredential) => Fails<Identity | undefined>;
   readonly findLoginCredential: (hash: TokenHash) => Fails<Identity | undefined>;
   readonly revokeLoginCredential: (hash: TokenHash) => Fails<boolean>;
+  readonly revokeLoginCredentialsMadeWithRevokedTokens: (identity: IdentityName) => Fails<readonly TokenHash[]>;
 }
 
 const PENDING: LoginCollection = { status: "pending" };
@@ -51,6 +61,7 @@ function collected(identity: Identity): LoginCollection {
 export {
   type CollectLoginRequest,
   GONE,
+  type IssueLoginCredential,
   type LoginCollection,
   type LoginRequest,
   type LoginRequestsSection,

@@ -3,8 +3,8 @@ import { answer, emptyPostgresDatabase, freshDatabasePath, runServe, startServe 
 import { expect, it } from "@effect/vitest";
 import { NodeServices } from "@effect/platform-node";
 import type { ServeProcess } from "../../../testing/server.ts";
-import { createCookoutClient } from "../../../sdk/index.ts";
 import { secretsLive } from "../../../secrets/server.ts";
+import { testClient } from "../../../testing/index.ts";
 
 const EXIT_FAILURE = 1;
 const NOTHING_LISTENS = "1";
@@ -20,7 +20,7 @@ const postAndRead = Effect.fnUntraced(function* postThenRead({
   adminToken,
   url,
 }: Pick<ServeProcess, "adminToken" | "url">) {
-  const admin = createCookoutClient({ env: {}, token: adminToken, url });
+  const admin = testClient({ env: {}, token: adminToken, url });
   yield* answer(() => admin.createChannel({ name: "grill" }));
   const posted = yield* answer(() => admin.createMessage({ channel: "grill", text: "lunch is on the grill" }));
   const thread = yield* answer(() => admin.getThread(posted.message.id));

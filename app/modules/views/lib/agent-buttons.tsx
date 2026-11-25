@@ -1,4 +1,4 @@
-import { Button } from "../../design-system/index.tsx";
+import { Button } from "../../design-system/controls.tsx";
 import type { IdentityActions } from "../../composer/index.ts";
 import type { ListedAgentSession } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
@@ -21,7 +21,7 @@ export function AgentButtons(props: AgentButtonsProps): ReactNode {
   const handleRevoke = actions.ask.revoke;
   return (
     <>
-      <Button disabled={sending} onClick={handleRotate}>
+      <Button disabled={sending} focused={state.tokenForgotten} onClick={handleRotate}>
         {TEXT.rotate}
       </Button>
       {(state.sessions ?? NO_SESSIONS).length > NONE && (

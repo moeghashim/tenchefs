@@ -1,9 +1,9 @@
 import {
+  answeredAndShown,
   arrived,
   openReading,
   otherThread,
   rowSelected,
-  shown,
   sidebarCleared,
   sidebarCounts,
   threadToRead,
@@ -26,8 +26,8 @@ it("a selected thread row is still unread at 1.9 s on screen and read at 2 s, an
   expect.hasAssertions();
 
   const thread = await threadToRead("web-read-rule");
-  const opened = await openReading({ hash: "#/inbox", thread });
-  await rowSelected(thread);
+  const opened = await openReading({ hash: "#/inbox", thread, waitingOn: ["inbox"] });
+  await rowSelected({ opened, thread });
   const before = sidebarCounts(thread.channel);
   const atShort = await opened.unreadAfter(JUST_SHORT);
   const after = await opened.readAfter(THE_REST);
@@ -44,9 +44,9 @@ it("selecting another row before 2 s leaves the first unread", { timeout: 8000 }
   const thread = await threadToRead("web-read-rule-move");
   const other = await otherThread(thread);
   const opened = await openReading({ hash: thread.address, thread });
-  await shown(LATEST);
+  await answeredAndShown({ opened, text: LATEST });
   opened.advance(A_SECOND);
-  await rowSelected(other);
+  await rowSelected({ opened, thread: other });
 
   await expect(opened.unreadAfter(A_SECOND)).resolves.toBe(TWO);
 
@@ -74,7 +74,7 @@ it.each(UNFOCUSINGS)(
 
     const thread = await threadToRead(`web-read-rule-${how}`);
     const opened = await openReading({ hash: thread.address, thread });
-    await shown(LATEST);
+    await answeredAndShown({ opened, text: LATEST });
     opened.advance(A_SECOND);
     opened.page[leave]();
     const meanwhile = await opened.unreadAfter(READ_AFTER);
@@ -95,7 +95,7 @@ it("a focus event while the page is already focused doesn't restart the count", 
 
   const thread = await threadToRead("web-read-rule-refocus");
   const opened = await openReading({ hash: thread.address, thread });
-  await shown(LATEST);
+  await answeredAndShown({ opened, text: LATEST });
   opened.advance(A_SECOND);
   opened.page.focus();
 
@@ -109,7 +109,7 @@ it("a reply arriving live in the open conversation is read 2 s after it arrives"
 
   const thread = await threadToRead("web-read-rule-live");
   const opened = await openReading({ hash: thread.address, thread });
-  await shown(LATEST);
+  await answeredAndShown({ opened, text: LATEST });
   opened.advance(A_SECOND);
   await arrived({ text: "Arrived live", thread });
   const aSecondIn = await opened.unreadAfter(A_SECOND);

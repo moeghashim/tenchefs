@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 export function IdentityRow(parts: IdentityRowParts): ReactNode {
   return (
     <li>
-      <PersonMenu inline={false} name={parts.name} profileHref={parts.href}>
+      <PersonMenu inline={false} moreInTabOrder={false} name={parts.name} profileHref={parts.href}>
         <IdentityRowLink row={parts} />
       </PersonMenu>
     </li>

@@ -7,7 +7,7 @@
  * `#/people` the people and agents, `#/people/<name>` the same with that
  * identity's profile open, `#/settings` the settings page and
  * `#/settings/<section>` the same with the focus on that section (`profile`,
- * `theme` or `agents`), `#/channels/<name>`,
+ * `theme`, `agents` or `session`), `#/channels/<name>`,
  * `#/channels/<name>/threads/<id>`, `#/channels/<name>/threads/<id>/messages/<message id>`
  * the same thread scrolled to that message and highlighted (the thread's own ID for its
  * top-level message), `#/approve/<user code>` the approval
@@ -27,14 +27,16 @@
  * link that opens a profile beside `route`, and `closedHref(route)` the one
  * that closes it.
  */
-import type { ChannelName, IdentityName, MessageId } from "../sdk/index.ts";
+import type { ChannelName, IdentityName } from "../sdk/index.ts";
 import { inboxHref, messageIdOf, selectionOf } from "./lib/thread-selection.ts";
+import { threadHref, threadMatch } from "./lib/thread-route.ts";
 import type { InboxSelection } from "./lib/thread-selection.ts";
+import type { ThreadRoute } from "./lib/thread-route.ts";
 import { isChannelName } from "../channels/index.ts";
 import { isIdentityName } from "../identities/index.ts";
 import { isUserCode } from "../logins/index.ts";
 
-const settingsSections = ["profile", "theme", "agents"] as const;
+const settingsSections = ["profile", "theme", "agents", "session"] as const;
 
 type SettingsSection = (typeof settingsSections)[number];
 
@@ -45,7 +47,7 @@ type Route =
   | { readonly name: "profile"; readonly identity: IdentityName }
   | { readonly name: "inbox"; readonly selected: InboxSelection | null }
   | { readonly name: "channel"; readonly channel: ChannelName }
-  | { readonly name: "thread"; readonly channel: ChannelName; readonly thread: MessageId; readonly message?: MessageId }
+  | ThreadRoute
   | { readonly name: "approve"; readonly userCode: string }
   | { readonly name: "approve-join"; readonly userCode: string }
   | { readonly name: "missing" };
@@ -67,8 +69,6 @@ const PEOPLE = /^#\/people$/u;
 const OLD_OPEN_THREADS = /^#\/threads(?:\/all)?$/u;
 const PROFILE = /^#\/people\/(?<identity>[^/]+(?:\/[^/]+)?)$/u;
 const CHANNEL = /^#\/channels\/(?<channel>[^/]+)$/u;
-const THREAD = /^#\/channels\/(?<channel>[^/]+)\/threads\/(?<thread>[^/]+)$/u;
-const REPLY = /^#\/channels\/(?<channel>[^/]+)\/threads\/(?<thread>[^/]+)\/messages\/(?<message>[^/]+)$/u;
 
 const PROFILE_QUERY = /\?profile=(?<profile>[^/?]*(?:\/[^/?]*)?)$/u;
 const WITH_PROFILE = /^.*\?profile=(?<profile>[^/?]*(?:\/[^/?]*)?)$/u;
@@ -104,23 +104,6 @@ function approveRoute(userCode: string, name: "approve" | "approve-join" = "appr
     return MISSING;
   }
   return { name, userCode };
-}
-
-function threadRoute(channel: string, thread: string): Route {
-  const selection = selectionOf({ channel, thread });
-  if (selection === null) {
-    return MISSING;
-  }
-  return { ...selection, name: "thread" };
-}
-
-function replyRoute(hash: string): Route {
-  const route = threadRoute(hash.replace(REPLY, "$<channel>"), hash.replace(REPLY, "$<thread>"));
-  const message = messageIdOf(hash.replace(REPLY, "$<message>"));
-  if (route.name !== "thread" || message === null) {
-    return MISSING;
-  }
-  return { ...route, message };
 }
 
 function inboxRoute(channel: string, thread: string): Route {
@@ -161,8 +144,7 @@ const matchers: readonly Matcher[] = [
   (hash) => APPROVE.test(hash) && approveRoute(hash.replace(APPROVE, "$<code>")),
   (hash) => APPROVE_JOIN.test(hash) && approveRoute(hash.replace(APPROVE_JOIN, "$<code>"), "approve-join"),
   (hash) => CHANNEL.test(hash) && channelRoute(hash.replace(CHANNEL, "$<channel>")),
-  (hash) => THREAD.test(hash) && threadRoute(hash.replace(THREAD, "$<channel>"), hash.replace(THREAD, "$<thread>")),
-  (hash) => REPLY.test(hash) && replyRoute(hash),
+  threadMatch,
 ];
 
 function settingsHref(section: SettingsSection | null): string {
@@ -176,11 +158,7 @@ function channelHref(route: Extract<Route, { readonly name: "channel" | "thread"
   if (route.name === "channel") {
     return `#/channels/${route.channel}`;
   }
-  const thread = `#/channels/${route.channel}/threads/${String(route.thread)}`;
-  if (!("message" in route)) {
-    return thread;
-  }
-  return `${thread}/messages/${String(route.message)}`;
+  return threadHref(route);
 }
 
 function pageHref(route: Extract<Route, { readonly name: "settings" | "channel" | "thread" }>): string {

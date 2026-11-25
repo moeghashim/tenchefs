@@ -15,7 +15,7 @@ export function MessageRefusals(props: MessageRefusalsProps): ReactNode {
     <>
       <MarkUnreadRefusal menu={props.menu} />
       <ReactionRefusal />
-      {props.closing !== null && <ClosingRefusal closing={props.closing} />}
+      {props.closing !== null && <ClosingRefusal />}
     </>
   );
 }

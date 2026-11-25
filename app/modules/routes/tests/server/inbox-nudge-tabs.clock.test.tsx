@@ -6,6 +6,7 @@ import type { EventStream } from "../../../sdk/index.ts";
 import type { Scope } from "effect";
 import { TestClock } from "effect/testing";
 import type { TestIdentity } from "../../../testing/server.ts";
+import { answering } from "../answering.ts";
 import { openAt } from "../render.tsx";
 import { watched } from "../watched.ts";
 
@@ -18,12 +19,14 @@ const settled: Effect.Effect<void> = TestClock.withLive(Effect.sleep(SETTLE));
 
 function pageOpenFor(who: TestIdentity): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* openPage() {
-    const { live, stream } = watched(who.client);
-    openAt({ client: who.client, hash: "#/inbox", live });
+    const { answered, client } = answering(who.client);
+    const { live, stream } = watched(client);
+    openAt({ client, hash: "#/inbox", live });
     yield* Effect.acquireRelease(
       answer(() => stream),
       (events: EventStream) => answer(() => events.close()),
     );
+    yield* answer(() => answered("inboxHistory"));
   });
 }
 

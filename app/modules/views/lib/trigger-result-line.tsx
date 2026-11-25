@@ -1,5 +1,5 @@
 import type { Trigger, TriggerResult } from "../../sdk/index.ts";
-import { Muted } from "../../design-system/index.tsx";
+import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { TriggerLastCall } from "./trigger-last-call.tsx";
 import type { TriggerSnapshot } from "../../composer/index.ts";

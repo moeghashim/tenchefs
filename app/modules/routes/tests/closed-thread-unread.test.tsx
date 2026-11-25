@@ -1,6 +1,8 @@
+import { answeredUntil, answering } from "./answering.ts";
 import { expect, it, onTestFinished, vi } from "vitest";
-import { feedOf, idOf, postedIn } from "./feed.ts";
+import { feedOf, feedOpened, idOf, postedIn } from "./feed.ts";
 import { inPane, inSidebar } from "./regions.ts";
+import type { Answering } from "./answering.ts";
 import type { Posted } from "./feed.ts";
 import { adminClient } from "./identities.ts";
 import { fireEvent } from "@testing-library/react";
@@ -33,12 +35,13 @@ async function articleSaying(text: Readonly<RegExp>): Promise<Element> {
   return article;
 }
 
-async function readAll(posted: Posted): Promise<void> {
-  await vi.waitFor(async () => {
-    const { items } = await posted.reader.inbox();
+async function unreadIn(posted: Posted): Promise<number> {
+  const { items } = await posted.reader.inbox();
+  return items.filter((item) => item.channel.name === posted.channel).length;
+}
 
-    expect(items.filter((item) => item.channel.name === posted.channel)).toHaveLength(NONE);
-  });
+async function readAll(posted: Posted, answered: Answering["answered"]): Promise<void> {
+  await answeredUntil({ answered, done: async () => (await unreadIn(posted)) === NONE, method: "ack" });
 }
 
 interface Opened {
@@ -52,17 +55,20 @@ interface Reopening {
   readonly read: string;
 }
 
-function openChannel(posted: Posted): Opened {
+async function openChannel(posted: Posted): Promise<Opened> {
   const scrolled = scrolledIntoView();
-  return { close: openAt({ client: posted.reader, hash: `#/channels/${posted.channel}` }), scrolled };
+  const { close } = await feedOpened({ hash: `#/channels/${posted.channel}`, reader: posted.reader });
+  return { close, scrolled };
 }
 
 async function openedAgain({ close, posted, read }: Reopening): Promise<() => void> {
   close();
-  const reading = openAt({ client: posted.reader, hash: read });
-  await readAll(posted);
+  const { answered, client } = answering(posted.reader);
+  const reading = openAt({ client, hash: read });
+  await readAll(posted, answered);
   reading();
-  return openAt({ client: posted.reader, hash: `#/channels/${posted.channel}` });
+  const again = await openChannel(posted);
+  return again.close;
 }
 
 async function followedAndClosed(channel: string, texts: readonly string[]): Promise<Posted> {
@@ -96,7 +102,7 @@ it("a closed thread mentioning you shows outside the fold, labelled Closed, and 
   const mention = "@web-held-mention-grace done a.";
   const texts = ["Open one.", mention, "Done b.", "Open two."];
   const posted = await postedIn({ channel: "web-held-mention", closed: [mention, "Done b."], texts });
-  const { close } = openChannel(posted);
+  const { close } = await openChannel(posted);
   await feedShows(texts, ["Open one.", mention, "<1 closed thread>", "Open two."]);
 
   await expect(articleSaying(/done a\./u)).resolves.toHaveProperty("textContent", expect.stringContaining(CLOSED));
@@ -115,7 +121,7 @@ it("a closed thread you follow with an unread reply shows outside the fold until
 
   const texts = ["Open one.", "Done a.", "Done b."];
   const posted = await followedAndClosed("web-held-followed", texts);
-  const { close } = openChannel(posted);
+  const { close } = await openChannel(posted);
 
   await feedShows(texts, ["Open one.", "Done a.", "<1 closed thread>"]);
 
@@ -135,7 +141,7 @@ it("opening the channel scrolls to the first unread item for you and highlights 
   const mention = "@web-held-scroll-grace done a.";
   const texts = ["Open one.", mention, "@web-held-scroll-grace later."];
   const posted = await postedIn({ channel: "web-held-scroll", closed: [mention], texts });
-  const { close, scrolled } = openChannel(posted);
+  const { close, scrolled } = await openChannel(posted);
   const article = await articleSaying(/done a\./u);
 
   await vi.waitFor(() => {
@@ -153,7 +159,7 @@ it("opening a channel with no closed thread unread for you scrolls to nothing", 
   const mention = "@web-held-none-grace open.";
   const texts = ["Done a.", mention];
   const posted = await postedIn({ channel: "web-held-none", closed: ["Done a."], texts });
-  const { close, scrolled } = openChannel(posted);
+  const { close, scrolled } = await openChannel(posted);
 
   await feedShows(texts, ["<1 closed thread>", mention]);
 
@@ -168,7 +174,7 @@ it("moving to another channel holds and highlights that channel's own closed thr
   const mention = "@web-held-switch-grace done a.";
   const posted = await postedIn({ channel: "web-held-switch", closed: [mention], texts: ["Open one.", mention] });
   await closedMentionIn(posted, "web-held-switch-b");
-  const { close } = openChannel(posted);
+  const { close } = await openChannel(posted);
   await highlightedSaying(/done a\./u);
   fireEvent.click(await inSidebar().findByRole("link", { name: /^#web-held-switch-b/u }));
 

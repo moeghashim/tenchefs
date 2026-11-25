@@ -1,4 +1,4 @@
-import { FieldNote } from "../../design-system/index.tsx";
+import { FieldNote } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { ScheduleRunList } from "./schedule-run-list.tsx";
 import type { SchedulingSnapshot } from "../../board/index.ts";

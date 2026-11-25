@@ -78,10 +78,14 @@ function createSelection(store: ItemsStore, scope: Scope | null): Selection {
 
   return {
     chooseReplyPost: (post) => {
-      publish({ ...state, replyPost: post });
+      if (JSON.stringify(state.replyPost) !== JSON.stringify(post)) {
+        publish({ ...state, replyPost: post });
+      }
     },
     expand: () => {
-      publish({ ...state, expanded: true });
+      if (!state.expanded) {
+        publish({ ...state, expanded: true });
+      }
     },
     snapshot: () => state,
     subscribe: (listener) => {

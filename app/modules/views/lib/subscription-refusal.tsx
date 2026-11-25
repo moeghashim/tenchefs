@@ -1,4 +1,4 @@
-import { Alert } from "../../design-system/index.tsx";
+import { Alert } from "../../design-system/content.tsx";
 import type { ChannelName } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 import type { SubscriptionsState } from "../../board/index.ts";

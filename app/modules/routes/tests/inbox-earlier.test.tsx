@@ -1,11 +1,14 @@
 import type { CookoutClient, MessageId } from "../../sdk/index.ts";
+import { agentShown, anonymousClient } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { rowsOf, subscribedReader } from "./inbox-reader.ts";
+import type { Answering } from "./answering.ts";
 import { alertSaying } from "./alerts.ts";
-import { anonymousClient } from "./identities.ts";
+import { answering } from "./answering.ts";
 import { inPane } from "./regions.ts";
 import { openWithClockStopped } from "./clock.ts";
+import { testAgentDisplayName } from "../../testing/index.ts";
 
 const NONE = 0;
 const ONE = 1;
@@ -44,7 +47,7 @@ function historyRefusedAfter(reader: CookoutClient, pages: number): CookoutClien
   };
 }
 
-function answering<Answer>(answer: Answer): () => Promise<Answer> {
+function answeredWith<Answer>(answer: Answer): () => Promise<Answer> {
   return async () => {
     const answered = await Promise.resolve(answer);
     return answered;
@@ -58,17 +61,22 @@ async function readElsewhere(channel: string): Promise<CookoutClient> {
   await reader.ack(last);
   return {
     ...reader,
-    inbox: answering(inbox),
-    readPositions: answering(positions),
+    inbox: answeredWith(inbox),
+    readPositions: answeredWith(positions),
   };
 }
 
+async function historyShown(answered: Answering["answered"], shown: () => Promise<void>): Promise<void> {
+  await answered("inboxHistory");
+  await shown();
+}
+
 function postedRow(channel: string, text: string): string {
-  return `#/inbox/${channel} New in #${channel}${channel}-posterposted in#${channel}just now${text}`;
+  return `#/inbox/${channel} New in #${channel}${agentShown(`${channel}-poster`)}posted in#${channel}just now${text}`;
 }
 
 function newRow(channel: string, text: string): string {
-  return `#/inbox/${channel} New in #${channel}${channel}-posterposted in#${channel}3 newjust now${text}`;
+  return `#/inbox/${channel} New in #${channel}${agentShown(`${channel}-poster`)}posted in#${channel}3 newjust now${text}`;
 }
 
 it("earlier lists read rows, a page at a time, merging each page into the rows it shows, until there are no more", {
@@ -77,9 +85,11 @@ it("earlier lists read rows, a page at a time, merging each page into the rows i
   expect.hasAssertions();
 
   const channel = "web-inbox-earlier";
-  const reader = await readThenUnread(channel);
-  const unmount = openWithClockStopped({ client: reader, hash: "#/inbox", pageSize: TWO_A_PAGE });
-  await screen.findByRole("list", { name: "Earlier" });
+  const { answered, client } = answering(await readThenUnread(channel));
+  const unmount = openWithClockStopped({ client, hash: "#/inbox", pageSize: TWO_A_PAGE });
+  await historyShown(answered, async () => {
+    await screen.findByRole("list", { name: "Earlier" });
+  });
 
   expect([rowsOf("Earlier"), screen.queryByText("That's everything.")]).toStrictEqual([
     [postedRow(channel, "Three")],
@@ -87,7 +97,9 @@ it("earlier lists read rows, a page at a time, merging each page into the rows i
   ]);
 
   fireEvent.click(inPane().getByRole("button", { name: "Show earlier" }));
-  await screen.findByText("That's everything.");
+  await historyShown(answered, async () => {
+    await screen.findByText("That's everything.");
+  });
 
   expect([
     rowsOf("Earlier"),
@@ -160,6 +172,7 @@ it("an item read in another session after the inbox loaded stays in Activity, no
   const channel = "web-inbox-read-elsewhere";
   const unmount = openWithClockStopped({ client: await readElsewhere(channel), hash: "#/inbox" });
   await screen.findByText("Nothing read yet.");
+  await inPane().findByRole("link", { name: testAgentDisplayName(`${channel}-poster`) });
 
   expect(rowsOf("Activity")).toStrictEqual([postedRow(channel, "One")]);
 

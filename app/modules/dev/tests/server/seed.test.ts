@@ -200,8 +200,8 @@ it.effect("the seed leaves an agent release-bot brought in, posting in deploys",
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("the seed calls a command in deploys and its handler replies with a result", () =>
-  Effect.gen(function* seededCommandCall() {
+it.effect("the seed calls a Webhook command in deploys and its handler replies with a result", () =>
+  Effect.gen(function* seededWebhookCommandCall() {
     const cookout = yield* TestCookout;
     yield* seeded(cookout);
     const { commands } = yield* answer(() => cookout.client.listCommands());
@@ -209,10 +209,7 @@ it.effect("the seed calls a command in deploys and its handler replies with a re
     const call = Option.getOrThrow(Arr.findFirst(deploys.messages, ({ author }) => author.name === "ada"));
     const thread = yield* answer(() => cookout.client.getThread(call.id));
 
-    expect(Arr.map(commands, ({ handler, name }) => [name, handler])).toStrictEqual([
-      ["rollback", "rollback"],
-      ["spawn-agent", "spawn-agent"],
-    ]);
+    expect(Arr.map(commands, ({ handler, name }) => [name, handler])).toStrictEqual([["rollback", "rollback"]]);
     expect([thread.parent.text, thread.parent.data]).toStrictEqual([
       "/rollback",
       { command: "rollback", data: { version: "1.4.1" } },

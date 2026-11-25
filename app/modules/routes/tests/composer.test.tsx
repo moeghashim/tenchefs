@@ -1,5 +1,5 @@
 import type { CookoutClient, Message } from "../../sdk/index.ts";
-import { adminClient, clientWith, newIdentity } from "./identities.ts";
+import { adminClient, agentOption, clientWith, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, getDefaultNormalizer, screen, within } from "@testing-library/react";
 import { inPane } from "./regions.ts";
@@ -16,15 +16,15 @@ function hashOf(parent: Message): string {
 }
 
 async function typeInReply(text: string): Promise<HTMLElement> {
-  const box = await screen.findByRole("textbox", { name: "Reply" });
+  const box = await screen.findByLabelText("Reply", { selector: "textarea" });
   fireEvent.change(box, { target: { value: text } });
   return box;
 }
 
 async function suggested(): Promise<readonly (string | null)[]> {
-  const list = await screen.findByRole("list", { name: "Mention suggestions" });
+  const list = await screen.findByRole("listbox", { name: "Mention suggestions" });
   const shown: (string | null)[] = [];
-  for (const button of within(list).getAllByRole("button")) {
+  for (const button of within(list).getAllByRole("option")) {
     shown.push(button.textContent);
   }
   return shown;
@@ -43,7 +43,7 @@ it("typing @ and a prefix suggests the identities whose names start with it, hum
 
   await typeInReply("Ping @sugg");
 
-  await expect(suggested()).resolves.toStrictEqual(["@suggest-ada", "@suggest-agent"]);
+  await expect(suggested()).resolves.toStrictEqual(["@suggest-ada", agentOption("suggest-agent")]);
 
   close();
 });
@@ -67,7 +67,7 @@ it("typing @ and the start of a display name, in any case, suggests that identit
 
   const box = await typeInReply("Ping @qUOk");
   const shown = await suggested();
-  fireEvent.click(inPane().getByRole("button", { name: /@shown-worker-1/u }));
+  fireEvent.mouseDown(inPane().getByRole("option", { name: /@shown-worker-1/u }));
 
   expect([shown, box]).toStrictEqual([
     ["@shown-worker-1Quokka (cloud)"],
@@ -77,14 +77,14 @@ it("typing @ and the start of a display name, in any case, suggests that identit
   close();
 });
 
-const MEMBERS = ["@member-dot", "@member-cy", "@member-bea"];
+const MEMBERS = ["@member-dot", agentOption("member-cy"), "@member-bea"];
 const FIRST = 0;
 
 async function repliesBy(parent: Message, earlier: CookoutClient, latest: CookoutClient): Promise<void> {
   const reply = { channel: parent.channel, replyTo: parent.id, text: "Reply" };
   await earlier.createMessage(reply);
-  await latest.createMessage(reply);
-  await earlier.createMessage(reply);
+  const { message: read } = await latest.createMessage(reply);
+  await earlier.createMessage({ ...reply, seen: read.id });
   await latest.createMessage(reply);
   await adminClient().createMessage(reply);
 }
@@ -131,11 +131,11 @@ it("choosing a suggestion puts the mention in the reply box in place of the pref
 
   const box = await typeInReply("Ping @chosen-l");
   await suggested();
-  fireEvent.click(inPane().getByRole("button", { name: /^@chosen-linus/u }));
+  fireEvent.mouseDown(inPane().getByRole("option", { name: /^@chosen-linus/u }));
 
   expect([
     screen.queryByDisplayValue("Ping @chosen-linus ", { normalizer: getDefaultNormalizer({ trim: false }) }),
-    screen.queryByRole("list", { name: "Mention suggestions" }),
+    screen.queryByRole("listbox", { name: "Mention suggestions" }),
   ]).toStrictEqual([box, null]);
 
   close();
@@ -149,7 +149,39 @@ it("text with no @ before the caret suggests nobody", { timeout: 5000 }, async (
 
   await typeInReply("mail me at me@admin");
 
-  expect(screen.queryByRole("list", { name: "Mention suggestions" })).toBeNull();
+  expect(screen.queryByRole("listbox", { name: "Mention suggestions" })).toBeNull();
+
+  close();
+});
+
+it("@ and a space, as dictation types it, still suggests, and @ g filters as @g does", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  await newIdentity({ kind: "human", name: "spoken-grace" });
+  const parent = await threadIn("web-composer-spoken");
+  const close = openAt({ client: adminClient(), hash: hashOf(parent) });
+
+  await typeInReply("Ping @ ");
+
+  await expect(suggested()).resolves.not.toStrictEqual([]);
+
+  await typeInReply("Ping @ spoken-g");
+
+  await expect(suggested()).resolves.toStrictEqual(["@spoken-grace"]);
+
+  close();
+});
+
+it("a spoken at, with no @, suggests nobody", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  await newIdentity({ kind: "human", name: "spoken-at-grace" });
+  const parent = await threadIn("web-composer-spoken-at");
+  const close = openAt({ client: adminClient(), hash: hashOf(parent) });
+
+  await typeInReply("Ping at spoken-at-g");
+
+  expect(screen.queryByRole("listbox", { name: "Mention suggestions" })).toBeNull();
 
   close();
 });
@@ -167,7 +199,7 @@ it("when the server refuses the identity list, typing @ suggests nobody and the 
   await expect(refused.listIdentities()).rejects.toThrow("token");
 
   expect([
-    screen.queryByRole("list", { name: "Mention suggestions" }),
+    screen.queryByRole("listbox", { name: "Mention suggestions" }),
     screen.queryByDisplayValue("Ping @adm"),
   ]).toStrictEqual([null, box]);
 

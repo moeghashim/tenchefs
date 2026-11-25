@@ -1,6 +1,6 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import type { ChannelsState, CommandsState } from "./listed-slices.ts";
-import type { OwnClient, OwnParts } from "./own-parts.ts";
+import type { OwnClient, OwnParts, Schedules } from "./own-parts.ts";
 import type { BoardCalls } from "./board-calls.ts";
 import type { ChannelPages } from "./channel-pages.ts";
 import type { ClosingRefusal } from "./thread-closing.ts";
@@ -22,7 +22,7 @@ interface ThreadCalls {
   readonly ack: (place: ThreadPlace, id: MessageId) => void;
 }
 
-type OwnShown = "channels" | "commands" | "subscriptions";
+type OwnShown = "channels" | "commands" | "schedules" | "subscriptions";
 
 interface OwnShowing {
   readonly channelPages: ChannelPageCalls;
@@ -36,6 +36,7 @@ interface OwnState {
   readonly channels: ChannelsState;
   readonly notice: ChannelName | null;
   readonly commands: CommandsState;
+  readonly schedules: Schedules;
   readonly subscriptions: SubscriptionsState;
   readonly messages: MessagesHeld;
   readonly closingRefusal: ClosingRefusal | null;
@@ -118,11 +119,13 @@ function createOwn(options: OwnOptions): Own {
       commands: parts.commands.state(),
       messages: parts.messages.state(),
       notice: parts.notice(),
+      schedules: parts.schedules.state(),
       subscriptions: parts.subscriptions.state(),
     }),
     subscribers: (following) => ({
       channels: showingPart(following, parts.channels),
       commands: showingPart(following, parts.commands),
+      schedules: showingPart(following, parts.schedules),
       subscriptions: showingPart(following, parts.subscriptions),
     }),
   };

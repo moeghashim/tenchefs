@@ -1,9 +1,10 @@
 import type { ChannelMessagesState, MessageBeforeState, ThreadMessagesState } from "./message-selectors.ts";
+import type { ChannelName, ScheduledMessageId } from "../../sdk/index.ts";
 import type { ChannelsState, CommandsState } from "./listed-slices.ts";
 import { channelMessages, messageBefore, threadMessages } from "./message-selectors.ts";
 import type { BoardState } from "./board-store.ts";
-import type { ChannelName } from "../../sdk/index.ts";
 import type { ClosingRefusal } from "./thread-closing.ts";
+import type { ListedSchedules } from "./schedules-slice.ts";
 import type { SubscriptionsState } from "./subscriptions-slice.ts";
 import type { ThreadPlace } from "./threads-part.ts";
 
@@ -21,6 +22,28 @@ function commandList(state: BoardState): CommandsState {
 
 function subscribedChannels(state: BoardState): SubscriptionsState {
   return state.subscriptions;
+}
+
+function scheduleListOf(channel: ChannelName): (state: BoardState) => ListedSchedules {
+  let read: ListedSchedules | null = null;
+  let shown: ListedSchedules = { status: "loading" };
+  return (state) => {
+    const { listed } = state.schedules;
+    if (listed === read) {
+      return shown;
+    }
+    read = listed;
+    if (listed.status !== "loaded") {
+      shown = listed;
+      return shown;
+    }
+    shown = { schedules: listed.schedules.filter((schedule) => schedule.channel === channel), status: "loaded" };
+    return shown;
+  };
+}
+
+function deletedSchedules(state: BoardState): ReadonlySet<ScheduledMessageId> {
+  return state.schedules.deleted;
 }
 
 function closingRefusal(state: BoardState): ClosingRefusal | null {
@@ -48,7 +71,9 @@ export {
   closingRefusal,
   commandList,
   deletedChannelNotice,
+  deletedSchedules,
   messageBeforeOf,
+  scheduleListOf,
   subscribedChannels,
   threadOf,
 };

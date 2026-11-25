@@ -2,10 +2,10 @@ import { Array as Arr, Option, Order, Predicate, pipe } from "effect";
 import type { Message, Reply, TopLevelMessage } from "../../../messages/index.ts";
 import type { SearchCursor, SearchPageRequest, SearchQuery, SearchSection, StoredSearchPage } from "./search.ts";
 import { counted, threadIdOf } from "./messages.ts";
+import { matchesQuery, matchingShare } from "../../../search/index.ts";
 import type { Effect } from "effect";
 import type { SearchResult } from "../../../search/index.ts";
 import type { StorageUnavailable } from "./errors.ts";
-import { matchesQuery } from "../../../search/index.ts";
 
 type Read = <Value>(work: (messages: readonly Message[]) => Value) => Effect.Effect<Value, StorageUnavailable>;
 
@@ -64,10 +64,24 @@ function passesFilters(query: SearchQuery): (message: Message) => boolean {
     anyOrOneOf(query.authors, author.name) && anyOrOneOf(query.channels, channel) && isWithinDates(query, createdAt);
 }
 
+function bestFirst(query: SearchQuery): Order.Order<Message> {
+  return Order.combine(
+    Order.flip(Order.mapInput(Order.Number, ({ text }: Message) => matchingShare({ query, text }))),
+    newestFirst,
+  );
+}
+
+function pageOf({ page, query }: Omit<Searching, "messages">, matching: readonly Message[]): readonly Message[] {
+  if (page.sort === "best") {
+    return Arr.drop(Arr.sort(matching, bestFirst(query)), page.offset);
+  }
+  return Arr.filter(Arr.sort(matching, newestFirst), isOlderThan(page.after));
+}
+
 function searchIn({ messages, page, query }: Searching): StoredSearchPage {
   const filtered = Arr.filter(messages, passesFilters(query));
   const matching = Arr.filter(filtered, ({ text }) => matchesQuery({ query, text }));
-  const found = Arr.filter(Arr.sort(matching, newestFirst), isOlderThan(page.after));
+  const found = pageOf({ page, query }, matching);
   return { hasMore: found.length > page.limit, results: Arr.map(Arr.take(found, page.limit), resultIn(messages)) };
 }
 

@@ -1,5 +1,5 @@
 import { ChannelBadges } from "./channel-badges.tsx";
-import { NavLink } from "../../design-system/index.tsx";
+import { NavLink } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 import type { UnreadCounts } from "../../unread/index.ts";
 import { hasUnread } from "./unread-counts.ts";

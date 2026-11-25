@@ -1,3 +1,4 @@
+import { Array as Arr, Effect, Predicate } from "effect";
 import {
   Caller,
   identityNotFound,
@@ -5,11 +6,11 @@ import {
   requireOwnerBringerOrAdmin,
   requireOwnerOrAdmin,
 } from "../../../identities/server.ts";
-import { Effect, Predicate } from "effect";
+import type { Identity, IdentityName } from "../../../identities/index.ts";
+import type { ListAgentSessionsResponse, ListedAgentSession } from "../../index.ts";
 import { ListAgentSessionsResponseSchema, RevokeAgentSessionResponseSchema } from "./wire.ts";
 import { AgentSessions } from "./service.ts";
 import { HttpServerResponse } from "effect/http";
-import type { IdentityName } from "../../../identities/index.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { Route } from "../../../http/server.ts";
 import { Storage } from "../../../storage/server.ts";
@@ -23,7 +24,7 @@ type Permission = (name: IdentityName) => Effect.Effect<void, Refusal | StorageU
 function managedAgent(
   params: Readonly<Record<string, string>>,
   permitted: Permission,
-): Effect.Effect<IdentityName, Refusal | StorageUnavailable, Caller | Storage> {
+): Effect.Effect<Identity, Refusal | StorageUnavailable, Caller | Storage> {
   return Effect.gen(function* checkManagedAgent() {
     const name = yield* nameParam(params);
     yield* permitted(name);
@@ -32,17 +33,29 @@ function managedAgent(
     if (Predicate.isUndefined(found)) {
       return yield* Effect.fail(identityNotFound(name));
     }
-    return name;
+    return found;
   });
+}
+
+function unwatched({ sessionUrl: _hidden, ...session }: ListedAgentSession): ListedAgentSession {
+  return session;
+}
+
+function shownTo(caller: Identity, agent: Identity, listed: ListAgentSessionsResponse): ListAgentSessionsResponse {
+  if (agent.kind === "agent" && agent.owner === caller.name) {
+    return listed;
+  }
+  return { agentSessions: Arr.map(listed.agentSessions, unwatched) };
 }
 
 const listRoute: Route<Needs> = {
   handle: (params) =>
     Effect.gen(function* listAgentSessionsRoute() {
-      const name = yield* managedAgent(params, requireOwnerOrAdmin);
+      const agent = yield* managedAgent(params, requireOwnerOrAdmin);
+      const caller = yield* Caller;
       const agentSessions = yield* AgentSessions;
-      const listed = yield* agentSessions.listFor(name);
-      return yield* HttpServerResponse.schemaJson(ListAgentSessionsResponseSchema)(listed);
+      const listed = yield* agentSessions.listFor(agent.name);
+      return yield* HttpServerResponse.schemaJson(ListAgentSessionsResponseSchema)(shownTo(caller, agent, listed));
     }),
   method: "GET",
   path: identityAgentSessionPath,
@@ -51,7 +64,7 @@ const listRoute: Route<Needs> = {
 const revokeRoute: Route<Needs> = {
   handle: (params) =>
     Effect.gen(function* revokeAgentSessionRoute() {
-      const name = yield* managedAgent(params, requireOwnerBringerOrAdmin);
+      const { name } = yield* managedAgent(params, requireOwnerBringerOrAdmin);
       const caller = yield* Caller;
       const agentSessions = yield* AgentSessions;
       const revoked = yield* agentSessions.revokeFor(name, caller.name);

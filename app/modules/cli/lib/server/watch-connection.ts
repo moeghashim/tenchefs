@@ -1,6 +1,5 @@
-import { Array as Arr, Cause, Duration, Effect, Exit, Option, Predicate, Queue, Ref, Schedule, Stream } from "effect";
-import type { CallFailure, ClientWithAgentSessionState } from "./adapters/sdk.ts";
 import type {
+  AgentJoinRequestsEvent,
   ConnectedEvent,
   CookoutEvent,
   DeactivatedQuietAgentEvent,
@@ -12,12 +11,19 @@ import type {
   Reaction,
   WatchOptions,
 } from "../../../sdk/index.ts";
+import { Array as Arr, Cause, Duration, Effect, Exit, Option, Predicate, Queue, Ref, Schedule, Stream } from "effect";
+import type { CallFailure, ClientWithAgentSessionState } from "./adapters/sdk.ts";
 import { callClient, toFailure } from "./adapters/sdk.ts";
 import type { Scope } from "effect";
 import { eventsPath } from "../../../events/index.ts";
 import { note } from "./watch-lines.ts";
 
-type WatchedEvent = InboxItemEvent | NudgeEvent | DeactivationOfferEvent | DeactivatedQuietAgentEvent;
+type WatchedEvent =
+  | InboxItemEvent
+  | NudgeEvent
+  | DeactivationOfferEvent
+  | DeactivatedQuietAgentEvent
+  | AgentJoinRequestsEvent;
 
 type Heard = WatchedEvent | ConnectedEvent;
 
@@ -80,6 +86,9 @@ function isWatched(event: CookoutEvent | Heard): event is WatchedEvent {
   }
   if (event.type === "deactivated-quiet-agent") {
     return !event.deactivatedQuietAgent.read;
+  }
+  if (event.type === "agent-join-requests") {
+    return Arr.isReadonlyArrayNonEmpty(event.agentJoinRequests);
   }
   return event.type === "inbox-item" || event.type === "nudge";
 }
@@ -184,7 +193,7 @@ function lastSeenAfter(event: Heard): (seen: Option.Option<MessageId>) => Option
         ),
       );
   }
-  if (event.type === "nudge" || event.type === "deactivation-offer" || event.type === "deactivated-quiet-agent") {
+  if (event.type !== "connected") {
     return (seen) => seen;
   }
   return Option.orElse(() => Option.fromNullishOr(event.latestMessageId));

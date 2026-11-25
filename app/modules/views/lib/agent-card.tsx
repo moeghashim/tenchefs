@@ -1,7 +1,8 @@
-import { ActionGroup, ProfileName } from "../../design-system/index.tsx";
+import { ActionGroup } from "../../design-system/controls.tsx";
 import type { Identities } from "../../composer/index.ts";
 import type { Identity } from "../../sdk/index.ts";
 import { IdentityActionsView } from "./identity-actions.tsx";
+import { ProfileName } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { noteOf } from "./use-author.ts";
 

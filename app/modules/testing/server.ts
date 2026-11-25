@@ -1,6 +1,6 @@
 /**
  * The test composition root, importable only from tests. `runDev`,
- * `startDev` and `startFakeRoutine` run the dev program's commands (ADR 0079) in process. It builds the test
+ * `startDev` (`startProbedDev` with `--probe`) and `startFakeRoutine` run the dev program's commands (ADR 0079) in process. It builds the test
  * Layers (a cookout on port 0 with memory storage and test secrets, its
  * admin on a token it makes and identities seeded through `Storage`, both storage
  * Layers on fresh stores, a store that is unusable). `assetStoreLayers` are the asset store Layers on fresh stores, S3 on
@@ -27,13 +27,20 @@
  * answer 502 to just its next few requests (or those to one path), as a deploy
  * does, and wait until it has answered 502 so many times, or freeze, so it stops answering: open streams send
  * nothing more and every later request waits for ever.
+ * `pastOwnPresence` reads an all-channels feed past its own caller coming online, and `watchingAllChannels` opens one so.
  * `silentConnection` connects to a server and sends nothing. `cuttableRelay`,
  * from the http module, is a link a test can cut and restore, from another
  * process too, as the browser tests do.
  */
 export { answer, refusal } from "./lib/server/calls.ts";
+export { pastOwnPresence, watchingAllChannels } from "./lib/server/own-presence.ts";
 export { type ChannelFixtureOptions, channelFixture, channelName } from "./lib/server/channels.ts";
-export { type CommandFixtureOptions, commandFixture, commandName, handlerFixture } from "./lib/server/commands.ts";
+export {
+  type WebhookCommandFixtureOptions,
+  webhookCommandFixture,
+  webhookCommandName,
+  handlerFixture,
+} from "./lib/server/commands.ts";
 export {
   type CliResult,
   type CommandLineNeeds,
@@ -48,7 +55,7 @@ export {
   watchCookout,
 } from "./lib/server/cli.ts";
 export { interruptCookout } from "./lib/server/cli-interrupt.ts";
-export { type DevProcess, startDev, startFakeRoutine } from "./lib/server/dev.ts";
+export { type DevProcess, startDev, startFakeRoutine, startProbedDev } from "./lib/server/dev.ts";
 export {
   type InterruptedDev,
   interruptDevBinary,
@@ -91,8 +98,6 @@ export {
   type TestCookoutService,
   type TestIdentity,
   testCookout,
-  testRoutineFirePath,
-  testRoutineToken,
 } from "./lib/server/cookout.ts";
 export type { LastEnd } from "./lib/server/booted.ts";
 export { fixtureTime, isoTime, testStartTime } from "./lib/server/time.ts";

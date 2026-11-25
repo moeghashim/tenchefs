@@ -102,8 +102,18 @@ function createCast({ token, url }: BoardConnection): Effect.Effect<Cast, SeedFa
     {
       ada: createIdentity(url, admin, { kind: "human", name: "ada" }),
       grace: createIdentity(url, admin, { kind: "human", name: "grace" }),
-      releaseBot: createIdentity(url, admin, { kind: "agent", name: "release-bot", owner: "ada" }),
-      triageAgent: createIdentity(url, admin, { kind: "agent", name: "triage-agent", owner: "grace" }),
+      releaseBot: createIdentity(url, admin, {
+        displayName: "release-bot",
+        kind: "agent",
+        name: "release-bot",
+        owner: "ada",
+      }),
+      triageAgent: createIdentity(url, admin, {
+        displayName: "triage-agent",
+        kind: "agent",
+        name: "triage-agent",
+        owner: "grace",
+      }),
     },
     ONE_AT_A_TIME,
   );
@@ -160,13 +170,18 @@ function postConversation(cast: Cast): Effect.Effect<Conversation, SeedFailure> 
   });
 }
 
-function callCommand(
+function callWebhookCommand(
   { token, url }: BoardConnection,
   cast: Cast,
 ): Effect.Effect<Pick<SeededMessages, "rollbackCall" | "rollbackResult">, SeedFailure> {
   return Effect.gen(function* rollback() {
     const admin = clientAt(url, token);
-    const handler = yield* createIdentity(url, admin, { kind: "agent", name: "rollback", owner: "ada" });
+    const handler = yield* createIdentity(url, admin, {
+      displayName: "rollback",
+      kind: "agent",
+      name: "rollback",
+      owner: "ada",
+    });
     yield* call(() =>
       admin.addCommand({
         description: "Roll back to a version",
@@ -204,6 +219,9 @@ function postBroughtIn(
 ): Effect.Effect<Pick<SeededMessages, "broughtInPost">, SeedFailure> {
   return Effect.gen(function* broughtIn() {
     const box = createCookoutClient({ env: {}, url });
+    yield* call(() =>
+      cast.releaseBot.client.createAgentForOwner({ displayName: "build-worker", name: "build-worker" }),
+    );
     const started = yield* call(() => box.startAgentJoin({ as: "build-worker", host: "build-box" }));
     yield* call(() => cast.releaseBot.client.approveAgentJoin(started.userCode));
     const collected = yield* Effect.filterOrFail(
@@ -223,7 +241,12 @@ function postLast(
 ): Effect.Effect<Pick<SeededMessages, "mentionOfGrace" | "oldBotPost">, SeedFailure> {
   return Effect.gen(function* last() {
     const admin = clientAt(url, token);
-    const oldBot = yield* createIdentity(url, admin, { kind: "agent", name: "old-deploy-bot", owner: "ada" });
+    const oldBot = yield* createIdentity(url, admin, {
+      displayName: "old-deploy-bot",
+      kind: "agent",
+      name: "old-deploy-bot",
+      owner: "ada",
+    });
     const oldBotPost = yield* post(oldBot, { channel: "deploys", text: "Deployed 1.4.0." });
     yield* call(() => admin.deactivateIdentity("old-deploy-bot"));
     const mention = yield* post(cast.ada, {
@@ -247,7 +270,7 @@ function seedBoard(connection: BoardConnection): Effect.Effect<SeededBoard, Seed
     const cast = yield* createCast(connection);
     const conversation = yield* postConversation(cast);
     yield* react(cast, conversation);
-    const command = yield* callCommand(connection, cast);
+    const command = yield* callWebhookCommand(connection, cast);
     const broughtIn = yield* postBroughtIn(connection, cast);
     const last = yield* postLast(connection, cast);
     const identities = Arr.map([cast.ada, cast.grace, cast.releaseBot, cast.triageAgent], ({ created }) => created);

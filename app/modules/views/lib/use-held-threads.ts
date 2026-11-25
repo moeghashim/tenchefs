@@ -1,8 +1,9 @@
 import type { ChannelName, MessageId, TopLevelMessage } from "../../sdk/index.ts";
-import type { Unread, UnreadState } from "../../unread/index.ts";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import type { ChannelMessagesState } from "../../board/index.ts";
-import { threadsWithNews } from "../../unread/index.ts";
+import type { Unread } from "../../unread/index.ts";
+import { inboxThreadsWithNews } from "../../board/index.ts";
+import { useBoardInbox } from "./use-board-inbox.ts";
 
 const HIGHLIGHT_MS = 2000;
 const NO_THREADS: readonly MessageId[] = [];
@@ -28,13 +29,6 @@ interface Seen {
   readonly kept: Kept;
   readonly news: readonly MessageId[] | null;
   readonly messages: readonly TopLevelMessage[] | null;
-}
-
-function newsOf(state: UnreadState, channel: ChannelName): readonly MessageId[] | null {
-  if (state.status !== "loaded") {
-    return null;
-  }
-  return threadsWithNews({ channel, items: state.items });
 }
 
 function messagesOf(state: ChannelMessagesState): readonly TopLevelMessage[] | null {
@@ -76,9 +70,8 @@ function shownOf(target: MessageId | null, faded: MessageId | null): MessageId |
 
 const FRESH: Kept = { decided: false, held: new Set(), target: null };
 
-export function useHeldThreads({ channel, state, unread }: Holding): HeldThreads {
-  const unreadState = useSyncExternalStore(unread.subscribe, unread.snapshot);
-  const news = useMemo(() => newsOf(unreadState, channel), [unreadState, channel]);
+export function useHeldThreads({ channel, state }: Holding): HeldThreads {
+  const news = useBoardInbox((board) => inboxThreadsWithNews({ channel, state: board }));
   const [kept, setKept] = useState<Kept>(FRESH);
   const [faded, setFaded] = useState<MessageId | null>(null);
   const next = decided({ kept: grown(kept, news ?? NO_THREADS), messages: messagesOf(state), news });

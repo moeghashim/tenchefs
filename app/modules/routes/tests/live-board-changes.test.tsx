@@ -3,7 +3,7 @@ import { addCommand, suggestedFor } from "./commands.ts";
 import { adminClient, clientWith, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { Live } from "../../live/index.ts";
+import type { Live } from "../../testing/web.ts";
 import { inSidebar } from "./regions.ts";
 import { openAt } from "./render.tsx";
 import { watched } from "./watched.ts";
@@ -31,15 +31,30 @@ interface HeldOpen {
   readonly release: () => void;
 }
 
-async function heard(live: Live, type: CookoutEvent["type"]): Promise<boolean> {
+interface Hearing {
+  readonly live: Live;
+  readonly heard: Promise<boolean>;
+}
+
+function hearing(live: Live, type: CookoutEvent["type"]): Hearing {
   const { promise, resolve } = Promise.withResolvers<boolean>();
-  live.subscribe((event) => {
-    if (event.type === type) {
-      resolve(true);
-    }
-  });
-  const sent = await promise;
-  return sent;
+  return {
+    heard: promise,
+    live: {
+      ...live,
+      follow: (follower) => {
+        live.follow({
+          ...follower,
+          heard: (event) => {
+            follower.heard(event);
+            if (event.type === type) {
+              resolve(true);
+            }
+          },
+        });
+      },
+    },
+  };
 }
 
 async function openWithListHeld(channel: string): Promise<HeldOpen> {
@@ -54,9 +69,10 @@ async function openWithListHeld(channel: string): Promise<HeldOpen> {
       return listed;
     },
   };
-  const { live, stream } = watched(held);
-  const deletionHeard = heard(live, "channel-deleted");
+  const watching = watched(held);
+  const { heard: deletionHeard, live } = hearing(watching.live, "channel-deleted");
   openAt({ client: held, hash: "#/inbox", live });
+  const { stream } = watching;
   return {
     deletionHeard,
     events: await stream,

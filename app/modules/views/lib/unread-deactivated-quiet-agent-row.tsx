@@ -1,12 +1,13 @@
-import { ButtonRow, RowButton } from "../../design-system/index.tsx";
 import type { Identities, IdentityActions } from "../../composer/index.ts";
 import { useCallback, useMemo } from "react";
+import { ButtonRow } from "../../design-system/controls.tsx";
 import type { DeactivatedQuietAgent } from "../../sdk/index.ts";
 import { DeactivatedQuietAgentRow } from "./deactivated-quiet-agent-row.tsx";
 import type { DeactivatedQuietAgents } from "../../unread/index.ts";
 import { IdentityConfirm } from "./identity-confirm.tsx";
 import type { ReactNode } from "react";
 import { ReactivateRefusal } from "./reactivate-refusal.tsx";
+import { RowButton } from "../../design-system/feed.tsx";
 import { TokenShown } from "./token-shown.tsx";
 
 const TEXT = { markRead: "Mark read", reactivate: "Reactivate" } as const;

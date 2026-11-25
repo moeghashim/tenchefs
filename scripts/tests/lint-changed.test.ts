@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { expect, it, onTestFinished } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { field, parseJson, text as textOf } from "../lib/json.ts";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { changedFiles } from "../lib/changed-files.ts";
 import path from "node:path";
 import { tmpdir } from "node:os";
@@ -8,6 +9,8 @@ import { tmpdir } from "node:os";
 const FIXTURES = ".vitest";
 const PASSED = 0;
 const FAILED = 1;
+const SUMMARY = -2;
+const LAST = -1;
 const VIOLATION = "export const total = 7 * 6;\n";
 const CLEAN = 'export const greeting = "hello";\n';
 const SETUP = [
@@ -22,6 +25,7 @@ const SETUP = [
 interface Ran {
   readonly output: string;
   readonly status: number | null;
+  readonly stdout: string;
 }
 
 function fixture(content: string): string {
@@ -35,9 +39,17 @@ function fixture(content: string): string {
   return file;
 }
 
+function nodeIn(cwd: string, ...args: readonly string[]): Ran {
+  const ran = spawnSync("node", args, { cwd, encoding: "utf8" });
+  return { output: `${ran.stdout}${ran.stderr}`, status: ran.status, stdout: ran.stdout };
+}
+
 function node(...args: readonly string[]): Ran {
-  const ran = spawnSync("node", args, { encoding: "utf8" });
-  return { output: `${ran.stdout}${ran.stderr}`, status: ran.status };
+  return nodeIn(process.cwd(), ...args);
+}
+
+function lastLine(text: string): string {
+  return text.trimEnd().split("\n").at(LAST) ?? "";
 }
 
 function git(cwd: string, ...args: readonly string[]): void {
@@ -91,16 +103,62 @@ it("reports a violation once in the hook's format and fails as the hook does", {
     [`${file}:1 eslint(no-magic-numbers) No magic number: 7`, `${file}:1 eslint(no-magic-numbers) No magic number: 6`],
   ]);
   expect(changed.output).toContain("2 new violations in 1 file");
+  expect(changed.output.trimEnd().split("\n").slice(SUMMARY)).toStrictEqual([
+    "By rule (2 violations; the full list is above):",
+    `  2 eslint(no-magic-numbers), e.g. ${file}:1 No magic number: 7`,
+  ]);
+  expect(lastLine(changed.stdout)).toBe("RESULT: FAIL (lint)");
 });
 
 it("passes a clean file as the hook does", { timeout: 60_000 }, () => {
   expect.hasAssertions();
 
   const file = fixture(CLEAN);
-  const statuses = [
-    node("scripts/lint-changed.ts", file).status,
-    node("scripts/lint-ratchet.ts", "--fix", file).status,
-  ];
+  const changed = node("scripts/lint-changed.ts", file);
+  const statuses = [changed.status, node("scripts/lint-ratchet.ts", "--fix", file).status];
 
   expect(statuses).toStrictEqual([PASSED, PASSED]);
+  expect(lastLine(changed.stdout)).toBe("RESULT: PASS");
+});
+
+function rootKnipScript(): string | undefined {
+  const manifest = parseJson(readFileSync("package.json", "utf8"));
+  return textOf(field(field(manifest, "scripts"), "knip"));
+}
+
+function unusedExportRepo(): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "lint-changed-knip-"));
+  onTestFinished(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+  symlinkSync(path.resolve("node_modules"), path.join(dir, "node_modules"));
+  write(dir, {
+    "knip.json": JSON.stringify({ workspaces: { ".": { entry: ["main.ts!"], project: ["*.ts!"] } } }),
+    "lib.ts": "export const used = 1;\nexport const unused = 2;\n",
+    "main.ts": 'import { used } from "./lib.ts";\n\nexport const doubled = used + used;\n',
+    "package.json": JSON.stringify({
+      name: "fixture",
+      private: true,
+      scripts: { knip: rootKnipScript() },
+      type: "module",
+    }),
+    "tsconfig.json": JSON.stringify({
+      compilerOptions: { allowImportingTsExtensions: true, module: "nodenext", noEmit: true, strict: true, types: [] },
+    }),
+  });
+  for (const args of SETUP) {
+    git(dir, ...args);
+  }
+  return dir;
+}
+
+it("fails on an unused export with knip's report, before pnpm check would", { timeout: 60_000 }, () => {
+  expect.hasAssertions();
+
+  const dir = unusedExportRepo();
+  const changed = nodeIn(dir, path.resolve("scripts/lint-changed.ts"), "--base", "v1");
+
+  expect(changed.status).toBe(FAILED);
+  expect(changed.output).toMatch(/unused\s+lib\.ts:2:14/u);
+  expect(lastLine(changed.stdout)).toBe("RESULT: FAIL (knip)");
 });

@@ -1,9 +1,8 @@
 import type { CookoutClient, EventStream, MessageId } from "../../sdk/index.ts";
 import { expect, it } from "vitest";
+import { inboxOpened, subscribedReader } from "./inbox-reader.ts";
 import { screen, waitFor, within } from "@testing-library/react";
 import { inSidebar } from "./regions.ts";
-import { openWithClockStopped } from "./clock.ts";
-import { subscribedReader } from "./inbox-reader.ts";
 import { watched } from "./watched.ts";
 
 function badgesOn(channel: string): readonly string[] {
@@ -15,9 +14,9 @@ function badgesOn(channel: string): readonly string[] {
   return badges;
 }
 
-async function openInbox(reader: CookoutClient): Promise<() => Promise<void>> {
+async function openInbox({ channel, reader }: Pick<Thread, "channel" | "reader">): Promise<() => Promise<void>> {
   const { live, stream } = watched(reader);
-  const unmount = openWithClockStopped({ client: reader, hash: "#/inbox", live });
+  const { unmount } = await inboxOpened({ author: `${channel}-poster`, live, reader });
   await screen.findByRole("list", { name: "Earlier" });
   const events: EventStream = await stream;
   return async () => {
@@ -57,11 +56,11 @@ it("closing the only thread with unread replies in a channel keeps its badge, li
   expect.hasAssertions();
 
   const { channel, parent, poster, reader } = await threadWithNews("web-badge-closed");
-  const close = await openInbox(reader);
+  const close = await openInbox({ channel, reader });
   await badgesBecome(channel, BADGES);
 
   await poster.closeThread(parent);
-  await screen.findByText("Closed");
+  await screen.findAllByText("Closed");
   await badgesBecome(channel, BADGES);
 
   await poster.reopenThread(parent);

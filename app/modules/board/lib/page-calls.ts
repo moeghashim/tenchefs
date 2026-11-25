@@ -3,10 +3,11 @@ import type { PageAt, PageOps } from "./page-reads.ts";
 import { appliedToMessages, withFresh } from "./messages-table.ts";
 import { callFailure, notJson, parseData } from "./command-call.ts";
 import type { CallRequest } from "./command-call.ts";
+import type { Outgoing } from "./outgoing.ts";
+import { attachmentsOf } from "./outgoing.ts";
 import { failure } from "./failure.ts";
 
-interface PostRequest {
-  readonly text: string;
+interface PostRequest extends Outgoing {
   readonly posted: () => void;
 }
 
@@ -66,10 +67,11 @@ async function callCommand(calling: Calling, request: CallRequest): Promise<void
   await sendCall(calling, { data: parsed.data, request });
 }
 
-async function postMessage({ at, ops }: Calling, { posted, text }: PostRequest): Promise<void> {
+async function postMessage({ at, ops }: Calling, { files, posted, text }: PostRequest): Promise<void> {
   ops.update((page) => ({ ...page, post: { status: "posting" } }));
   try {
-    const { message } = await at.client.createMessage({ channel: at.name, text });
+    const attachments = await attachmentsOf(files);
+    const { message } = await at.client.createMessage({ attachments, channel: at.name, text });
     at.held.put(appliedToMessages({ event: { message, type: "message" }, held: at.held.current() }));
     ops.update((page) => ({ ...page, post: { status: "idle" } }));
     posted();

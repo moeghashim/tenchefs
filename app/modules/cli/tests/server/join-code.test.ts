@@ -36,7 +36,9 @@ function claudeCode(session: string, shared: Env): Env {
 const joinCodeFor = Effect.gen(function* makeJoinCode() {
   const cookout = yield* TestCookout;
   const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-  const { joinCode } = yield* answer(() => ada.client.createJoinCode({ name: "spawned-agent" }));
+  const { joinCode } = yield* answer(() =>
+    ada.client.createJoinCode({ displayName: "joining-agent", name: "joining-agent" }),
+  );
   const folder = yield* freshStateFolder;
   return { joinCode, shared: { COOKOUT_STATE_DIR: folder, COOKOUT_URL: cookout.url } };
 });
@@ -55,12 +57,12 @@ it.effect("join --code joins the code's agent for this harness session with no o
         ...succeeded,
         stdoutJson: {
           created: false,
-          identity: "spawned-agent",
+          identity: "joining-agent",
           issuedAt: "2026-01-01T00:00:00.000Z",
           source: "join-code",
         },
       },
-      { ...succeeded, stdoutJson: { identity: { name: "spawned-agent", owner: "ada" } } },
+      { ...succeeded, stdoutJson: { identity: { name: "joining-agent", owner: "ada" } } },
       failedWith("join_code_not_found"),
     ]);
     expect(Arr.map(results, ({ stdout }) => Str.includes("cookout_test_")(stdout))).toStrictEqual([

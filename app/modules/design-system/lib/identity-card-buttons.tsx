@@ -1,4 +1,6 @@
+import { useCallback, useContext } from "react";
 import type { IdentityCardBoxParts } from "./identity-card-parts.ts";
+import { LandingContext } from "../../landing/index.ts";
 import type { ReactNode } from "react";
 
 const TEXT = { message: "Message", viewProfile: "View profile" } as const;
@@ -7,7 +9,12 @@ const BUTTON = "inline-flex h-8 items-center justify-center rounded-md px-3 text
 export function IdentityCardButtons(parts: IdentityCardBoxParts): ReactNode {
   const { card, control } = parts;
   const handleMessage = control.onMessage;
-  const handleProfile = control.onClose;
+  const land = useContext(LandingContext).askOnFollow;
+  const close = control.onClose;
+  const handleProfile = useCallback(() => {
+    close();
+    land();
+  }, [close, land]);
   const handleKeyDown = control.onStopKeyDown;
   return (
     <div className="grid grid-cols-2 gap-2 pt-0.5">

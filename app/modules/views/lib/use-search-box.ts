@@ -1,70 +1,56 @@
-import type { Search, SearchState } from "../../search/web.ts";
-import { useEffect, useRef } from "react";
+import { aheadOf, boxOptionsOf, foundIdsOf } from "./search-options.ts";
+import { channelList, searchResultsOf } from "../../board/index.ts";
+import { filterSuggestionsOf, pickedOf } from "./filter-suggestions.ts";
+import { useCallback, useEffect, useRef } from "react";
+import type { BoardStore } from "../../board/index.ts";
+import type { BoxOption } from "./search-options.ts";
+import type { FilterSuggestion } from "./filter-suggestions.ts";
+import type { Identities } from "../../composer/index.ts";
+import type { Keymap } from "../../keymap/index.ts";
 import type { RefObject } from "react";
+import type { Search } from "../../search/web.ts";
 import type { SearchResult } from "../../sdk/index.ts";
-import { hrefOf } from "../../paths/index.ts";
+import { recentDays } from "../../format/index.ts";
+import { useBoardStore } from "./use-board.ts";
 
-const SHORTCUT = "k";
 const NEAR_END_PX = 48;
 const CAPTURE = { capture: true } as const;
 const ONE = 1;
+const NONE = 0;
 
 interface SearchBox {
   readonly area: RefObject<HTMLDivElement | null>;
-  readonly box: RefObject<HTMLInputElement | null>;
+  readonly choose: (href: string) => void;
+  readonly pick: (at: number) => void;
+}
+
+interface SearchBoxStores {
+  readonly box: string;
+  readonly identities: Identities;
+  readonly keymap: Keymap;
+  readonly land: () => void;
+  readonly search: Search;
 }
 
 interface Place {
   readonly search: Search;
+  readonly options: () => readonly BoxOption[];
+  readonly suggestions: () => readonly FilterSuggestion[];
   readonly area: () => HTMLDivElement | null;
-  readonly box: () => HTMLInputElement | null;
+  readonly box: () => Element | null;
   readonly back: () => unknown;
+  readonly land: () => void;
   readonly remember: (element: unknown) => void;
 }
 
 type Listener = (event: Readonly<Event>) => void;
 
-interface Press {
-  readonly key: string;
-  readonly shortcut: boolean;
-}
-
-function searchHrefOf({ message }: SearchResult): string {
-  if (message.kind === "reply") {
-    return hrefOf({ channel: message.channel, message: message.id, name: "thread", thread: message.replyTo });
-  }
-  return hrefOf({ channel: message.channel, name: "thread", thread: message.id });
-}
-
-function highlightedOf(state: SearchState): readonly SearchResult[] {
-  if (state.found.status !== "found" || state.highlighted === null) {
-    return [];
-  }
-  return state.found.results.slice(state.highlighted, state.highlighted + ONE);
-}
-
-function present<Element>(element: Element | null): readonly Element[] {
-  return [element].filter((each): each is Element => each !== null);
+function inputs(element: unknown): readonly HTMLInputElement[] {
+  return [element].filter((each): each is HTMLInputElement => each instanceof HTMLInputElement);
 }
 
 function focusable(element: unknown): readonly HTMLElement[] {
   return [element].filter((each): each is HTMLElement => each instanceof HTMLElement);
-}
-
-function isShortcut(event: Readonly<Event>): boolean {
-  return (
-    event instanceof KeyboardEvent &&
-    event.key.toLowerCase() === SHORTCUT &&
-    (event.ctrlKey || event.metaKey) &&
-    !event.altKey
-  );
-}
-
-function pressOf(event: Readonly<Event>): Press {
-  if (!(event instanceof KeyboardEvent) || event.isComposing) {
-    return { key: "", shortcut: false };
-  }
-  return { key: event.key, shortcut: isShortcut(event) };
 }
 
 function isInside(place: Place, event: Readonly<Event>): boolean {
@@ -72,14 +58,10 @@ function isInside(place: Place, event: Readonly<Event>): boolean {
   return event.composedPath().some((target) => target === area);
 }
 
-function isLink(event: Readonly<Event>): boolean {
-  return event.composedPath().some((target) => target instanceof HTMLAnchorElement);
-}
-
 function goBack(place: Place): void {
   const before = place.back();
   place.remember(null);
-  for (const box of present(place.box())) {
+  for (const box of inputs(place.box())) {
     box.blur();
   }
   for (const element of focusable(before)) {
@@ -87,62 +69,106 @@ function goBack(place: Place): void {
   }
 }
 
-function choose(place: Place): void {
-  for (const chosen of highlightedOf(place.search.snapshot())) {
-    place.search.close();
-    place.remember(null);
-    globalThis.location.hash = searchHrefOf(chosen);
+function go(place: Place, href: string): void {
+  for (const box of inputs(place.box())) {
+    box.value = "";
+  }
+  place.search.edit("");
+  place.search.close();
+  place.remember(null);
+  globalThis.location.hash = href;
+  place.land();
+}
+
+function chooseHighlighted(place: Place): void {
+  const { highlighted } = place.search.snapshot();
+  for (const chosen of place.options().slice(highlighted, highlighted + ONE)) {
+    go(place, chosen.href);
   }
 }
 
-function boxKeys(place: Place): Readonly<Partial<Record<string, () => void>>> {
+function pick(place: Place, at: number): void {
+  const state = place.search.snapshot();
+  for (const chosen of place.suggestions().slice(at, at + ONE)) {
+    const picked = pickedOf({ state, suggestion: chosen });
+    for (const box of inputs(place.box())) {
+      box.value = picked.query;
+      box.setSelectionRange(picked.caret, picked.caret);
+    }
+    place.search.edit(picked.query, picked.caret);
+  }
+}
+
+function isSuggesting(place: Place): boolean {
+  const { dismissed, open } = place.search.snapshot();
+  return open && !dismissed && place.suggestions().length > NONE;
+}
+
+function moved(place: Place, direction: "down" | "up"): true {
+  if (isSuggesting(place)) {
+    place.search.moveSuggestion(direction, place.suggestions().length);
+  } else {
+    place.search.move(direction, aheadOf(place.options()));
+  }
+  return true;
+}
+
+function bindBox(place: Place, keymap: Keymap): () => void {
   const { search } = place;
-  return {
-    ArrowDown: () => {
-      search.move("down");
+  return keymap.bind({
+    actions: {
+      closeSearch: () => {
+        search.close();
+        goBack(place);
+        return true;
+      },
+      dismissSuggestions: () => {
+        if (!isSuggesting(place)) {
+          return false;
+        }
+        search.dismissSuggestions();
+        return true;
+      },
+      highlightNext: () => moved(place, "down"),
+      highlightPrevious: () => moved(place, "up"),
+      openHighlighted: () => {
+        chooseHighlighted(place);
+        return true;
+      },
+      pickSuggestion: () => {
+        if (!isSuggesting(place)) {
+          return false;
+        }
+        pick(place, search.snapshot().suggestion);
+        return true;
+      },
     },
-    ArrowUp: () => {
-      search.move("up");
-    },
-    Enter: () => {
-      choose(place);
-    },
-    Escape: () => {
-      search.close();
-      goBack(place);
-    },
-  };
+    scope: "search box",
+    within: place.box,
+  });
 }
 
-function shortcutOf(place: Place): Listener {
-  return (event) => {
-    if (pressOf(event).shortcut) {
-      event.preventDefault();
-      for (const box of present(place.box())) {
-        box.focus();
-        box.select();
-      }
-      place.search.open();
-    }
-  };
-}
-
-function pressedOf(place: Place): Listener {
-  const keys = boxKeys(place);
-  return (event) => {
-    const action = keys[pressOf(event).key] ?? null;
-    if (action !== null && event.target === place.box()) {
-      event.preventDefault();
-      action();
-    }
-  };
+function bindOpen(place: Place, keymap: Keymap): () => void {
+  return keymap.bind({
+    actions: {
+      openSearch: () => {
+        for (const box of inputs(place.box())) {
+          box.focus();
+          box.select();
+        }
+        place.search.open();
+        return true;
+      },
+    },
+    scope: "everywhere",
+  });
 }
 
 function typedOf(place: Place): Listener {
   return (event) => {
-    for (const box of present(place.box())) {
+    for (const box of inputs(place.box())) {
       if (box === event.target) {
-        place.search.edit(box.value);
+        place.search.edit(box.value, Number(box.selectionEnd));
       }
     }
   };
@@ -167,15 +193,6 @@ function pointedOf(place: Place): Listener {
   };
 }
 
-function clickedOf(place: Place): Listener {
-  return (event) => {
-    if (isInside(place, event) && isLink(event)) {
-      place.search.close();
-      place.remember(null);
-    }
-  };
-}
-
 function isNearEnd(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.scrollTop + target.clientHeight >= target.scrollHeight - NEAR_END_PX;
 }
@@ -195,14 +212,13 @@ function on(type: keyof DocumentEventMap, listener: Listener): () => void {
   };
 }
 
-function listen(place: Place): () => void {
+function listen(place: Place, keymap: Keymap): () => void {
   const stops = [
-    on("keydown", shortcutOf(place)),
-    on("keydown", pressedOf(place)),
+    bindOpen(place, keymap),
+    bindBox(place, keymap),
     on("input", typedOf(place)),
     on("focusin", focusedOf(place)),
     on("pointerdown", pointedOf(place)),
-    on("click", clickedOf(place)),
     on("scroll", scrolledOf(place)),
   ];
   return () => {
@@ -212,24 +228,56 @@ function listen(place: Place): () => void {
   };
 }
 
-function useSearchBox(search: Search): SearchBox {
-  const area = useRef<HTMLDivElement>(null);
-  const box = useRef<HTMLInputElement>(null);
-  const back = useRef<unknown>(null);
-  useEffect(
-    () =>
-      listen({
-        area: () => area.current,
-        back: () => back.current,
-        box: () => box.current,
-        remember: (element) => {
-          back.current = element;
-        },
-        search,
-      }),
-    [search],
-  );
-  return { area, box };
+function resultsNow(store: BoardStore, search: Search): readonly SearchResult[] {
+  const select = searchResultsOf(foundIdsOf(search.snapshot()));
+  return select(store.snapshot());
 }
 
-export { searchHrefOf, useSearchBox };
+function useSearchBox({ box, identities, keymap, land, search }: SearchBoxStores): SearchBox {
+  const store = useBoardStore();
+  const area = useRef<HTMLDivElement>(null);
+  const back = useRef<unknown>(null);
+  const place = useCallback(
+    (): Place => ({
+      area: () => area.current,
+      back: () => back.current,
+      box: () => globalThis.document.querySelector(`[id="${box}"]`),
+      land,
+      options: () =>
+        boxOptionsOf({
+          channels: channelList(store.snapshot()),
+          identities: identities.snapshot(),
+          results: resultsNow(store, search),
+          state: search.snapshot(),
+        }),
+      remember: (element) => {
+        back.current = element;
+      },
+      search,
+      suggestions: () =>
+        filterSuggestionsOf({
+          channels: channelList(store.snapshot()),
+          days: recentDays(),
+          identities: identities.snapshot(),
+          state: search.snapshot(),
+        }),
+    }),
+    [box, identities, land, search, store],
+  );
+  useEffect(() => listen(place(), keymap), [keymap, place]);
+  const choose = useCallback(
+    (href: string) => {
+      go(place(), href);
+    },
+    [place],
+  );
+  const pickAt = useCallback(
+    (at: number) => {
+      pick(place(), at);
+    },
+    [place],
+  );
+  return { area, choose, pick: pickAt };
+}
+
+export { useSearchBox };

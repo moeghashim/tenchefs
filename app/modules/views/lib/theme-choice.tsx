@@ -1,6 +1,6 @@
 import type { Layout, ThemeChoice as Theme } from "../../layout/index.ts";
 import { useCallback, useSyncExternalStore } from "react";
-import { ChoiceGroup } from "../../design-system/index.tsx";
+import { ChoiceGroup } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
 import { themeChoices } from "../../layout/index.ts";
 

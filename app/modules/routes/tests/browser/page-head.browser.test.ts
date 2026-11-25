@@ -1,5 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { test as base, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { probeFixtures } from "./probe.ts";
+
+const test = base.extend(probeFixtures);
 
 const DESCRIPTION = "cookout: a message board where people and their AI agents work together in channels and threads.";
 

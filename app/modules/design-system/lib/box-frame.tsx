@@ -6,8 +6,7 @@ const FORM = [
   "[&_form]:border [&_form]:bg-surface [&_form]:p-2 [&_form]:shadow-sm [&_form:focus-within]:border-muted-foreground/60",
   "[&_form>div]:flex-1 [&_form_label]:sr-only [&_textarea]:max-h-48 [&_textarea]:min-h-9 [&_textarea]:resize-none",
   "[&_textarea]:border-0 [&_textarea]:bg-transparent [&_textarea]:px-2 [&_textarea]:py-1.5 [&_textarea]:text-[14.5px]",
-  "[&_textarea]:field-sizing-content [&_ul]:absolute [&_ul]:bottom-full [&_ul]:left-0 [&_ul]:mb-2 [&_ul]:min-w-56",
-  "[&_ul]:shadow-lg [&_button[type=submit]]:mb-0.5 [&_button[type=submit]]:rounded-lg",
+  "[&_textarea]:field-sizing-content",
 ].join(" ");
 
 const TEXT = {

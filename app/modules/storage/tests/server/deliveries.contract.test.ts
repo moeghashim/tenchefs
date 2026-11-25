@@ -5,17 +5,17 @@ import {
   callId,
   channelFixture as channel,
   channelName,
-  commandFixture as command,
-  commandName,
+  webhookCommandFixture as command,
   handlerFixture as handler,
   isoTime,
   messageId,
   newMessageFixture as newMessage,
   openStore,
   storageLayers,
+  webhookCommandName,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { CallId } from "../../../commands/index.ts";
+import type { CallId } from "../../../webhook-commands/index.ts";
 import type { Layer } from "effect";
 import type { MessageId } from "../../../messages/index.ts";
 
@@ -32,7 +32,7 @@ function delivery(id: CallId, threadId: MessageId): StoredDelivery {
     attempts: 0,
     callId: id,
     channel: channelName("grill"),
-    command: commandName("deploy"),
+    command: webhookCommandName("deploy"),
     data: { branch: "main", tags: ["blue", true, null] },
     nextAttemptAt: startedAt,
     outcome: "pending" as const,
@@ -50,7 +50,7 @@ function storeWithCall<Failure, Needs>(
 ): Effect.Effect<CalledStore, Failure | StorageUnavailable, Needs> {
   return Effect.gen(function* callDeploy() {
     const { storage } = yield* openStore(layer);
-    yield* storage.addCommand(command("deploy"), handler("deploy"));
+    yield* storage.addWebhookCommand(command("deploy"), handler("deploy"));
     yield* storage.createChannel(channel("grill"));
     const call = yield* appendTo(storage)(newMessage("grill", "/deploy"));
     return { storage, threadId: call.id };

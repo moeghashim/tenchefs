@@ -1,8 +1,8 @@
 import { Effect, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+import { NodeHttpClient, NodeServices } from "@effect/platform-node";
 import { builtWebFolder, freshDatabasePath, startServe } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import { NodeServices } from "@effect/platform-node";
 import { secretsLive } from "../../../secrets/server.ts";
 
 interface Fetched {
@@ -20,6 +20,15 @@ function fetched(url: string): Effect.Effect<Fetched> {
     const body = yield* response.text;
     return { body, contentType: response.headers["content-type"] ?? "", status: response.status };
   }).pipe(Effect.provide(FetchHttpClient.layer), Effect.orDie);
+}
+
+function statusWithHost(url: string, host: string): Effect.Effect<number> {
+  return Effect.gen(function* fetchWithHost() {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(url).pipe(HttpClientRequest.setHeader("host", host)),
+    );
+    return response.status;
+  }).pipe(Effect.provide(NodeHttpClient.layerNodeHttp), Effect.orDie);
 }
 
 function refusalCode(url: string): Effect.Effect<string> {
@@ -59,6 +68,51 @@ it.effect("with a public URL, the served page's link preview points at that URL"
       '<meta property="og:image" content="https://cookout.example.com/assets/og-card.png" />',
     );
     expect(page.contentType).toBe("text/html");
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
+it.effect("on Fly with no public URL set, the public URL is the app's fly.dev address, and a set one wins", () =>
+  Effect.gen(function* flyPublicUrl() {
+    const web = yield* builtWebFolder;
+    const database = yield* freshDatabasePath;
+    const fly = yield* startServe({ database, env: { FLY_APP_NAME: "new-app" }, webFolder: web.folder });
+    const set = yield* startServe({
+      database: `${database}-set`,
+      env: { COOKOUT_PUBLIC_URL: "https://cookout.example.com", FLY_APP_NAME: "new-app" },
+      webFolder: web.folder,
+    });
+    const flyPage = yield* fetched(`${fly.url}/`);
+    const setPage = yield* fetched(`${set.url}/`);
+
+    expect(flyPage.body).toContain('<meta property="og:url" content="https://new-app.fly.dev/" />');
+    expect(setPage.body).toContain('<meta property="og:url" content="https://cookout.example.com/" />');
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
+it.effect("on Render with no public URL set, the public URL is the service's external URL, and a set one wins", () =>
+  Effect.gen(function* renderPublicUrl() {
+    const web = yield* builtWebFolder;
+    const database = yield* freshDatabasePath;
+    const render = yield* startServe({
+      database,
+      env: { RENDER_EXTERNAL_URL: "https://new-service.onrender.com" },
+      webFolder: web.folder,
+    });
+    const set = yield* startServe({
+      database: `${database}-set`,
+      env: {
+        COOKOUT_PUBLIC_URL: "https://cookout.example.com",
+        RENDER_EXTERNAL_URL: "https://new-service.onrender.com",
+      },
+      webFolder: web.folder,
+    });
+    const renderPage = yield* fetched(`${render.url}/`);
+    const setPage = yield* fetched(`${set.url}/`);
+    const renderHost = yield* statusWithHost(`${render.url}/`, "new-service.onrender.com");
+
+    expect(renderPage.body).toContain('<meta property="og:url" content="https://new-service.onrender.com/" />');
+    expect(setPage.body).toContain('<meta property="og:url" content="https://cookout.example.com/" />');
+    expect(renderHost).toBe(OK);
   }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
 );
 

@@ -7,6 +7,7 @@ import type { Live } from "../../live/index.ts";
 import type { Mock } from "vitest";
 import { createCookoutClient } from "../../sdk/index.ts";
 import { createLive } from "../../live/index.ts";
+import { createTestAgent } from "../../testing/index.ts";
 import { handLive } from "../../testing/web.ts";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
@@ -31,7 +32,7 @@ function adminClient(): CookoutClient {
 }
 
 async function agentNamed(name: string): Promise<Agent> {
-  const { identity, token } = await adminClient().createIdentity({ kind: "agent", name, owner: "admin" });
+  const { identity, token } = await createTestAgent({ by: adminClient(), name, owner: "admin" });
   return { client: createCookoutClient({ env: {}, token, url: webTestCookout().url }), name: identity.name };
 }
 
@@ -177,15 +178,15 @@ it("opening and closing a profile many times leaves one stream listener for agen
 
   const agent = await agentNamed("store-sessions-listener-bot");
   const live = createLive(handLive().adapter);
-  const subscribe = vi.fn<Live["subscribe"]>(live.subscribe);
-  const store = createBoardStore({ client: adminClient(), live: { ...live, subscribe }, url: webTestCookout().url });
+  const follow = vi.fn<Live["follow"]>(live.follow);
+  const store = createBoardStore({ client: adminClient(), live: { ...live, follow }, url: webTestCookout().url });
   for (let opening = NONE; opening < OPENINGS; opening += ONE) {
     store.subscribeShowingSessions(agent.name)(vi.fn<() => void>())();
   }
   show(store, agent.name);
   await sessionCount(store, agent.name, NONE);
 
-  expect(subscribe).toHaveBeenCalledTimes(ONE);
+  expect(follow).toHaveBeenCalledTimes(ONE);
 });
 
 it("once one of an agent's sessions expires, its sessions are read again", { timeout: 5000 }, async () => {

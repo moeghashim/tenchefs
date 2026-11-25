@@ -1,3 +1,4 @@
+import { BOX_BUTTON } from "./box-button-style.ts";
 import type { ReactNode } from "react";
 
 interface SendButtonParts {
@@ -9,7 +10,7 @@ export function SendButton(parts: SendButtonParts): ReactNode {
   return (
     <button
       aria-label={parts.label}
-      className="self-start rounded-md border bg-foreground p-1.5 text-background transition-opacity hover:opacity-90 disabled:opacity-50"
+      className={`${BOX_BUTTON} bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-50`}
       disabled={parts.disabled}
       title={parts.label}
       type="submit"

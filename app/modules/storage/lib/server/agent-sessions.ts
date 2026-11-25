@@ -14,6 +14,7 @@ interface StoredAgentSession {
   readonly expiresAt: IsoTime;
   readonly idleSeconds: number;
   readonly host?: string;
+  readonly sessionUrl?: string;
 }
 
 interface LiveAgentSession {
@@ -21,6 +22,7 @@ interface LiveAgentSession {
   readonly expiresAt: IsoTime;
   readonly lastUsedAt?: IsoTime;
   readonly host?: string;
+  readonly sessionUrl?: string;
 }
 
 interface AgentAt {
@@ -74,12 +76,14 @@ interface ListedFields {
   readonly expiresAt: IsoTime;
   readonly lastUsedAt: Option.Option<IsoTime>;
   readonly host: Option.Option<string>;
+  readonly sessionUrl: Option.Option<string>;
 }
 
-function listedSession({ expiresAt, host, issuedAt, lastUsedAt }: ListedFields): LiveAgentSession {
+function listedSession({ expiresAt, host, issuedAt, lastUsedAt, sessionUrl }: ListedFields): LiveAgentSession {
   const times = { expiresAt, issuedAt };
   const used = Option.match(lastUsedAt, { onNone: () => times, onSome: (at) => ({ ...times, lastUsedAt: at }) });
-  return Option.match(host, { onNone: () => used, onSome: (joinedFrom) => ({ ...used, host: joinedFrom }) });
+  const from = Option.match(host, { onNone: () => used, onSome: (joinedFrom) => ({ ...used, host: joinedFrom }) });
+  return Option.match(sessionUrl, { onNone: () => from, onSome: (url) => ({ ...from, sessionUrl: url }) });
 }
 
 function renewedExpiry({ idleSeconds, now }: Renewal): IsoTime {

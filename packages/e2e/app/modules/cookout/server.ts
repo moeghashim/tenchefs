@@ -23,14 +23,14 @@
  * `watchOutput` are the `cookout watch` stdout format.
  * `browserFixtures` is a `cookout` fixture for Playwright's `test.extend`: one
  * run for each browser test, closed when it ends, and its page logged in by
- * token on request. `exampleCommand` is the command the example handler
+ * token on request. `exampleWebhookCommand` is the Webhook command the example handler
  * (`packages/handler-example`) holds the secret of. A handler learns its
- * command's secret only when the command is added or its secret rotated, so the suite can't add a
- * fresh command per run and still have the handler sign its calls:
+ * Webhook command's secret only when the Webhook command is added or its secret rotated, so the suite can't add a
+ * fresh Webhook command per run and still have the handler sign its calls:
  * `pnpm e2e:docker` adds it on the local container before it starts the
  * handler there, and `scripts/handler-provision.sh` on the deployed one. Its
- * schema needs a string `branch`. `requireExampleCommand` fails, naming the
- * missing command, when the cookout under test doesn't have it, so a webhook
+ * schema needs a string `branch`. `requireExampleWebhookCommand` fails, naming the
+ * missing Webhook command, when the cookout under test doesn't have it, so a webhook
  * test fails there instead of skipping. `shownMessage` matches the text a
  * message shows in a list: an optional "New" line (whether a message was
  * unread as the view opened depends on when it arrived), its header (the
@@ -51,7 +51,7 @@ export {
   postedMessageId,
 } from "./lib/server/bin.ts";
 export { e2eNameStart, requireRunIdentity, runPrefix, runPrefixSpace } from "./lib/server/run-prefix.ts";
-export { exampleCommand, requireExampleCommand } from "./lib/server/example-command.ts";
+export { exampleWebhookCommand, requireExampleWebhookCommand } from "./lib/server/example-command.ts";
 export { type BrowserFixtures, type BrowserRun, browserFixtures } from "./lib/server/browser-run.ts";
 export { type Answered, type Relay, openRelay } from "./lib/server/relay.ts";
 export { shownMessage } from "./lib/server/shown-message.ts";

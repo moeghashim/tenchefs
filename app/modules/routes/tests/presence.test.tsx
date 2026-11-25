@@ -1,38 +1,13 @@
 import { adminClient, clientWith, newIdentity } from "./identities.ts";
 import { agentNamed, authorDot, offline, online, profileDot, readerOn, rowDot } from "./presence.ts";
 import { expect, it } from "vitest";
-import type { Live } from "../../live/index.ts";
-import { createLive } from "../../live/index.ts";
 import { inProfile } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { scriptedLive } from "../../testing/web.ts";
 import { within } from "@testing-library/react";
-
-type Link = ReturnType<Live["link"]>;
 
 const SEEN = "Offline, last seen just now";
 const NO_BADGE = 0;
-
-interface Cuttable {
-  readonly live: Live;
-  readonly report: (link: Link) => void;
-}
-
-function cuttable(): Cuttable {
-  const reports: ((link: Link) => void)[] = [];
-  const live = createLive({
-    open: (_onEvent, onLink) => {
-      reports.push(onLink);
-    },
-  });
-  return {
-    live,
-    report: (link) => {
-      for (const onLink of reports) {
-        onLink(link);
-      }
-    },
-  };
-}
 
 it('an author who is watching shows an online dot, and going offline turns it into an offline ring read as "ada, Offline" (no last seen) with no reload', {
   timeout: 5000,
@@ -135,7 +110,7 @@ it("a presence change made while the live link was down shows once it is back", 
 
   const agent = await agentNamed("web-presence-missed-bot");
   const reader = await newIdentity({ kind: "human", name: "web-presence-missed-reader" });
-  const { live, report } = cuttable();
+  const { live, report } = scriptedLive();
   openAt({ client: reader.client, hash: "#/people", live });
   await rowDot({ label: "Offline", who: "web-presence-missed-bot" });
 

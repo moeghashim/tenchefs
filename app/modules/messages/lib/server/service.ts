@@ -11,9 +11,14 @@ import type {
   TopLevelMessage,
   TopLevelMessageResponse,
 } from "../../index.ts";
-import type { NewCommandCall, OpenThreadsPageRequest, Storage, StorageUnavailable } from "../../../storage/server.ts";
+import type {
+  NewWebhookCommandCall,
+  OpenThreadsPageRequest,
+  Storage,
+  StorageUnavailable,
+} from "../../../storage/server.ts";
 import type { PubSub, Scope } from "effect";
-import { closeWithCommandToken, messageNotFound, replyOutsideCommandThread } from "./refusals.ts";
+import { closeWithWebhookCommandToken, messageNotFound, replyOutsideWebhookCommandThread } from "./refusals.ts";
 import { postScheduledWith, postWith } from "./posting.ts";
 import { react, shownPage, shownThread, unreact } from "./reactions.ts";
 import type { Attaching } from "../../../attachments/server.ts";
@@ -37,7 +42,7 @@ interface PageRequest {
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
-type CallParts = Omit<NewCommandCall, "message">;
+type CallParts = Omit<NewWebhookCommandCall, "message">;
 
 function pageRequest({ before, limit = pageSize.default }: PageQuery): PageRequest {
   if (Predicate.isUndefined(before)) {
@@ -86,27 +91,27 @@ function messagesOn({ attaching, hub, reactions, storage }: MessagesOn): Omit<Me
     latestId: storage.latestMessageId,
     page: pageWith(storage),
     post,
-    postCommandCall: (author, message, call) =>
-      postWith({ ...posting, append: (stored) => storage.appendCommandCall({ ...call, message: stored }) })(
-        author,
-        message,
-      ),
     postInThread: (author, message, threadId) =>
-      Effect.gen(function* postInCommandThread() {
+      Effect.gen(function* postInWebhookCommandThread() {
         const { channel, close, replyTo } = message;
         if (Predicate.isNotUndefined(close)) {
-          return yield* Effect.fail(closeWithCommandToken);
+          return yield* Effect.fail(closeWithWebhookCommandToken);
         }
         if (Predicate.isUndefined(replyTo)) {
-          return yield* Effect.fail(replyOutsideCommandThread);
+          return yield* Effect.fail(replyOutsideWebhookCommandThread);
         }
         const found = yield* storage.getThread(replyTo);
         if (!inThread(found, threadId, channel)) {
-          return yield* Effect.fail(replyOutsideCommandThread);
+          return yield* Effect.fail(replyOutsideWebhookCommandThread);
         }
         return yield* post(author, message);
       }),
     postScheduled: postScheduledWith(posting),
+    postWebhookCommandCall: (author, message, call) =>
+      postWith({ ...posting, append: (stored) => storage.appendWebhookCommandCall({ ...call, message: stored }) })(
+        author,
+        message,
+      ),
     posted: hub.subscribe,
     react: (caller, id, reaction) => react({ asked: { caller, id, reaction }, hub: reactions, storage }),
     thread: (id) =>
@@ -133,7 +138,7 @@ export interface MessagesService {
     query: OpenThreadsQuery,
   ) => Effect.Effect<ListOpenThreadsResponse, StorageUnavailable>;
   readonly post: (author: Identity, message: PostMessage) => Fails<MessageResponse>;
-  readonly postCommandCall: (author: Identity, message: PostMessage, call: CallParts) => Fails<MessageResponse>;
+  readonly postWebhookCommandCall: (author: Identity, message: PostMessage, call: CallParts) => Fails<MessageResponse>;
   readonly postInThread: (author: Identity, message: PostMessage, threadId: MessageId) => Fails<MessageResponse>;
   readonly postScheduled: (author: Identity, message: PostMessage, run: ScheduledRunParts) => Fails<MessageResponse>;
   readonly thread: (id: MessageId) => Fails<ThreadResponse>;

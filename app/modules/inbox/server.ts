@@ -241,6 +241,7 @@ export { DeactivationOffers, deactivationOffersLayer } from "./lib/server/deacti
 export {
   DeactivatedQuietAgentSchema,
   DeactivationOfferSchema,
+  InboxAgentJoinRequestSchema,
   InboxItemSchema,
   MovedBackReadPositionSchema,
   OfflineAlertSchema,

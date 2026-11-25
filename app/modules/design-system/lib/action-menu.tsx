@@ -7,13 +7,21 @@ const TEXT = { more: "More actions" } as const;
 
 interface ActionMenuFrame extends ActionMenuParts {
   readonly inline?: boolean;
+  readonly moreInTabOrder?: boolean;
   readonly children: ReactNode;
 }
 
 export function ActionMenu(parts: ActionMenuFrame): ReactNode {
   const { choices } = parts;
   const inline = parts.inline ?? false;
-  const more = <HoverMoreActions choices={choices} inline={inline} label={parts.buttonLabel ?? TEXT.more} />;
+  const more = (
+    <HoverMoreActions
+      choices={choices}
+      inTabOrder={parts.moreInTabOrder ?? true}
+      inline={inline}
+      label={parts.buttonLabel ?? TEXT.more}
+    />
+  );
   if (inline) {
     return (
       <ActionContextMenu choices={choices} label={parts.label}>

@@ -20,9 +20,9 @@ export function PagePanes(props: PagePanesProps): ReactNode {
   if (route.name === "inbox") {
     return (
       <InboxView
-        board={stores.board}
         composer={stores.composer}
         edge={edge}
+        keymap={stores.keymap}
         me={props.me}
         reading={stores.reading}
         selected={route.selected}
@@ -33,5 +33,13 @@ export function PagePanes(props: PagePanesProps): ReactNode {
   if (route.name === "login") {
     return <LoginView session={stores.session} />;
   }
-  return <SettingsView composer={stores.composer} layout={stores.layout} me={props.me} section={route.section} />;
+  return (
+    <SettingsView
+      composer={stores.composer}
+      layout={stores.layout}
+      me={props.me}
+      section={route.section}
+      session={stores.session}
+    />
+  );
 }

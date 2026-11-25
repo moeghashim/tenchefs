@@ -5,6 +5,7 @@ interface Screen {
   readonly clickIn?: string;
   readonly choose?: string;
   readonly fill?: readonly (readonly [label: string, value: string])[];
+  readonly attach?: "pending" | "refused";
   readonly focus?: string;
   readonly press?: string;
   readonly text: string;
@@ -29,8 +30,8 @@ const SCREENS: readonly Screen[] = [
   { click: "Show earlier", hash: "#/inbox", history: "loading", name: "inbox-loading", text: "Loading…" },
   {
     click: "More actions",
-    clickIn: 'main li:has(a[data-feed-row][href="#/inbox/general/1"])',
-    focus: 'main a[data-feed-row][href="#/inbox/general/1"]',
+    clickIn: 'main li:has(a[data-feed-row][href^="#/inbox/general/1/"])',
+    focus: 'main a[data-feed-row][href^="#/inbox/general/1/"]',
     hash: "#/inbox",
     name: "inbox-row-menu",
     text: "Open in channel",
@@ -57,6 +58,10 @@ const SCREENS: readonly Screen[] = [
     name: "channel-hover",
     text: "Lunch at 12:30.",
   },
+  { hash: "#/channels/design", name: "attachments", text: "The view from the office, and my notes." },
+  { click: "hills.png", hash: "#/channels/design", name: "attachment-full", text: "1.2 KB" },
+  { attach: "pending", hash: "#/channels/design", name: "composer-files", text: "notes.txt" },
+  { attach: "refused", hash: "#/channels/design", name: "composer-refusal", text: "Couldn't attach dump.bin" },
   {
     click: "More actions",
     clickIn: 'article:has-text("Lunch at 12:30.")',
@@ -100,7 +105,7 @@ const SCREENS: readonly Screen[] = [
     focus: 'article:has-text("@triage-agent can you post the failing run?") a:has-text("@triage-agent")',
     hash: "#/channels/general/threads/1",
     name: "identity-card",
-    text: "View profile",
+    text: "Open session",
   },
   {
     focus: 'article:has-text("@grace can you check the notes before we ship?") a:has-text("@grace")',
@@ -168,6 +173,23 @@ const SCREENS: readonly Screen[] = [
     text: "Lunch at 12:30.",
   },
   { click: "Collapse sidebar", hash: "#/channels/general", name: "collapsed", text: "Lunch at 12:30." },
+  { focus: "main a", hash: "#/inbox", name: "shortcut-list", press: "?", text: "Keyboard shortcuts" },
+  { fill: [["Message", "@"]], hash: "#/channels/general", name: "mention-suggestions", text: "Lunch at 12:30." },
+  {
+    focus: 'aside[aria-label="Thread"] textarea',
+    hash: "#/channels/general/threads/1",
+    name: "thread-mention-suggestions",
+    press: "@",
+    text: "Thanks, both of you.",
+  },
+  {
+    fill: [["Search", "gen"]],
+    focus: "main a",
+    hash: "#/channels/general",
+    name: "jump-box",
+    press: "Control+k",
+    text: "#general",
+  },
   { hash: "#/channels/general", liveDown: true, name: "reconnecting", text: "Reconnecting…" },
 ];
 

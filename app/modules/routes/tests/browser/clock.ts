@@ -1,8 +1,8 @@
 import type { CookoutClient, CreateIdentityRequest } from "../../../sdk/index.ts";
 import type { Fixtures, PlaywrightTestArgs, PlaywrightTestOptions } from "@playwright/test";
+import { moveClockForward, testClient } from "../../../testing/index.ts";
 import type { Person } from "./people.ts";
-import { createCookoutClient } from "../../../sdk/index.ts";
-import { moveClockForward } from "../../../testing/index.ts";
+import { createdBy } from "./people.ts";
 import { startDevCookout } from "../../../../../scripts/lib/dev-cookout.ts";
 
 interface OwnCookout {
@@ -23,10 +23,10 @@ const clockFixtures: Fixtures<ClockFixtures, object, PlaywrightTestArgs & Playwr
   ownCookout: async ({ request: _request }, provide) => {
     const cookout = await startDevCookout({});
     const { adminToken, clockUrl, webUrl } = cookout;
-    const admin = createCookoutClient({ token: adminToken, url: webUrl });
+    const admin = testClient({ token: adminToken, url: webUrl });
     async function newIdentity(request: CreateIdentityRequest): Promise<Person> {
-      const { token } = await admin.createIdentity(request);
-      return { client: createCookoutClient({ token, url: webUrl }), token };
+      const { token } = await createdBy({ by: admin, request });
+      return { client: testClient({ token, url: webUrl }), token };
     }
     async function daysPass(days: number): Promise<void> {
       await moveClockForward({ clockUrl, days });

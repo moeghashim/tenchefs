@@ -4,9 +4,13 @@ import type {
   CallCommandResponse,
   CommandWithSecretResponse,
   ListCommandsResponse,
-} from "../../commands/index.ts";
-import { commandCallsPath, commandSecretPath, commandsPath } from "../../commands/index.ts";
+} from "../../webhook-commands/index.ts";
 import { isCallCommandResponse, isCommandWithSecretResponse, isListCommandsResponse } from "./generated/validators.js";
+import {
+  webhookCommandCallsPath,
+  webhookCommandSecretPath,
+  webhookCommandsPath,
+} from "../../webhook-commands/index.ts";
 import type { ClientConnection } from "./request.ts";
 import { send } from "./request.ts";
 
@@ -24,7 +28,7 @@ function commandCalls(server: ClientConnection): CommandCalls {
         body,
         isExpected: isCommandWithSecretResponse,
         method: "POST",
-        path: commandsPath,
+        path: webhookCommandsPath,
       });
       return added;
     },
@@ -34,12 +38,16 @@ function commandCalls(server: ClientConnection): CommandCalls {
         isExpected: isCallCommandResponse,
         method: "POST",
         params: { name },
-        path: commandCallsPath,
+        path: webhookCommandCallsPath,
       });
       return called;
     },
     listCommands: async () => {
-      const listed = await send(server, { isExpected: isListCommandsResponse, method: "GET", path: commandsPath });
+      const listed = await send(server, {
+        isExpected: isListCommandsResponse,
+        method: "GET",
+        path: webhookCommandsPath,
+      });
       return listed;
     },
     rotateCommandSecret: async (name) => {
@@ -47,7 +55,7 @@ function commandCalls(server: ClientConnection): CommandCalls {
         isExpected: isCommandWithSecretResponse,
         method: "POST",
         params: { name },
-        path: commandSecretPath,
+        path: webhookCommandSecretPath,
       });
       return rotated;
     },
@@ -60,5 +68,5 @@ export type {
   CallCommandResponse,
   CommandWithSecretResponse,
   ListCommandsResponse,
-} from "../../commands/index.ts";
+} from "../../webhook-commands/index.ts";
 export { commandCalls };
