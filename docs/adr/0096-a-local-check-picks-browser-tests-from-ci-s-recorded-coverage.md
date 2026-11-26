@@ -22,3 +22,5 @@ Committing the map and checking it with a drift check was the other choice. It w
 CI's browser job runs a little slower with coverage on. An unsharded CI browser run doesn't record coverage, since every browser test with coverage on didn't fit in one job's five minutes. A local check now makes one `gh` call per v1 commit a machine hasn't seen when a branch changes a view, and a green local `pnpm check` still doesn't promise every browser test passes: CI runs every one before anything lands on v1.
 
 The recorder relies on Playwright's internal client instrumentation (`_instrumentation.addListener`, the hooks Playwright's own tracing uses). If an upgrade removes it, CI makes no map and local checks run every browser test.
+
+Superseded in part on 2026-11-25 by [ADR 0113](0113-a-local-check-runs-only-what-the-change-reaches-and-never-repeats-the-hook.md): a local check also runs only the unit tests the change reaches, a change to a file on its list (configs, the lockfile, the testing module, test servers) runs every test, and a docs-only change runs none (mattpocock/cookout#633).

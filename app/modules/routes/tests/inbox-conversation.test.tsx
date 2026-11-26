@@ -4,6 +4,7 @@ import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inConversation, inPane, inSidebar, inThread } from "./regions.ts";
 import { rowsOf, subscribedReader } from "./inbox-reader.ts";
+import { conversationOpened } from "./view-opened.ts";
 import { handReading } from "./hand-reading.ts";
 import { openWithClockStopped } from "./clock.ts";
 import { watched } from "./watched.ts";
@@ -173,7 +174,7 @@ it("opening a thread row's address shows its conversation, with the row marked a
   expect.hasAssertions();
 
   const thread = await threadWithNews("web-conversation-address");
-  const unmount = openWithClockStopped({ client: thread.reader, hash: thread.address });
+  const { close: unmount } = await conversationOpened({ client: thread.reader, hash: thread.address });
   const shown = await conversationShown();
 
   expect([shown, inConversation().getByRole("button", { name: "2 earlier replies" }).textContent]).toStrictEqual([
@@ -225,7 +226,7 @@ it("open thread goes to the thread's channel with its panel open", { timeout: 50
   expect.hasAssertions();
 
   const thread = await threadWithNews("web-conversation-open", ["Earlier one"]);
-  const unmount = openWithClockStopped({ client: thread.reader, hash: thread.address });
+  const { close: unmount } = await conversationOpened({ client: thread.reader, hash: thread.address });
   await inConversation().findByRole("button", { name: "1 earlier reply" });
   fireEvent.click(inConversation().getByRole("link", { name: "Open thread" }));
   await inThread().findByText("Unread two");

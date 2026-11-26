@@ -2,7 +2,6 @@ import type { Command, Identity, IdentityName } from "../../sdk/index.ts";
 import type { KeptText } from "./kept-text.ts";
 import { sameSnapshot } from "../../board/index.ts";
 
-const MOST_SUGGESTIONS = 8;
 const NOTHING = 0;
 const AT_SIGN = 1;
 const ONE = 1;
@@ -32,7 +31,7 @@ function suggestionsFor(sources: Sources, text: string, caret: number): readonly
   const matches = sources
     .identities()
     .filter((identity) => identity.deactivated !== true && startsWithTyped(identity, prefix));
-  return membersFirst(matches, sources.members()).slice(NOTHING, MOST_SUGGESTIONS);
+  return membersFirst(matches, sources.members());
 }
 
 function commandsFor(commands: readonly Command[], text: string): readonly Command[] {
@@ -40,7 +39,7 @@ function commandsFor(commands: readonly Command[], text: string): readonly Comma
     return [];
   }
   const prefix = text.slice(ONE);
-  return commands.filter((command) => command.name.startsWith(prefix)).slice(NOTHING, MOST_SUGGESTIONS);
+  return commands.filter((command) => command.name.startsWith(prefix));
 }
 
 interface DraftSnapshot {

@@ -32,7 +32,7 @@ async function openLive(name: string, at: (parent: Message) => string): Promise<
   const { message: parent } = await poster.client.createMessage({ channel: name, text: "Deploy at noon?" });
   const { live, stream } = watched(reader.client);
   const unmount = openAt({ client: reader.client, hash: at(parent), live });
-  await screen.findByText("Deploy at noon?");
+  await screen.findAllByText("Deploy at noon?");
   await stream;
   return {
     close: async () => {

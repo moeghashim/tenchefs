@@ -12,9 +12,16 @@ const LAST = -1;
 
 const E2E = { ciJob: "e2e-docker", command: "pnpm e2e:docker", name: "the e2e suite", workflow: "Release" } as const;
 const BROWSER = { ciJob: "browser", command: "pnpm browser", name: "the other browser tests" } as const;
+const HOOK = {
+  ciJob: "static",
+  command: "pnpm check --all",
+  hook: true,
+  name: "lint, format, types and seams",
+} as const;
 const PASSING = { ...BROKEN, command: ["node", "-e", ""], name: "passing" } as const;
 const SKIP_LINES = [
   "skipped: the e2e suite, which CI runs as the Release workflow's e2e-docker job. Run it here on purpose with pnpm e2e:docker.",
+  "skipped: lint, format, types and seams, the pre-commit hook's, which it ran on every commit and CI runs as its static job. Run them here on purpose with pnpm check --all.",
   "skipped: the other browser tests, which CI runs as its browser job. Run it here on purpose with pnpm browser.",
 ];
 
@@ -38,7 +45,7 @@ async function printed(checks: readonly Check[], { inCi = false, job = "" }: Run
     log.mockRestore();
     error.mockRestore();
   });
-  await runChecks({ checks, ciOnly: [E2E, BROWSER], inCi, job, lockFile: path.join(dir, "check.lock") });
+  await runChecks({ checks, ciOnly: [E2E, HOOK, BROWSER], inCi, job, lockFile: path.join(dir, "check.lock") });
   return lines;
 }
 

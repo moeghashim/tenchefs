@@ -5,6 +5,7 @@ import type { Composer } from "../../composer/index.ts";
 import type { Keymap } from "../../keymap/index.ts";
 import type { ThreadMessagesState } from "../../board/index.ts";
 import { hrefOf } from "../../paths/index.ts";
+import { isThreadDeleted } from "./thread-deleted.ts";
 
 const TEXT = { markRead: "Mark read", markUnread: "Mark unread", readName: "Mark conversation read" } as const;
 
@@ -56,8 +57,16 @@ function countOf(state: ThreadMessagesState): number {
   return state.replies.length;
 }
 
-function isMissing(state: ThreadMessagesState): boolean {
-  return state.status === "failed" && state.code === NOT_FOUND;
+type ConversationShape = "missing" | "deleted" | "shown";
+
+function shapeOf(state: ThreadMessagesState): ConversationShape {
+  if (state.status === "failed" && state.code === NOT_FOUND) {
+    return "missing";
+  }
+  if (isThreadDeleted(state)) {
+    return "deleted";
+  }
+  return "shown";
 }
 
-export { type ConversationProps, INBOX_HREF, actionsOf, countOf, isMissing, openLinkOf };
+export { type ConversationProps, INBOX_HREF, actionsOf, countOf, openLinkOf, shapeOf };

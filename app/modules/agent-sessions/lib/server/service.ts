@@ -3,7 +3,7 @@ import type { AgentSessionResponse, ListAgentSessionsResponse, RevokeAgentSessio
 import { Context, DateTime, Duration, Effect, Option } from "effect";
 import type { Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { Join, On } from "./join.ts";
-import type { JoinRequestChanges, JoinRequests } from "./join-requests.ts";
+import type { JoinRequestChange, JoinRequestChanges, JoinRequests } from "./join-requests.ts";
 import type { PubSub, Scope } from "effect";
 import { agentSessionExpired, agentSessionRevoked } from "../../index.ts";
 import type { JoinCodes } from "./join-codes.ts";
@@ -33,7 +33,7 @@ interface AgentSessionsService extends JoinRequests, JoinCodes {
     by: IdentityName,
   ) => Effect.Effect<RevokeAgentSessionResponse, StorageUnavailable>;
   readonly sessionChanged: Effect.Effect<PubSub.Subscription<Identity>, never, Scope.Scope>;
-  readonly joinRequestChanged: Effect.Effect<PubSub.Subscription<IdentityName>, never, Scope.Scope>;
+  readonly joinRequestChanged: Effect.Effect<PubSub.Subscription<JoinRequestChange>, never, Scope.Scope>;
 }
 
 class AgentSessions extends Context.Service<AgentSessions, AgentSessionsService>()(

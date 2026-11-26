@@ -2,7 +2,7 @@ import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { inPane } from "./regions.ts";
-import { logIn } from "./login.ts";
+import { logInToChannels } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
@@ -12,7 +12,7 @@ async function openChannel(page: Page, channel: string): Promise<void> {
   await adminClient().createChannel({ name: channel });
   await adminClient().createMessage({ channel, text: "Hover over me" });
   const { token } = await newIdentity({ kind: "human", name: `${channel}-reader` });
-  await logIn({ page, token });
+  await logInToChannels({ page, token });
   await page.goto(`/#/channels/${channel}`);
 }
 

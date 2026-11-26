@@ -3,7 +3,6 @@ import { Alert } from "../../design-system/content.tsx";
 import { AttachRefusal } from "./attach-refusal.tsx";
 import { BoxFrame } from "../../design-system/layout.tsx";
 import type { Draft } from "../../composer/index.ts";
-import { FileDrop } from "../../design-system/controls.tsx";
 import { MessageForm } from "./message-form.tsx";
 import type { ReactNode } from "react";
 
@@ -24,19 +23,16 @@ interface MessageBoxProps {
 
 export function MessageBox(props: MessageBoxProps): ReactNode {
   const { draft, post, text } = props;
-  const handleFiles = draft.attachments.attach;
   return (
     <BoxFrame>
-      <FileDrop onFiles={handleFiles}>
-        <MessageForm
-          draft={draft}
-          focused={props.focused}
-          onPost={props.onPost}
-          onSchedule={props.onSchedule}
-          posting={post.status === "posting"}
-          text={text}
-        />
-      </FileDrop>
+      <MessageForm
+        draft={draft}
+        focused={props.focused}
+        onPost={props.onPost}
+        onSchedule={props.onSchedule}
+        posting={post.status === "posting"}
+        text={text}
+      />
       <AttachRefusal attachments={draft.attachments} />
       {post.status === "failed" && <Alert>{`Couldn't post the ${text.posts} (${post.code}): ${post.message}`}</Alert>}
     </BoxFrame>

@@ -24,9 +24,9 @@ interface DeletedChannel {
   readonly attachments: readonly AttachmentId[];
 }
 
-type MemoryChannelsSection = Omit<ChannelsSection, "deleteChannel"> & {
+interface MemoryChannelsSection extends Omit<ChannelsSection, "deleteChannel"> {
   readonly forgetChannel: (name: ChannelName) => void;
-};
+}
 
 const CHANNEL_COLUMNS = "name, description, created_at";
 

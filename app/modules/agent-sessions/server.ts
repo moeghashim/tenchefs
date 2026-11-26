@@ -75,6 +75,15 @@ export { AgentSessions } from "./lib/server/service.ts";
 export { agentSessionsLayer } from "./lib/server/layer.ts";
 
 /**
+ * When people may first be shown an agent join request (`peopleShownJoinRequestAt`): at once for an agent a person
+ * created, and for an agent another agent brought in only once it has been pending
+ * `peopleWaitForBroughtInJoinRequests`, 3 minutes (Matt, board msg 4760, 2026-11-25, #589). An owner is always a
+ * person, so an agent another agent owns is one an agent brought in. The agent that brought it in sees it at once.
+ * Only what people are shown waits: who may approve doesn't change, and its link approves at once.
+ */
+export { peopleShownJoinRequestAt } from "./lib/server/join-request-terms.ts";
+
+/**
  * The agent session routes, for the server's route list: join and leave.
  */
 export const agentSessionRoutes: readonly Route<Caller | AgentSessions>[] = [joinRoute, leaveRoute];

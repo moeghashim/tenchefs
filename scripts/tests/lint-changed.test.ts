@@ -4,6 +4,7 @@ import { field, parseJson, text as textOf } from "../lib/json.ts";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { changedFiles } from "../lib/changed-files.ts";
 import path from "node:path";
+import { ranAtOnce } from "../lib/ran-at-once.ts";
 import { tmpdir } from "node:os";
 
 const FIXTURES = ".vitest";
@@ -44,8 +45,20 @@ function nodeIn(cwd: string, ...args: readonly string[]): Ran {
   return { output: `${ran.stdout}${ran.stderr}`, status: ran.status, stdout: ran.stdout };
 }
 
-function node(...args: readonly string[]): Ran {
-  return nodeIn(process.cwd(), ...args);
+async function node(...args: readonly string[]): Promise<Ran> {
+  const { status, stderr, stdout } = await ranAtOnce({ args, program: "node" });
+  return { output: `${stdout}${stderr}`, status, stdout };
+}
+
+async function changedAndHook(
+  content: string,
+): Promise<{ readonly changed: Ran; readonly file: string; readonly hook: Ran }> {
+  const file = fixture(content);
+  const [changed, hook] = await Promise.all([
+    node("scripts/lint-changed.ts", file),
+    node("scripts/lint-ratchet.ts", "--fix", fixture(content)),
+  ]);
+  return { changed, file, hook };
 }
 
 function lastLine(text: string): string {
@@ -88,12 +101,10 @@ it("lists unstaged, staged and untracked changes against the base, but not delet
   });
 });
 
-it("reports a violation once in the hook's format and fails as the hook does", { timeout: 60_000 }, () => {
+it("reports a violation once in the hook's format and fails as the hook does", { timeout: 60_000 }, async () => {
   expect.hasAssertions();
 
-  const file = fixture(VIOLATION);
-  const changed = node("scripts/lint-changed.ts", file);
-  const hook = node("scripts/lint-ratchet.ts", "--fix", file);
+  const { changed, file, hook } = await changedAndHook(VIOLATION);
 
   const reported = changed.output.split("\n").filter((line) => line.startsWith(`${file}:`));
 
@@ -110,14 +121,12 @@ it("reports a violation once in the hook's format and fails as the hook does", {
   expect(lastLine(changed.stdout)).toBe("RESULT: FAIL (lint)");
 });
 
-it("passes a clean file as the hook does", { timeout: 60_000 }, () => {
+it("passes a clean file as the hook does", { timeout: 60_000 }, async () => {
   expect.hasAssertions();
 
-  const file = fixture(CLEAN);
-  const changed = node("scripts/lint-changed.ts", file);
-  const statuses = [changed.status, node("scripts/lint-ratchet.ts", "--fix", file).status];
+  const { changed, hook } = await changedAndHook(CLEAN);
 
-  expect(statuses).toStrictEqual([PASSED, PASSED]);
+  expect([changed.status, hook.status]).toStrictEqual([PASSED, PASSED]);
   expect(lastLine(changed.stdout)).toBe("RESULT: PASS");
 });
 

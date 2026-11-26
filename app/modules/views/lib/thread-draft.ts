@@ -23,7 +23,9 @@ function membersOf(state: ThreadMessagesState, me: string): readonly IdentityNam
 }
 
 export function threadDraft({ channel, composer, me, messages, thread }: ThreadDraftOf): Draft {
-  return composer.draft(`${channel}/${String(thread)}`, () => membersOf(messages.snapshot(), me));
+  return composer.draft(`${channel}/${String(thread)}`, () => [
+    ...new Set([...membersOf(messages.snapshot(), me), ...composer.channelPosters(channel)]),
+  ]);
 }
 
 export type { Composer } from "../../composer/index.ts";

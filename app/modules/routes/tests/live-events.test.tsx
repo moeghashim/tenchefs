@@ -43,7 +43,7 @@ async function openScripted(channel: string, at: (parent: Message) => string): P
   const parent = await post(channel, "The parent");
   const { live, send } = scriptedLive();
   const close = openWithClockStopped({ client: reader.client, hash: at(parent), live });
-  await screen.findByText("The parent");
+  await screen.findAllByText("The parent");
   return { close, parent, send };
 }
 

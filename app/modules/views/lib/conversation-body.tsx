@@ -4,11 +4,13 @@ import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import { CardBody } from "../../design-system/layout.tsx";
 import { ConversationReplies } from "./conversation-replies.tsx";
 import type { MessageId } from "../../sdk/index.ts";
+import { ParentEntry } from "./parent-entry.tsx";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
-import { StandaloneEntry } from "./standalone-entry.tsx";
 
-const TEXT = { first: "First message" } as const;
+const NONE = 0;
+
+const TEXT = { first: "First message", unread: "Unread replies" } as const;
 
 interface ConversationBodyProps {
   readonly state: ThreadMessagesState;
@@ -36,8 +38,9 @@ export function ConversationBody(props: ConversationBodyProps): ReactNode {
   }
   return (
     <>
-      <StandaloneEntry
+      <ParentEntry
         closing={props.closing}
+        deleted={state.deleted}
         label={TEXT.first}
         me={props.me}
         menu={props.menu}
@@ -47,11 +50,17 @@ export function ConversationBody(props: ConversationBodyProps): ReactNode {
       />
       <ConversationReplies
         closing={props.closing}
+        deleted={state.deleted}
+        kept={NONE}
         linked={props.linked}
+        readPosition={props.readPosition}
+        unlined="shown"
+        label={TEXT.unread}
         me={props.me}
         menu={props.menu}
+        newLine={null}
+        opened
         parent={state.parent}
-        readPosition={props.readPosition}
         receipts={state.receipts}
         replies={state.replies}
         reply={props.reply}

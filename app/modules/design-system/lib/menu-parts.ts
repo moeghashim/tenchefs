@@ -20,6 +20,7 @@ interface MessageMenuParts {
   readonly onCopyLink: () => void;
   readonly reactions: readonly ReactionChoice[];
   readonly thread: ThreadChoice | null;
+  readonly onDelete: (() => void) | null;
 }
 
 interface MessageActionParts {

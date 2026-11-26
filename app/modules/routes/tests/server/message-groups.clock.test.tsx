@@ -4,8 +4,8 @@ import type { TestCookoutService, TestIdentity } from "../../../testing/server.t
 import { expect, it } from "@effect/vitest";
 import type { Message } from "../../../sdk/index.ts";
 import { TestClock } from "effect/testing";
-import { openAt } from "../render.tsx";
 import { streamOf } from "../messages.ts";
+import { viewOpened } from "../view-opened.ts";
 
 interface People {
   readonly ada: TestIdentity;
@@ -38,9 +38,11 @@ function reply(poster: TestIdentity, parent: Message, text: string): Effect.Effe
   );
 }
 
-function shownTo(reader: TestIdentity, hash: string, label: string): Effect.Effect<readonly string[]> {
+const LOADED_BY = { Messages: "listMessages", Replies: "getThread" } as const;
+
+function shownTo(reader: TestIdentity, hash: string, label: keyof typeof LOADED_BY): Effect.Effect<readonly string[]> {
   return Effect.andThen(
-    Effect.sync(() => openAt({ client: reader.client, hash })),
+    answer(() => viewOpened({ client: reader.client, hash, waitingOn: [LOADED_BY[label]] })),
     answer(() => streamOf(label)),
   );
 }

@@ -175,6 +175,7 @@ it("s does nothing while a subscription changes", { timeout: 5000 }, async () =>
   const close = openAt({ client: hanging.client, hash: `#/channels/${channels.first}` });
   await focusedRow(channels.second);
   await pressedUntil({ key: "s", text: `Subscribed to #${channels.second}` });
+  await hanging.reached;
   pressed({ key: "s" });
 
   expect(hanging.asked()).toBe(ONCE);

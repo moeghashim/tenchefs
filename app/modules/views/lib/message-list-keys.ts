@@ -6,6 +6,7 @@ const ITEM = "article";
 const FOLD = "article[data-closed-fold]";
 const THREAD = `aside[aria-label="${THREAD_PANEL.thread}"]`;
 const TOP = `${ITEM}[aria-label="${THREAD_PANEL.parent}"]`;
+const EARLIER = "button[data-divider-button]";
 const UNKNOWN_SIZE = "-1";
 const FIRST = 0;
 const STEP = 1;
@@ -24,7 +25,7 @@ interface Place extends List {
 
 function threadAround(): HTMLElement | null {
   const focused = globalThis.document.activeElement;
-  if (!(focused instanceof HTMLElement) || focused.closest(`${TOP}, ${FEED}`) === null) {
+  if (!(focused instanceof HTMLElement) || focused.closest(`${TOP}, ${EARLIER}, ${FEED}`) === null) {
     return null;
   }
   return focused.closest<HTMLElement>(THREAD);
@@ -35,7 +36,7 @@ function threadList(): List | null {
   if (thread === null) {
     return null;
   }
-  return { items: [...thread.querySelectorAll<HTMLElement>(`${TOP}, ${FEED} ${ITEM}`)], list: thread };
+  return { items: [...thread.querySelectorAll<HTMLElement>(`${TOP}, ${EARLIER}, ${FEED} ${ITEM}`)], list: thread };
 }
 
 function listOf(): List | null {

@@ -49,6 +49,7 @@ const AND = " AND ";
 const LIST_SEPARATOR = ", ";
 const PLACEHOLDER = "?";
 const NOTHING = "";
+const LIVE: Condition = { params: [], sql: "deleted_at IS NULL" };
 
 const ClosedRow = Schema.Struct({ thread_closed: Schema.Literals([OPEN, CLOSED]) });
 
@@ -110,9 +111,6 @@ interface SearchSql extends Ranking {
 }
 
 function whereOf(conditions: readonly Condition[]): string {
-  if (Arr.isReadonlyArrayEmpty(conditions)) {
-    return NOTHING;
-  }
   return `WHERE ${Arr.join(
     Arr.map(conditions, ({ sql }) => sql),
     AND,
@@ -160,6 +158,7 @@ function boundCondition(sql: string, bound: string | undefined): readonly Condit
 
 function conditionsOf(db: SqlDatabase, query: SearchQuery): readonly Condition[] {
   return [
+    LIVE,
     ...wordsCondition(WORD_MATCHING[db.dialect], query.words),
     ...oneOfCondition({ column: "author_name", values: query.authors }),
     ...oneOfCondition({ column: "channel", values: query.channels }),

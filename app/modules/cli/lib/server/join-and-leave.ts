@@ -32,7 +32,9 @@ interface Joining {
   readonly issue: Effect.Effect<Issued, CallFailure, AgentSessionStateNeeds>;
 }
 
-type JoinAnswer = Omit<AgentSessionResponse, "agentSessionToken"> & { readonly source: CredentialSource };
+interface JoinAnswer extends Omit<AgentSessionResponse, "agentSessionToken"> {
+  readonly source: CredentialSource;
+}
 
 const NOTHING = {};
 

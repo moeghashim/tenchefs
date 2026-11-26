@@ -172,8 +172,8 @@ test("+ on a focused message says Reaction added, and again says Reaction remove
 });
 
 const MENU_KEYS = [
-  ["Reply", "r", "r"],
-  ["Open thread", "ArrowRight t Enter", "→ or t or Enter"],
+  ["Reply", "ArrowRight Enter r", "→ or Enter or r"],
+  ["Open thread", "t", "t"],
   ["React with 👍", "+", "+"],
   ["React with 👎", "-", "-"],
   ["Mark unread", "Alt+Enter", "Alt+Enter"],

@@ -9,6 +9,7 @@
  * as the login page does for its Token field; its target may instead be a function that finds the element or
  * returns null, tried on each change to the page, as → on a sidebar channel link does for that channel's newest
  * message. `subscribe` and `snapshot` (whether a landing is asked for and not yet
- * settled) let the app settle after each ask, even one that doesn't change the location.
+ * settled) let the app settle after each ask, even one that doesn't change the location. `isLanding` says whether a
+ * landing is asked for or still watching for its target, so the keymap's focus keeper doesn't land focus meanwhile.
  */
 export { type Landing, LandingContext, createLanding } from "./lib/landing.ts";

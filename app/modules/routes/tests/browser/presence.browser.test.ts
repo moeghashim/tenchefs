@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
+import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
 import { logInWithStream } from "./login.ts";
-import { newIdentity } from "./people.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
@@ -27,6 +27,31 @@ async function tabOf(browser: Browser, token: string): Promise<() => Promise<voi
   };
 }
 
+async function lastSeenAt(watched: string): Promise<string> {
+  const { presence } = await adminClient().presence();
+  const [at = ""] = presence
+    .filter(({ identity, online }) => identity === watched && !online)
+    .map(({ lastSeenAt: seen = "" }) => seen);
+  return at;
+}
+
+interface Closing extends Viewing {
+  readonly closeTab: () => Promise<void>;
+}
+
+async function closeAndPin({ closeTab, page, watched }: Closing): Promise<void> {
+  await closeTab();
+
+  await expect
+    .poll(async () => {
+      const at = await lastSeenAt(watched);
+      return at;
+    })
+    .not.toBe("");
+
+  await page.clock.setFixedTime(await lastSeenAt(watched));
+}
+
 test("a human whose tab opens shows online in another browser, and offline once it closes and the grace ends", async ({
   browser,
   page,
@@ -42,7 +67,7 @@ test("a human whose tab opens shows online in another browser, and offline once 
   await expect(profile.getByRole("img", { exact: true, name: `${watched}, Online` })).toBeVisible();
   await expect(profile.getByText("Online · web", { exact: true })).toBeVisible();
 
-  await closeTab();
+  await closeAndPin({ closeTab, page, watched });
 
   await expect(
     profile.getByRole("img", { exact: true, name: `${watched}, Offline, last seen just now` }),

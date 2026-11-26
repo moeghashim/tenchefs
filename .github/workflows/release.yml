@@ -1,37 +1,117 @@
 name: Release
 
-# Opens or updates the "Version Packages" pull request from the changesets on main. Merging that
-# pull request publishes @ai-hero/cookout to npm by trusted publishing (OIDC), with provenance and
-# no npm token (docs/adr/0050-the-cli-is-published-to-npm.md). The e2e suite, pack smoke and the
-# published client run first, and release needs all three, so a release can't ship a broken package
-# or image. They moved here from Check (#605).
+# Release is the gate (#636, docs/adr/0114-release-is-the-gate-on-the-newest-green-v1-commit.md). Its
+# first job picks the newest v1 commit whose Check push run is green, reusing that run's static
+# checks and unit tests. On that commit it runs every browser test (6 shards, moved from Check),
+# pack smoke, the published client and the e2e suite on the Docker image. Only when all of them
+# pass does it fast-forward main to that commit, call Deploy, and run changesets: it opens or
+# updates the Version Packages pull request against v1, and once that is merged and no changesets
+# are left, publishes @ai-hero/cookout to npm by trusted publishing (OIDC), with provenance and no
+# npm token (docs/adr/0050-the-cli-is-published-to-npm.md). A failing gate job publishes nothing,
+# deploys nothing, and the verdict job names it in the run summary. `dry-run` runs the choice and
+# the gate, then only prints what it would publish and deploy.
+#
+# It runs on its own (#637) when Check completes on v1. The choose job then decides whether to go
+# ahead (scripts/lib/release-go.ts): only when the chosen commit isn't at or behind the newest
+# deploy/* tag, something user-facing changed since that tag, and no Release run started its gate
+# in the last 30 minutes. When nothing user-facing changed and main lacks the commit, it only moves
+# main to it: no gate, no deploy, no changesets (docs/adr/0123). When a gate run is the only reason, it waits until that run is 30 minutes
+# old, fetches v1 and decides again (#744). There is no schedule: GitHub registers a schedule only
+# from a push that isn't the workflow's token, and only Release's own token moves main, so a cron
+# here never fired. Otherwise it prints one line saying why, every other job is skipped, and the
+# run ends green. A workflow_dispatch on v1 always
+# goes ahead. Before changesets runs, the release job adds a patch changeset when shipping code
+# landed since the last version with none (changesets are optional, #648), so it isn't left unreleased.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [v1]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Run the choice and the gate, then only print what it would publish and deploy
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
-  # The image and the example handler in Docker, driven by packages/e2e, as Deploy runs it before
-  # deploying main.
-  e2e-docker:
+  choose:
+    name: choose the commit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Up to 30 minutes of waiting for the last gate run to be 30 minutes old, then the choice.
+    timeout-minutes: 40
     permissions:
       contents: read
+      actions: read
+    outputs:
+      go: ${{ steps.choose.outputs.go }}
+      promote: ${{ steps.choose.outputs.promote }}
+      sha: ${{ steps.choose.outputs.sha }}
+    steps:
+      # A workflow_run run starts from the default branch's workflow and still releases from v1: the
+      # choice reads origin/v1.
+      - name: Only from v1
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/v1'
+        run: |
+          echo "::error::Release runs on v1 only, not on $GITHUB_REF"
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # release-commit.ts and release-go.ts import effect, so the job installs the locked
+      # dependencies like the other jobs (#708).
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: choose
+      - id: choose
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-commit.ts --event "$GITHUB_EVENT_NAME" --run-id "$GITHUB_RUN_ID" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
+  # Every browser test in 6 shards, each uploading its timings and coverage map: the reusable
+  # browser workflow, which a pull request's Check run also calls with `reached` (#737).
+  browser:
+    needs: choose
+    if: ${{ needs.choose.outputs.go == 'true' }}
+    permissions:
+      contents: read
+      # To read the timings an earlier run uploaded.
+      actions: read
+    uses: ./.github/workflows/browser.yml
+    with:
+      ref: ${{ needs.choose.outputs.sha }}
+
+  # The image and the example handler in Docker, driven by packages/e2e. Deploy skips its own run of
+  # it when Release calls it after this.
+  e2e-docker:
+    needs: choose
+    if: ${{ needs.choose.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.choose.outputs.sha }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: e2e-docker
-      - run: pnpm exec playwright install --only-shell chromium
+      - uses: ./.github/actions/install-chromium
       - run: pnpm e2e:docker
       - name: Upload the per-file test timings
         if: always()
@@ -44,12 +124,23 @@ jobs:
 
   pack:
     name: pack smoke
+    needs: choose
+    if: ${{ needs.choose.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.choose.outputs.sha }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: pack
@@ -59,32 +150,159 @@ jobs:
   # field that the published client still requires fails here (docs/verification.md).
   published-client:
     name: published client
+    needs: choose
+    if: ${{ needs.choose.outputs.go == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.choose.outputs.sha }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: published-client
       - run: pnpm run --silent published-client
 
-  release:
-    needs: [e2e-docker, pack, published-client]
+  # Names each gate job that didn't pass in the run summary, and fails then. Every job after it needs it.
+  gate:
+    name: the gate
+    needs: [choose, browser, e2e-docker, pack, published-client]
+    if: ${{ !cancelled() && needs.choose.outputs.go != 'false' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+          SHA: ${{ needs.choose.outputs.sha }}
+        run: |
+          failed="$(jq -r 'to_entries | map(select(.value.result != "success")) | map("\(.key) (\(.value.result))") | join(", ")' <<< "$NEEDS")"
+          if [ -n "$failed" ]; then
+            echo "### The gate failed on ${SHA:-no commit}: $failed. Nothing was published or deployed." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::The gate failed on ${SHA:-no commit}: $failed. Nothing was published or deployed."
+            exit 1
+          fi
+          echo "### The gate passed on $SHA: browser ×6, pack smoke, the published client and e2e-docker" >> "$GITHUB_STEP_SUMMARY"
+
+  # Says what a real run would publish and deploy, and does neither.
+  dry-run:
+    name: what it would release
+    needs: [choose, gate]
+    if: ${{ inputs.dry-run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.choose.outputs.sha }}
           fetch-depth: 0
+      - env:
+          SHA: ${{ needs.choose.outputs.sha }}
+        run: |
+          main="$(git rev-parse origin/main)"
+          version="$(jq -r .version package.json)"
+          changesets="$(find .changeset -name '*.md' ! -name README.md | wc -l)"
+          {
+            echo "### Dry run: nothing was published or deployed"
+            echo "- would fast-forward main from ${main::12} to ${SHA::12}"
+            echo "- would call Deploy on ${SHA::12}: the cookout and the example handler to Fly, the deployed checks, then tag deploy/${SHA::8}"
+            if [ "$changesets" -gt 0 ]; then
+              echo "- would open or update the Version Packages pull request against v1 from $changesets changesets"
+            elif npm view "@ai-hero/cookout@$version" version > /dev/null 2>&1; then
+              echo "- would publish nothing to npm: @ai-hero/cookout@$version is already there"
+            else
+              echo "- would publish @ai-hero/cookout@$version to npm"
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # A plain push: GitHub refuses it unless it fast-forwards main, and the choose job already stopped
+  # if main had commits the chosen one lacks. It also runs, with the gate skipped and no deploy or
+  # changesets after it, when the chosen commit changed nothing user-facing since the newest deploy/*
+  # tag: an automatic run starts from main's workflow files, so main keeps up with v1's (#753,
+  # docs/adr/0123-release-moves-main-for-a-commit-with-nothing-user-facing.md).
+  promote:
+    name: move main
+    needs: [choose, gate]
+    if: >-
+      ${{ !cancelled() && !inputs.dry-run && needs.choose.result == 'success' && needs.choose.outputs.promote == 'true' &&
+      (needs.gate.result == 'success' || (needs.choose.outputs.go == 'false' && needs.gate.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.choose.outputs.sha }}
+          fetch-depth: 0
+      - env:
+          SHA: ${{ needs.choose.outputs.sha }}
+        run: |
+          git push origin "$SHA:refs/heads/main"
+          echo "### main fast-forwarded to $SHA" >> "$GITHUB_STEP_SUMMARY"
+
+  # A push made with the workflow's token starts no other workflow, so Deploy is called here
+  # rather than started by the push to main.
+  deploy:
+    needs: [choose, promote]
+    if: ${{ needs.choose.outputs.go == 'true' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      gated: true
+      ref: ${{ needs.choose.outputs.sha }}
+    secrets: inherit
+
+  release:
+    needs: [choose, promote]
+    if: ${{ needs.choose.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.choose.outputs.sha }}
+          fetch-depth: 0
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: release
           registry-url: https://registry.npmjs.org
+      # changesets/action below commits every change in the tree, so the Version Packages pull request
+      # would carry the workflow's .github/actions: put back the chosen commit's own.
+      - name: The chosen commit's local actions back
+        run: |
+          rm -rf .github/actions
+          git checkout HEAD -- .github/actions
       # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@^11.5.1
+      - name: Add a patch changeset for shipping code that landed without one
+        run: node scripts/release-changeset.ts
+      # With `branch: v1` (an automatic run starts on the default branch, main), the action opens the
+      # Version Packages pull request from changeset-release/v1 against v1: the version bump lands on
+      # v1 like any other change, and main can always fast-forward to v1.
       - name: Open or update the Version Packages pull request
         id: changesets
         uses: changesets/action@v1
@@ -92,11 +310,12 @@ jobs:
           version: pnpm run version
           title: Version Packages
           commit: Version Packages
+          branch: v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Runs once no changesets are left, that is on the push that merges the Version Packages pull
-      # request. `changeset publish` publishes only a version npm doesn't have yet. This step is the
-      # only publisher: passing `publish:` to the action as well would publish twice in one run.
+      # Runs once no changesets are left, that is once a merged Version Packages pull request is on
+      # the chosen commit. `changeset publish` publishes only a version npm doesn't have yet. This
+      # step is the only publisher: passing `publish:` to the action as well would publish twice.
       - name: Publish to npm
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: pnpm release

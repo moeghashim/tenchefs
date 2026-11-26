@@ -1,4 +1,4 @@
-import type { CookoutClient, CookoutEvent, EventStream } from "../../index.ts";
+import type { CookoutClient, CookoutEvent, EventStream, MessageId, TopLevelMessage } from "../../index.ts";
 import { TestCookout, answer, testCookout } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
@@ -62,6 +62,58 @@ it.effect("deleting a channel reaches every all-channels watcher as a channel-de
     const event = yield* events.next;
 
     expect(event).toStrictEqual({ done: false, value: { channel, type: "channel-deleted" } });
+  }).pipe(Effect.provide(testCookout())),
+);
+
+interface GrillThread {
+  readonly admin: CookoutClient;
+  readonly grace: CookoutClient;
+  readonly parent: TopLevelMessage;
+  readonly reply: MessageId;
+}
+
+function grillThread(): Effect.Effect<GrillThread, never, TestCookout> {
+  return Effect.gen(function* makeGrillThread() {
+    const cookout = yield* TestCookout;
+    const grace = yield* cookout.createIdentity("grace", { kind: "human" });
+    yield* answer(() => cookout.client.createChannel({ name: "grill" }));
+    const { message: parent } = yield* answer(() => grace.client.createMessage({ channel: "grill", text: "deploy?" }));
+    const { message: reply } = yield* answer(() =>
+      cookout.client.createMessage({ channel: "grill", replyTo: parent.id, text: "not yet" }),
+    );
+    const { parent: shown } = yield* answer(() => grace.client.getThread(parent.id));
+    return { admin: cookout.client, grace: grace.client, parent: shown, reply: reply.id };
+  });
+}
+
+it.effect("deleting a reply reaches every all-channels watcher with its thread's lowered reply count", () =>
+  Effect.gen(function* replyDeletionArrives() {
+    const { admin, grace, parent, reply } = yield* grillThread();
+    const events = yield* watchingAllChannels(grace);
+    const deleted = yield* answer(() => admin.deleteMessage(reply));
+    const event = yield* events.next;
+    const { parent: now } = yield* answer(() => grace.getThread(parent.id));
+
+    expect({ event, lowered: now.replyCount < parent.replyCount }).toStrictEqual({
+      event: { done: false, value: { message: deleted.message, parent: now, type: "message-deleted" } },
+      lowered: true,
+    });
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("deleting a thread reaches every all-channels watcher as one event, for its top-level message", () =>
+  Effect.gen(function* threadDeletionArrives() {
+    const { admin, grace, parent } = yield* grillThread();
+    const events = yield* watchingAllChannels(grace);
+    const deleted = yield* answer(() => grace.deleteMessage(parent.id));
+    const first = yield* events.next;
+    const { channel } = yield* answer(() => admin.createChannel({ name: "dining" }));
+    const second = yield* events.next;
+
+    expect([first, second]).toStrictEqual([
+      { done: false, value: { message: deleted.message, type: "message-deleted" } },
+      { done: false, value: { channel, type: "channel" } },
+    ]);
   }).pipe(Effect.provide(testCookout())),
 );
 

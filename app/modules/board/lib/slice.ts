@@ -15,6 +15,7 @@ interface Part<State, Change = CookoutEvent> {
   readonly show: () => void;
   readonly hide: () => void;
   readonly back: () => void;
+  readonly settled: () => Promise<void>;
 }
 
 interface PartOptions<State, Client, Change> {
@@ -93,6 +94,9 @@ function createPart<State, Client, Change = CookoutEvent>(
     },
     hide: () => {
       readers -= ONE;
+    },
+    settled: async () => {
+      await reading;
     },
     show: () => {
       readers += ONE;

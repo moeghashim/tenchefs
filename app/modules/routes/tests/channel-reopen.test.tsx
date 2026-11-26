@@ -1,7 +1,7 @@
 import type { CookoutClient, InboxResponse } from "../../sdk/index.ts";
 import { adminClient, newIdentity, revocableView } from "./identities.ts";
-import { expect, it, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { expect, it } from "vitest";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { alertSaying } from "./alerts.ts";
 import { inPane } from "./regions.ts";
 import { messagesIn } from "./messages.ts";
@@ -39,9 +39,12 @@ async function shownMessages(): Promise<readonly string[]> {
 }
 
 async function inboxEmptied(client: CookoutClient): Promise<InboxResponse> {
-  const inbox = await vi.waitUntil(async () => {
+  const inbox = await waitFor(async () => {
     const answer = await client.inbox();
-    return answer.items.length === NONE && answer;
+
+    expect(answer.items).toHaveLength(NONE);
+
+    return answer;
   });
   return inbox;
 }

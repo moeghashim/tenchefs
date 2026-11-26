@@ -4,6 +4,7 @@ import { IdentityTags } from "./identity-tags.tsx";
 import type { ReactNode } from "react";
 import { noteOf as deactivatedNote } from "./use-author.ts";
 import { kindOf } from "./kind-of.ts";
+import { memo } from "react";
 import { usePresence } from "./use-presence.ts";
 import { useProfileHref } from "./profile-base.ts";
 
@@ -23,7 +24,7 @@ function noteOf(identity: Identity, me: IdentityName): string | null {
   return deactivatedNote(identity);
 }
 
-export function PersonRow(props: PersonRowProps): ReactNode {
+function PersonRowView(props: PersonRowProps): ReactNode {
   const { identity } = props;
   const profileOf = useProfileHref();
   return (
@@ -42,3 +43,5 @@ export function PersonRow(props: PersonRowProps): ReactNode {
     </IdentityRow>
   );
 }
+
+export const PersonRow = memo(PersonRowView);

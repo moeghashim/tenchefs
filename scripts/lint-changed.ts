@@ -1,8 +1,9 @@
+import type { Finished } from "./lib/ran-at-once.ts";
 import { changedFiles } from "./lib/changed-files.ts";
 import { lintable } from "./lib/fix-until-stable.ts";
 import { parseArgs } from "node:util";
+import { ranAtOnce } from "./lib/ran-at-once.ts";
 import { ruleSummary } from "./lib/lint-summary.ts";
-import { spawnSync } from "node:child_process";
 import { unwrap } from "./lib/tools.ts";
 import { verdictLine } from "./lib/verdict.ts";
 
@@ -31,16 +32,13 @@ function filesToLint(): readonly string[] {
 }
 
 interface Ran {
+  readonly finished: Finished;
   readonly name: string;
-  readonly passed: boolean;
-  readonly reported: string;
 }
 
-function run({ command, name }: Named): Ran {
-  const [program = "true", ...rest] = command;
-  const ran = spawnSync(program, rest, { encoding: "utf8", stdio: ["inherit", "inherit", "pipe"] });
-  process.stderr.write(ran.stderr);
-  return { name, passed: ran.status === EXIT_SUCCESS, reported: ran.stderr };
+async function run({ command, name }: Named): Promise<Ran> {
+  const [program = "true", ...args] = command;
+  return { finished: await ranAtOnce({ args, program }), name };
 }
 
 function checksOf(files: readonly string[]): readonly Named[] {
@@ -50,12 +48,25 @@ function checksOf(files: readonly string[]): readonly Named[] {
   return [{ command: ["node", "scripts/lint-ratchet.ts", ...files], name: "lint" }, TYPES, KNIP];
 }
 
-function exitCodeOf(checks: readonly Named[]): number {
-  const ran = checks.map((check) => run(check));
-  for (const line of ruleSummary(ran.flatMap(({ reported }) => reported.split("\n")))) {
+function printed(ran: readonly Ran[]): void {
+  for (const { finished } of ran) {
+    process.stdout.write(finished.stdout);
+    process.stderr.write(finished.stderr);
+  }
+  for (const line of ruleSummary(ran.flatMap(({ finished }) => finished.stderr.split("\n")))) {
     console.error(line);
   }
-  const failed = ran.filter(({ passed }) => !passed).map(({ name }) => name);
+}
+
+async function exitCodeOf(checks: readonly Named[]): Promise<number> {
+  const ran = await Promise.all(
+    checks.map(async (check) => {
+      const finished = await run(check);
+      return finished;
+    }),
+  );
+  printed(ran);
+  const failed = ran.filter(({ finished }) => finished.status !== EXIT_SUCCESS).map(({ name }) => name);
   console.log(verdictLine(failed));
   if (failed.length === NONE) {
     return EXIT_SUCCESS;
@@ -63,4 +74,4 @@ function exitCodeOf(checks: readonly Named[]): number {
   return EXIT_FAILURE;
 }
 
-process.exitCode = exitCodeOf(checksOf(filesToLint().filter((file) => lintable(file))));
+process.exitCode = await exitCodeOf(checksOf(filesToLint().filter((file) => lintable(file))));

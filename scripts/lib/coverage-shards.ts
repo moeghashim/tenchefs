@@ -10,12 +10,8 @@ interface Recording {
   readonly shard: string;
 }
 
-interface Shards {
-  readonly commit: string;
-  readonly sources: readonly string[];
-}
-
 interface Shard {
+  readonly commit: string;
   readonly coverage: readonly TestCoverage[];
   readonly index: string;
   readonly total: string;
@@ -57,14 +53,14 @@ function incompleteIn(json: unknown): readonly TestCoverage[] {
   }));
 }
 
-function shardOf(commit: string, source: string): readonly Shard[] {
+function shardOf(source: string): readonly Shard[] {
   const json = parseJson(source);
   const map = coverageMapFrom(source);
   const [index, total] = shardLabel(json);
-  if (!map.ok || map.value.commit !== commit || index === "") {
+  if (!map.ok || index === "") {
     return [];
   }
-  return [{ coverage: [...recordsOf(map.value), ...incompleteIn(json)], index, total }];
+  return [{ commit: map.value.commit, coverage: [...recordsOf(map.value), ...incompleteIn(json)], index, total }];
 }
 
 function wholeRun(shards: readonly Shard[], read: number): boolean {
@@ -75,10 +71,12 @@ function wholeRun(shards: readonly Shard[], read: number): boolean {
   return totals.size === NEXT && shards.length === read && shards.length === Number(total) && every.every(Boolean);
 }
 
-function mergedShards({ commit, sources }: Shards): Outcome<CoverageMap> {
-  const shards = sources.flatMap((source) => shardOf(commit, source));
-  if (!wholeRun(shards, sources.length)) {
-    return { ok: false, reason: `CI's coverage maps for ${commit} aren't every shard of one run` };
+function mergedShards(sources: readonly string[]): Outcome<CoverageMap> {
+  const shards = sources.flatMap((source) => shardOf(source));
+  const commits = new Set(shards.map(({ commit }) => commit));
+  const [commit = ""] = commits;
+  if (commits.size !== NEXT || !wholeRun(shards, sources.length)) {
+    return { ok: false, reason: "CI's coverage maps aren't every shard of one run at one commit" };
   }
   return coverageMapOf({ commit, coverage: shards.flatMap(({ coverage }) => coverage) });
 }

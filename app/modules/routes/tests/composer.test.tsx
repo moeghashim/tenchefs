@@ -122,6 +122,28 @@ it("in a thread, its members are suggested first, most recent poster first, then
   close();
 });
 
+const MANY = 12;
+const TWO_DIGITS = 2;
+const MANY_NAMES = Array.from({ length: MANY }, (_value, at) => `many-match-${String(at).padStart(TWO_DIGITS, "0")}`);
+
+it("every identity matching a prefix is suggested, in order, not only the first few", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  await Promise.all(
+    MANY_NAMES.map(async (name) => {
+      await newIdentity({ kind: "human", name });
+    }),
+  );
+  const parent = await threadIn("web-composer-many-matches");
+  const close = openAt({ client: adminClient(), hash: hashOf(parent) });
+
+  await typeInReply("Ping @many-match");
+
+  await expect(suggested()).resolves.toStrictEqual(MANY_NAMES.map((name) => `@${name}`));
+
+  close();
+});
+
 it("choosing a suggestion puts the mention in the reply box in place of the prefix", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 

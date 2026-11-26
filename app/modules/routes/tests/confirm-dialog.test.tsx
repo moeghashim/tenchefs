@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { OpenedView } from "./view-opened.ts";
+import { holdsCallsOpen } from "../../testing/web.ts";
 import { profileOpened } from "./view-opened.ts";
 
 interface Held {
@@ -13,6 +14,7 @@ interface Held {
 
 function heldDeactivation(client: CookoutClient): Held {
   const { promise, resolve } = Promise.withResolvers<null>();
+  holdsCallsOpen("deactivateIdentity");
   return {
     client: {
       ...client,

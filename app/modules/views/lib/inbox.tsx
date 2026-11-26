@@ -1,10 +1,11 @@
 import type { Reading, Unread } from "../../unread/index.ts";
-import { useMemo, useSyncExternalStore } from "react";
+import { useContext, useMemo, useSyncExternalStore } from "react";
 import type { Composer } from "../../composer/index.ts";
 import { InboxConversation } from "./inbox-conversation.tsx";
 import type { InboxKeys } from "./use-inbox-keys.ts";
 import { InboxList } from "./inbox-list.tsx";
 import type { InboxSelection } from "../../paths/index.ts";
+import { LandingContext } from "../../landing/index.ts";
 import type { PanelEdgeParts } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 import { useInboxKeys } from "./use-inbox-keys.ts";
@@ -32,7 +33,8 @@ export function InboxView(props: InboxProps): ReactNode {
     () => ({ agentJoinRequests, deactivatedQuietAgents, deactivationOffers, identities, nudges }),
     [agentJoinRequests, deactivatedQuietAgents, deactivationOffers, nudges, identities],
   );
-  useInboxKeys({ conversation: CONVERSATION, keymap, selected: selected !== null });
+  const { watch } = useContext(LandingContext);
+  useInboxKeys({ conversation: CONVERSATION, keymap, selected: selected !== null, watch });
   return (
     <>
       <InboxList me={me} notices={notices} rows={rows} selected={selected} state={state} unread={unread} />

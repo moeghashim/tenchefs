@@ -10,7 +10,7 @@ const test = base.extend(probeFixtures);
 
 const UP = "ArrowUp";
 const DOWN = "ArrowDown";
-const RIGHT = "ArrowRight";
+const TOP = "t";
 const REPLY_BOX = { exact: true, name: "Reply" } as const;
 
 interface Opening {
@@ -101,7 +101,7 @@ function channelMessage(page: Page, text: string): Locator {
     .filter({ hasText: text });
 }
 
-async function enteredByArrow(page: Page): Promise<void> {
+async function enteredByT(page: Page): Promise<void> {
   const channel = unique("browser-top-enter");
   await opened({ channel, page, replied: true });
   await page.goto(`/#/channels/${channel}`);
@@ -110,13 +110,13 @@ async function enteredByArrow(page: Page): Promise<void> {
   await expect(top).toBeVisible();
 
   await top.focus();
-  await page.keyboard.press(RIGHT);
+  await page.keyboard.press(TOP);
 
   await expect(topMessage(page)).toBeFocused();
 }
 
-test("→ then ↓ focuses the first reply, and k on it focuses the top message again", async ({ page }) => {
-  await enteredByArrow(page);
+test("t then ↓ focuses the first reply, and k on it focuses the top message again", async ({ page }) => {
+  await enteredByT(page);
   await page.keyboard.press(DOWN);
 
   await expect(replySaying(page, "The first reply.")).toBeFocused();
@@ -127,14 +127,14 @@ test("→ then ↓ focuses the first reply, and k on it focuses the top message 
 });
 
 test("j on the top message focuses the first reply", async ({ page }) => {
-  await enteredByArrow(page);
+  await enteredByT(page);
   await page.keyboard.press("j");
 
   await expect(replySaying(page, "The first reply.")).toBeFocused();
 });
 
 test("Home and End in the thread panel focus the top message and the newest reply", async ({ page }) => {
-  await enteredByArrow(page);
+  await enteredByT(page);
   await page.keyboard.press("End");
 
   await expect(replySaying(page, "The last reply.")).toBeFocused();

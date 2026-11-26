@@ -14,7 +14,7 @@ import type { InboxReason, MovedBackReadPosition } from "../../../inbox/index.ts
 import type { Message, MessageId, ReadReceipt } from "../../../messages/index.ts";
 import { ackAllIn, ackIn, ackMessageIn, moveBackIn, readPositionsIn, receiptsOf } from "./read-positions-memory.ts";
 import { followersOf, mentionsOwnAuthor, newestPerScope, scopeOf } from "./inbox.ts";
-import { reactionHistoryFor, shownItem } from "./inbox-memory-state.ts";
+import { liveIdsIn, reactionHistoryFor, shownItem } from "./inbox-memory-state.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { MemoryInbox } from "./inbox-memory-state.ts";
 import type { StorageUnavailable } from "./errors.ts";
@@ -277,7 +277,8 @@ function memoryInbox({ changeInbox, channelExists, listChannels, read }: BoardAc
       read(({ inbox, messages }) =>
         readPositionsIn({ messages, positionOf: (scope) => inbox.positions.get(keyOf(identity, scope)) }),
       ),
-    listReadReceipts: (ids) => read(({ inbox }) => receiptsOf({ ids, receipts: inbox.receipts })),
+    listReadReceipts: (ids) =>
+      read(({ inbox, messages }) => receiptsOf({ ids: liveIdsIn({ ids, messages }), receipts: inbox.receipts })),
     listSubscribedChannels: (identity) =>
       Effect.flatMap(listChannels(), (channels) =>
         read((board) =>

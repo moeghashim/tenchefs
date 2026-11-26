@@ -1,3 +1,4 @@
+import type { Answered, DeletingClient, MessageDeleting } from "./message-deleting.ts";
 import type { AskedFrom, SubscriptionChange, SubscriptionsClient } from "./subscriptions-slice.ts";
 import type {
   Channel,
@@ -6,6 +7,7 @@ import type {
   CookoutEvent,
   CreateChannelRequest,
   IsoTime,
+  Message,
   MessageId,
   SearchRequest,
   SubscriptionResponse,
@@ -20,10 +22,12 @@ import type {
 } from "../../scheduled-messages/index.ts";
 import type { SearchAnswer } from "../../search/web.ts";
 import { createMessageAcks } from "./message-acks.ts";
+import { createMessageDeleting } from "./message-deleting.ts";
 import { createThreadClosing } from "./thread-closing.ts";
 import { refusedAs } from "./subscriptions-slice.ts";
 
 type CallsClient = ClosingClient &
+  DeletingClient &
   SubscriptionsClient &
   Pick<
     CookoutClient,
@@ -46,6 +50,10 @@ interface BoardCalls {
   readonly close: (messageId: MessageId) => void;
   readonly reopen: (messageId: MessageId) => void;
   readonly closingRefusal: () => ClosingRefusal | null;
+  readonly askDelete: (message: Message) => void;
+  readonly cancelDelete: () => void;
+  readonly deleteMessage: (messageId: MessageId, answered: Answered) => void;
+  readonly deleting: () => MessageDeleting;
   readonly ack: (id: MessageId) => void;
   readonly search: (request: SearchRequest) => Promise<SearchAnswer>;
   readonly createScheduledMessage: (request: CreateScheduledMessageRequest) => Promise<ScheduledMessage>;
@@ -147,9 +155,18 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
     client,
     refused: options.changed,
   });
+  const deleting = createMessageDeleting({
+    changed: options.changed,
+    client,
+    deleted: (message) => {
+      heard({ message, type: "message-deleted" });
+    },
+  });
   return {
     ...scheduleCalls(options),
     ack: createMessageAcks(client),
+    askDelete: deleting.askDelete,
+    cancelDelete: deleting.cancelDelete,
     close: closing.close,
     closingRefusal: closing.refusal,
     createChannel: async (request) => {
@@ -158,6 +175,8 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
       heard({ subscription: { channel: channel.name, subscribed: true }, type: "subscription" });
       return channel;
     },
+    deleteMessage: deleting.deleteMessage,
+    deleting: deleting.deleting,
     previewScheduledMessage: async (query) => {
       const { nextRuns } = await client.previewScheduledMessage(query);
       return nextRuns;
@@ -173,4 +192,13 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
 
 type ThreadClosing = Pick<BoardCalls, "close" | "reopen">;
 
-export { type BoardCalls, type CallsClient, type ScheduleChange, type ThreadClosing, createBoardCalls };
+type MessageDeletes = Pick<BoardCalls, "askDelete" | "cancelDelete" | "deleteMessage">;
+
+export {
+  type BoardCalls,
+  type CallsClient,
+  type MessageDeletes,
+  type ScheduleChange,
+  type ThreadClosing,
+  createBoardCalls,
+};

@@ -5,6 +5,7 @@ import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
 import { addCommand } from "./commands.ts";
 import { openAt } from "./render.tsx";
+import { profileOpened } from "./view-opened.ts";
 
 const ONE = 1;
 
@@ -49,7 +50,7 @@ it("deactivating a handler identity warns that its command stops replying, and s
   expect.hasAssertions();
 
   await withMessage(await addCommand({ name: "web-handler-off" }), "web-handler-off");
-  const close = openAt({ client: adminClient(), hash: "#/people/web-handler-off" });
+  const { close } = await profileOpened({ client: adminClient(), name: "web-handler-off" });
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
   await inDialog().findByText(
     "Its tokens and sessions stop working at once and it can't post; its messages stay. You can reactivate it later. /web-handler-off will stop replying until @web-handler-off is reactivated.",
@@ -69,7 +70,7 @@ it("deleting a handler identity warns that its command goes with it", { timeout:
   expect.hasAssertions();
 
   await addCommand({ name: "web-handler-gone" });
-  const close = openAt({ client: adminClient(), hash: "#/people/web-handler-gone" });
+  const { close } = await profileOpened({ client: adminClient(), name: "web-handler-gone" });
   fireEvent.click(await inProfile().findByRole("button", { name: "Delete" }));
 
   await expect(
@@ -86,7 +87,7 @@ it("deactivating an identity that handles no command gives no handler warning", 
 
   const plain = await newIdentity({ kind: "agent", name: "web-handler-none" });
   await withMessage(plain.client, "web-handler-none");
-  const close = openAt({ client: adminClient(), hash: "#/people/web-handler-none" });
+  const { close } = await profileOpened({ client: adminClient(), name: "web-handler-none" });
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
 
   await expect(

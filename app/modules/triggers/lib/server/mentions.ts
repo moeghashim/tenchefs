@@ -16,6 +16,8 @@ import type { Storage, StorageUnavailable, StoredTrigger } from "../../../storag
 import type { TriggerFailure, TriggerResult } from "../../index.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import type { Scope } from "effect";
+import type { TriggerAnswer } from "./answer.ts";
+import { errorMessageOf } from "./answer.ts";
 import { hrefOf } from "../../../paths/index.ts";
 import { isOkStatus } from "../../index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
@@ -75,25 +77,41 @@ function mentionedIn(storage: Storage["Service"], message: Message): Effect.Effe
   );
 }
 
-function resultOf(at: TriggerResult["at"], status: number): TriggerResult {
-  return { at, ok: isOkStatus(status), status };
+function secretsOf({ headers = [], token }: StoredTrigger): readonly string[] {
+  return [token, ...Arr.map(headers, ({ value }) => value)];
 }
 
+function resultOf(at: TriggerResult["at"], trigger: StoredTrigger, { message, status }: TriggerAnswer): TriggerResult {
+  const ok = isOkStatus(status);
+  const answered: TriggerResult = { at, ok, status };
+  return Option.match(errorMessageOf({ message, secrets: secretsOf(trigger) }), {
+    onNone: () => answered,
+    onSome: (error) => ({ ...answered, error }),
+  });
+}
+
+const SKIPPED_LIVE: Pick<TriggerResult, "ok" | "skipped"> = { ok: true, skipped: "agent_session_live" };
+
 function callMade(
-  caller: Services["caller"],
+  services: Services,
   boardUrl: Effect.Effect<string>,
   { message, trigger }: Mentioned,
-): Effect.Effect<TriggerResult> {
+): Effect.Effect<TriggerResult, StorageUnavailable> {
+  const { caller, storage } = services;
   return Effect.gen(function* callTrigger() {
     const now = yield* DateTime.now;
     const at = isoTimeOf(now);
+    const live = yield* storage.findLiveAgentSession({ identity: trigger.agent, now: at });
+    if (Option.isSome(live)) {
+      return { ...SKIPPED_LIVE, at };
+    }
     const base = yield* boardUrl;
     const text = textFor(base, message);
     return yield* caller.call({ headers: trigger.headers ?? [], text, token: trigger.token, url: trigger.url }).pipe(
       Effect.timeoutOrElse({ duration: Duration.seconds(TIMEOUT_SECONDS), orElse: () => Effect.fail(TIMED_OUT) }),
       Effect.match({
         onFailure: (error): TriggerResult => ({ at, error, ok: false }),
-        onSuccess: (status) => resultOf(at, status),
+        onSuccess: (answered) => resultOf(at, trigger, answered),
       }),
     );
   });
@@ -153,8 +171,10 @@ function settled(services: Services, settling: Settling): Effect.Effect<void, St
     }
     yield* Effect.logDebug(`Called the trigger URL of ${agent}`, settling.result);
     yield* services.storage.recordTriggerResult(agent, settling.result);
-    yield* services.presence.setReach(agent, Option.some({ lastResult: settling.result }));
-    yield* alerted(services, settling, stored);
+    if (Predicate.isUndefined(settling.result.skipped)) {
+      yield* services.presence.setReach(agent, Option.some({ lastResult: settling.result }));
+      yield* alerted(services, settling, stored);
+    }
     yield* announced(services, { ...stored, lastResult: settling.result });
   });
 }
@@ -165,7 +185,7 @@ function watchMentions({ boardUrl, posted, services }: Watching): Effect.Effect<
     const settling = yield* Semaphore.make(ONE_PERMIT);
     function callAndSettle(mentioned: Mentioned): Effect.Effect<void> {
       const unstored = `The result of a trigger call to ${mentioned.trigger.agent} wasn't stored.`;
-      return Effect.flatMap(callMade(services.caller, boardUrl, mentioned), (result) =>
+      return Effect.flatMap(callMade(services, boardUrl, mentioned), (result) =>
         settling.withPermits(ONE_PERMIT)(settled(services, { ...mentioned, result })),
       ).pipe(Effect.ignore({ log: "Warn", message: unstored }));
     }

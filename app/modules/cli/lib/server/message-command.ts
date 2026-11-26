@@ -81,7 +81,7 @@ const replyToFlag = Flag.Int("reply-to").pipe(
 const seenFlag = Flag.Int("seen").pipe(
   Flag.optional,
   Flag.withDescription(
-    "With --reply-to: you have read the thread up to this later message. Newer replies by others get it refused with thread_moved.",
+    "With --reply-to: you have read the thread up to this later message. Newer replies by others get it refused with thread_moved, and a thread deleted since with thread_deleted.",
   ),
 );
 const closeFlag = Flag.Boolean("close").pipe(
@@ -144,9 +144,18 @@ const messageListCommand = Command.make(
   (flags) => answer((client) => client.listMessages(flags.channel, pageQuery(flags))),
 ).pipe(Command.withDescription("List a channel's top-level messages, oldest first: the newest page, or --before."));
 
+const messageDeleteCommand = Command.make("delete", { id: messageIdArgument }, ({ id }) =>
+  answer((client) => client.deleteMessage(id)),
+).pipe(
+  Command.withDescription(
+    "Delete a message and print it as it was: your own, or anyone's as an admin human. A top-level message takes its " +
+      "whole thread with it. There is no undo.",
+  ),
+);
+
 const messageCommand = Command.make("message").pipe(
-  Command.withDescription("Post messages and page through a channel's messages."),
-  Command.withSubcommands([messagePostCommand, messageListCommand]),
+  Command.withDescription("Post, page through and delete a channel's messages."),
+  Command.withSubcommands([messagePostCommand, messageListCommand, messageDeleteCommand]),
 );
 
 export { beforeFlag, channelArgument, limitFlag, messageCommand, messageIdArgument, pageQuery };

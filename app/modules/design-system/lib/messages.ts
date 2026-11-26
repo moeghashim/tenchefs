@@ -9,6 +9,7 @@ export { MessageBody } from "./message-body.tsx";
 export { MessageItem } from "./message-item.tsx";
 export { MessageList } from "./message-list.tsx";
 export { ClosedFold } from "./closed-fold.tsx";
+export { DeletedMessage } from "./deleted-message.tsx";
 export { ThreadBar } from "./thread-bar.tsx";
 export { RepliesDivider } from "./replies-divider.tsx";
 export { ThreadSummary } from "./thread-summary.tsx";

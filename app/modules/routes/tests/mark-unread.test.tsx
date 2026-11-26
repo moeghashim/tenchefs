@@ -1,7 +1,7 @@
 import { adminClient, newIdentity } from "./identities.ts";
 import { chose, pressed } from "./menus.ts";
-import { expect, it, vi } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { expect, it } from "vitest";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { CookoutClient } from "../../sdk/index.ts";
 import { alertSaying } from "./alerts.ts";
 import { inPane } from "./regions.ts";
@@ -25,9 +25,10 @@ async function readerOf(channel: string): Promise<Posting> {
 }
 
 async function inboxEmptied(client: CookoutClient): Promise<void> {
-  await vi.waitUntil(async () => {
+  await waitFor(async () => {
     const inbox = await client.inbox();
-    return inbox.items.length === NONE;
+
+    expect(inbox.items).toHaveLength(NONE);
   });
 }
 
@@ -39,7 +40,7 @@ async function openedAs(reader: CookoutClient, hash: string, text: string): Prom
 }
 
 async function streamShows(label: string, rows: readonly string[]): Promise<void> {
-  await vi.waitFor(async () => {
+  await waitFor(async () => {
     const shown = await streamOf(label);
 
     expect(shown.filter((row) => row === "[New]" || !row.startsWith("["))).toStrictEqual(rows);
@@ -88,9 +89,9 @@ it('right-clicking a message and choosing Mark unread moves "New" above it and p
   await markedUnread();
   await streamShows("Messages", [`${channel}-adaFirst`, "[New]", `${channel}-adaSecond`, "Third"]);
   globalThis.location.hash = "#/inbox";
-  const [second, third] = await Promise.all([inPane().findByText("Second"), inPane().findByText("Third")]);
+  const [row, latest] = await Promise.all([inPane().findByText("3 new"), inPane().findByText("Third")]);
 
-  expect([second.textContent, third.textContent]).toStrictEqual(["Second", "Third"]);
+  expect([row.textContent, latest.textContent]).toStrictEqual(["3 new", "Third"]);
 
   close();
 });

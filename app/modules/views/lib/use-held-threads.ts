@@ -10,6 +10,7 @@ const NO_THREADS: readonly MessageId[] = [];
 
 interface Holding {
   readonly channel: ChannelName;
+  readonly me: string;
   readonly state: ChannelMessagesState;
   readonly unread: Unread;
 }
@@ -68,9 +69,17 @@ function shownOf(target: MessageId | null, faded: MessageId | null): MessageId |
   return target;
 }
 
+function closedByOthers(kept: Kept, { me, state }: Pick<Holding, "me" | "state">): ReadonlySet<MessageId> {
+  const mine = (messagesOf(state) ?? []).filter((message) => message.closedBy === me).map(({ id }) => id);
+  if (!mine.some((id) => kept.held.has(id))) {
+    return kept.held;
+  }
+  return new Set([...kept.held].filter((id) => !mine.includes(id)));
+}
+
 const FRESH: Kept = { decided: false, held: new Set(), target: null };
 
-export function useHeldThreads({ channel, state }: Holding): HeldThreads {
+export function useHeldThreads({ channel, me, state }: Holding): HeldThreads {
   const news = useBoardInbox((board) => inboxThreadsWithNews({ channel, state: board }));
   const [kept, setKept] = useState<Kept>(FRESH);
   const [faded, setFaded] = useState<MessageId | null>(null);
@@ -87,5 +96,5 @@ export function useHeldThreads({ channel, state }: Holding): HeldThreads {
       globalThis.clearTimeout(timer);
     };
   }, [highlighted]);
-  return { held: next.held, highlighted };
+  return { held: closedByOthers(next, { me, state }), highlighted };
 }

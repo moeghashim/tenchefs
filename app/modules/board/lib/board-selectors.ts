@@ -5,6 +5,7 @@ import { channelMessages, messageBefore, threadMessages } from "./message-select
 import type { BoardState } from "./board-store.ts";
 import type { ClosingRefusal } from "./thread-closing.ts";
 import type { ListedSchedules } from "./schedules-slice.ts";
+import type { MessageDeleting } from "./message-deleting.ts";
 import type { SubscriptionsState } from "./subscriptions-slice.ts";
 import type { ThreadPlace } from "./threads-part.ts";
 
@@ -50,6 +51,10 @@ function closingRefusal(state: BoardState): ClosingRefusal | null {
   return state.closingRefusal;
 }
 
+function messageDeleting(state: BoardState): MessageDeleting {
+  return state.messageDeleting;
+}
+
 function channelPage(name: ChannelName): (state: BoardState) => ChannelMessagesState {
   const select = channelMessages(name);
   return (state) => select(state.messages);
@@ -73,6 +78,7 @@ export {
   deletedChannelNotice,
   deletedSchedules,
   messageBeforeOf,
+  messageDeleting,
   scheduleListOf,
   subscribedChannels,
   threadOf,

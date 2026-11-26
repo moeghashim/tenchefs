@@ -5,6 +5,8 @@
 # After the commit, it warns when origin/v1 has commits since the branch's merge base that touch a file the branch
 # changes, so a ticket hears about a clashing merge at its next commit rather than at merge-ticket (#475).
 # The warning never blocks the commit, and never changes its exit code.
+# It records how long its `git commit` took, almost all of it hook time, as a pre-commit line in the shared stage log
+# that `pnpm budgets` reads (#639, scripts/lib/stage-log.ts). Recording never fails or slows the commit.
 set -euo pipefail
 allowed=false
 for arg in "$@"; do
@@ -61,6 +63,22 @@ warn_v1_overlap() {
   printf '%s\n' "${lines[@]}" >&2
 }
 
+# Microseconds since the epoch, or whole seconds' worth where bash has no EPOCHREALTIME.
+now_us() {
+  if [ -n "${EPOCHREALTIME:-}" ]; then
+    echo "${EPOCHREALTIME/[.,]/}"
+  else
+    echo "$((SECONDS * 1000000))"
+  fi
+}
+
+# Appends `<ISO time>\tpre-commit\t<milliseconds>` to the stage log in the git common directory.
+record_pre_commit() {
+  local started="$1" log
+  log="$(git rev-parse --git-common-dir)/stage-times.log"
+  printf '%s\tpre-commit\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$((($(now_us) - started) / 1000))" >>"$log"
+}
+
 # The fetch runs alongside the hook, so it adds no time unless it outlasts the hook.
 fetch_pid=""
 if git remote get-url origin >/dev/null 2>&1; then
@@ -68,7 +86,9 @@ if git remote get-url origin >/dev/null 2>&1; then
   fetch_pid=$!
 fi
 status=0
+started="$(now_us)"
 git commit "$@" || status=$?
+(record_pre_commit "$started") 2>/dev/null || true
 if [ -n "$fetch_pid" ]; then
   wait "$fetch_pid" || true
 fi

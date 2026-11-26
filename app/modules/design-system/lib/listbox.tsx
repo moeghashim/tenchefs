@@ -46,25 +46,28 @@ interface Drawn<Option extends ListboxOption> {
 const LOOKS = {
   menu: {
     listbox:
-      "absolute bottom-full left-0 z-50 mb-2 flex min-w-56 flex-col rounded-md border bg-background py-1 text-sm shadow-lg",
-    option: "flex w-full cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-foreground hover:bg-muted",
-    scrolls: false,
+      "absolute bottom-full left-0 z-50 mb-2 flex max-h-66 min-w-56 flex-col overflow-y-auto rounded-md border bg-background py-1 text-sm shadow-lg",
+    option:
+      "flex w-full shrink-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-foreground hover:bg-muted",
+    scrolls: "list",
   },
   "menu below": {
     listbox:
-      "absolute top-full left-4 z-50 mt-1 flex min-w-56 flex-col rounded-md border bg-background py-1 text-sm shadow-lg",
-    option: "flex w-full cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-foreground hover:bg-muted",
-    scrolls: false,
+      "absolute top-full left-4 z-50 mt-1 flex max-h-66 min-w-56 flex-col overflow-y-auto rounded-md border bg-background py-1 text-sm shadow-lg",
+    option:
+      "flex w-full shrink-0 cursor-pointer items-baseline gap-2 px-3 py-1.5 text-left text-foreground hover:bg-muted",
+    scrolls: "list",
   },
   results: {
     listbox: "flex flex-col gap-1",
     option: "flex cursor-pointer flex-col gap-0.5 rounded-md px-3 py-1.5 text-sm hover:bg-muted",
-    scrolls: true,
+    scrolls: "page",
   },
 } as const;
 
 const NEAREST = { block: "nearest" } as const;
 const FIRST = 0;
+const NONE = 0;
 
 function highlightStyle(highlighted: boolean): string {
   if (highlighted) {
@@ -120,12 +123,26 @@ function groupOf<Option extends ListboxOption>(group: PlacedGroup<Option>, drawn
   );
 }
 
-function scrollToOption(at: OptionAt): void {
+function scrollPageToOption(at: OptionAt): void {
   const option = document.querySelector(`#${CSS.escape(optionIdOf(at))}`);
   if (option !== null) {
     option.scrollIntoView(NEAREST);
   }
 }
+
+function scrollListToOption(at: OptionAt): void {
+  const box = document.querySelector<HTMLElement>(`#${CSS.escape(at.list)}`);
+  const option = document.querySelector<HTMLElement>(`#${CSS.escape(optionIdOf(at))}`);
+  if (box !== null && option !== null) {
+    const placed = option.getBoundingClientRect();
+    const top = box.getBoundingClientRect().top + box.clientTop;
+    const below = Math.max(NONE, placed.bottom - top - box.clientHeight);
+    const above = Math.min(NONE, placed.top - top);
+    box.scrollTop = Math.floor(box.scrollTop + above) + Math.ceil(below);
+  }
+}
+
+const SCROLLS = { list: scrollListToOption, page: scrollPageToOption } as const;
 
 export function Listbox<Option extends ListboxOption>(parts: ListboxParts<Option>): ReactNode {
   const { children: render, highlighted, list, look, onChoose } = parts;
@@ -136,8 +153,8 @@ export function Listbox<Option extends ListboxOption>(parts: ListboxParts<Option
     .map((each) => each.option.value)
     .join("");
   useEffect(() => {
-    if (LOOKS[look].scrolls && chosen !== "") {
-      scrollToOption({ index: highlighted, list });
+    if (chosen !== "") {
+      SCROLLS[LOOKS[look].scrolls]({ index: highlighted, list });
     }
   }, [chosen, highlighted, list, look]);
   const handleMouseDown = useCallback(

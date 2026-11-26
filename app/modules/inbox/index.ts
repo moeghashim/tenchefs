@@ -3,7 +3,8 @@
  * is there, the ack of a message (and everything before it in its scope) or of the whole inbox, mark unread, the inbox
  * history, following a thread and subscribing to a channel, an owner's offline alerts and marking one read, Nudges,
  * Deactivation offers and Keep, the entries saying an agent was deactivated after 90 days with no Activity, and Mark read, and their paths. They refuse with the message,
- * channel, nudge, deactivation offer, deactivated quiet agent and agent session error codes.
+ * channel, nudge, deactivation offer, deactivated quiet agent and agent session error codes. Deleted messages and threads
+ * leave the inbox, its history, its counts and Nudges, and acking or marking one unread is 404 `message_not_found`.
  */
 import type { Channel, ChannelName } from "../channels/index.ts";
 import type {

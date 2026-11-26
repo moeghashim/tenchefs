@@ -15,7 +15,7 @@ test("with the page's calls delayed, a test that reads the screen without waitin
 }) => {
   const reader = await newIdentity({ kind: "human", name: unique("slow-reader") });
   const views = page.getByRole("list", { exact: true, name: "Views" });
-  await logIn({ page, token: reader.token });
+  await logIn({ page, token: reader.token, waitUntil: "commit" });
   const missingItsWait = await views.isVisible();
 
   await expect(views).toBeVisible();

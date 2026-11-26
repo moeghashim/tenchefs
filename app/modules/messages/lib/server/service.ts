@@ -1,4 +1,4 @@
-import { Context, Effect, Predicate } from "effect";
+import { Context, Effect, Option, Predicate } from "effect";
 import type { Hub, PostMessage, ScheduledRunParts } from "./posting.ts";
 import type {
   ListMessagesResponse,
@@ -14,11 +14,17 @@ import type {
 import type {
   NewWebhookCommandCall,
   OpenThreadsPageRequest,
+  ReplyTarget,
   Storage,
   StorageUnavailable,
 } from "../../../storage/server.ts";
 import type { PubSub, Scope } from "effect";
-import { closeWithWebhookCommandToken, messageNotFound, replyOutsideWebhookCommandThread } from "./refusals.ts";
+import {
+  closeWithWebhookCommandToken,
+  messageNotFound,
+  replyOutsideWebhookCommandThread,
+  threadDeleted,
+} from "./refusals.ts";
 import { postScheduledWith, postWith } from "./posting.ts";
 import { react, shownPage, shownThread, unreact } from "./reactions.ts";
 import type { Attaching } from "../../../attachments/server.ts";
@@ -51,12 +57,20 @@ function pageRequest({ before, limit = pageSize.default }: PageQuery): PageReque
   return { before, limit };
 }
 
-function inThread(
-  found: Pick<ThreadResponse, "parent"> | undefined,
-  threadId: MessageId,
-  channel: ChannelName,
-): boolean {
-  return Predicate.isNotUndefined(found) && found.parent.id === threadId && found.parent.channel === channel;
+interface InThread {
+  readonly channel: ChannelName;
+  readonly target: ReplyTarget | undefined;
+  readonly threadId: MessageId;
+}
+
+function refusalInThread({ channel, target, threadId }: InThread, message: PostMessage): Option.Option<Refusal> {
+  if (Predicate.isUndefined(target) || target.thread !== threadId || target.channel !== channel) {
+    return Option.some(replyOutsideWebhookCommandThread);
+  }
+  if (target.threadDeleted) {
+    return Option.some(threadDeleted(message));
+  }
+  return Option.none();
 }
 
 const ONE_AT_A_TIME = 1;
@@ -68,7 +82,13 @@ interface MessagesOn {
   readonly attaching: Attaching;
 }
 
-type ThreadChangeCalls = "closeThread" | "reopenThread" | "threadChanged" | "listOpenThreads";
+type ThreadChangeCalls =
+  | "closeThread"
+  | "reopenThread"
+  | "threadChanged"
+  | "listOpenThreads"
+  | "deleteMessage"
+  | "deleted";
 
 function pageWith(storage: Storage["Service"]): MessagesService["page"] {
   return (channel, query) =>
@@ -100,9 +120,10 @@ function messagesOn({ attaching, hub, reactions, storage }: MessagesOn): Omit<Me
         if (Predicate.isUndefined(replyTo)) {
           return yield* Effect.fail(replyOutsideWebhookCommandThread);
         }
-        const found = yield* storage.getThread(replyTo);
-        if (!inThread(found, threadId, channel)) {
-          return yield* Effect.fail(replyOutsideWebhookCommandThread);
+        const target = yield* storage.findReplyTarget(replyTo);
+        const refused = refusalInThread({ channel, target, threadId }, message);
+        if (Option.isSome(refused)) {
+          return yield* Effect.fail(refused.value);
         }
         return yield* post(author, message);
       }),
@@ -150,6 +171,12 @@ export interface MessagesService {
   readonly closeThread: (caller: Identity, id: MessageId) => Fails<TopLevelMessageResponse>;
   readonly reopenThread: (id: MessageId) => Fails<TopLevelMessageResponse>;
   readonly threadChanged: Effect.Effect<PubSub.Subscription<TopLevelMessage>, never, Scope.Scope>;
+  readonly deleteMessage: (caller: Identity, id: MessageId) => Fails<{ readonly message: Message }>;
+  readonly deleted: Effect.Effect<
+    PubSub.Subscription<{ readonly message: Message; readonly parent?: TopLevelMessage }>,
+    never,
+    Scope.Scope
+  >;
 }
 
 export class Messages extends Context.Service<Messages, MessagesService>()(

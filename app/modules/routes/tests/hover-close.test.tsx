@@ -5,6 +5,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Posted } from "./feed.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { viewOpened } from "./view-opened.ts";
 
 const TEXTS = ["Before.", "Deploy?", "After."] as const;
 
@@ -44,10 +45,15 @@ it("hovering a top-level message in the channel feed shows Close thread, and pre
   expect.hasAssertions();
 
   const posted = await postedIn({ channel: "web-hover-close", closed: [], texts: TEXTS });
-  const close = openAt({ client: posted.reader, hash: `#/channels/${posted.channel}` });
+  const { answered, close } = await viewOpened({
+    client: posted.reader,
+    hash: `#/channels/${posted.channel}`,
+    waitingOn: ["listMessages"],
+  });
 
   await pressedCloseThread("Deploy?");
   await feedShows(["Before.", "<1 closed thread>", "After."]);
+  await answered("closeThread");
 
   await expect(closedByOf(posted)).resolves.toBe(posted.readerName);
 
@@ -60,12 +66,17 @@ it("a closed thread, unfolded, shows Reopen thread on hover, and pressing it reo
   expect.hasAssertions();
 
   const posted = await postedIn({ channel: "web-hover-reopen", closed: ["Deploy?"], texts: TEXTS });
-  const close = openAt({ client: posted.reader, hash: `#/channels/${posted.channel}` });
+  const { answered, close } = await viewOpened({
+    client: posted.reader,
+    hash: `#/channels/${posted.channel}`,
+    waitingOn: ["listMessages"],
+  });
   fireEvent.click(await inPane().findByRole("button", { name: "1 closed thread" }));
 
   const article = await feedArticle("Deploy?");
   fireEvent.click(within(article).getByRole("button", { name: "Reopen thread" }));
   await feedShows(["Before.", "Deploy?", "After."]);
+  await answered("reopenThread");
 
   await expect(closedByOf(posted)).resolves.toBeNull();
 

@@ -147,13 +147,34 @@ interface Parts extends IdentityParts, ReactionParts, InboxParts {
   readonly own: ReturnType<typeof createOwn>;
 }
 
+function ackingAfter(client: OwnClient, inboxRead: () => Promise<void>): OwnClient {
+  return {
+    ...client,
+    ack: async (id) => {
+      await inboxRead();
+      const acked = await client.ack(id);
+      return acked;
+    },
+  };
+}
+
 function partsOf(changed: () => void, options: BoardStoreOptions): Parts {
   const { client, pageSize = PAGE_SIZE, url } = options;
-  const own = createOwn({ changed, client, pageSize });
+  const inboxRead = Promise.withResolvers<() => Promise<void>>();
+  const own = createOwn({
+    changed,
+    client: ackingAfter(client, async () => {
+      const settled = await inboxRead.promise;
+      await settled();
+    }),
+    pageSize,
+  });
+  const inbox = inboxPartsOf({ changed, client, keepItems: own.parts.messages.keepItems, pageSize });
+  inboxRead.resolve(inbox.inbox.settled);
   return {
     ...reactionPartsOf({ changed, client }),
     ...identityPartsOf({ changed, client, url }),
-    ...inboxPartsOf({ changed, client, keepItems: own.parts.messages.keepItems, pageSize }),
+    ...inbox,
     own,
     presence: createPart({ changed, client, slice: presenceSlice }),
     triggers: createCalledTriggers(changed),

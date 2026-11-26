@@ -1,4 +1,11 @@
-import type { AppendMessageResult, ChannelPageRequest, MessagesSection, NewMessage, Placement } from "./messages.ts";
+import type {
+  AppendMessageResult,
+  ChannelPageRequest,
+  Deleting,
+  MessagesSection,
+  NewMessage,
+  Placement,
+} from "./messages.ts";
 import { Array as Arr, Effect, Option, Predicate, Schema, pipe } from "effect";
 import type {
   ListMessagesResponse,
@@ -8,7 +15,7 @@ import type {
   ThreadResponse,
   TopLevelMessage,
 } from "../../../messages/index.ts";
-import { MentionsText, dataText, messageColumns, toMessage } from "./message-rows-sqlite.ts";
+import { MentionsText, dataText, messageColumns, replyTargets, toMessage } from "./message-rows-sqlite.ts";
 import { insertAttachments, sqlAttachments } from "./attachments.ts";
 import { isPlaced, placeIn, placed, threadIdOf, withKnownMentions } from "./messages.ts";
 import { latestOf, stampedIn, takeId } from "./message-sequence-sqlite.ts";
@@ -42,7 +49,7 @@ function replyToOf(message: Message): MessageId | null {
 }
 
 function find(db: SqlDatabase, id: MessageId): Fails<Message | undefined> {
-  return db.get(`SELECT ${messageColumns(db)} FROM messages WHERE id = ?`, id).pipe(
+  return db.get(`SELECT ${messageColumns(db)} FROM messages WHERE id = ? AND deleted_at IS NULL`, id).pipe(
     Effect.flatMap((row) => {
       if (Predicate.isObject(row)) {
         return toMessage(row);
@@ -60,7 +67,7 @@ function placementOf(db: SqlDatabase, { channel, replyTo }: NewMessage): Fails<P
   if (Predicate.isUndefined(replyTo)) {
     return Effect.succeed({ status: "top-level" });
   }
-  return Effect.map(find(db, replyTo), (found) => placeIn({ channel, found }));
+  return Effect.map(replyTargets(db)(replyTo), (found) => placeIn({ channel, found }));
 }
 
 function scheduleOf({ scheduledMessage }: Message): number | null {
@@ -147,7 +154,8 @@ function append(db: SqlDatabase, message: NewMessage): Fails<AppendMessageResult
 }
 
 function threadMessages(db: SqlDatabase, parentId: MessageId): Fails<readonly Message[]> {
-  const sql = `SELECT ${messageColumns(db)} FROM messages WHERE id = ? OR reply_to = ? ORDER BY id`;
+  const sql = `SELECT ${messageColumns(db)} FROM messages
+    WHERE (id = ? OR reply_to = ?) AND deleted_at IS NULL ORDER BY id`;
   return db.all(sql, parentId, parentId).pipe(Effect.flatMap((rows) => Effect.forEach(rows, toMessage, ONE_AT_A_TIME)));
 }
 
@@ -168,7 +176,7 @@ function threadOf(db: SqlDatabase, id: MessageId): Fails<Omit<ThreadResponse, "r
 
 function newestRows(db: SqlDatabase, channel: ChannelName, page: ChannelPageRequest): Fails<readonly unknown[]> {
   const sql = `SELECT ${messageColumns(db)} FROM messages
-    WHERE channel = ? AND reply_to IS NULL AND id < ? ORDER BY id DESC LIMIT ?`;
+    WHERE channel = ? AND reply_to IS NULL AND deleted_at IS NULL AND id < ? ORDER BY id DESC LIMIT ?`;
   return db.all(sql, channel, page.before ?? ALL_IDS, page.limit + ONE_MORE);
 }
 
@@ -182,6 +190,20 @@ function pageOf(db: SqlDatabase, channel: ChannelName, page: ChannelPageRequest)
   });
 }
 
+const DELETE_THREAD = `UPDATE messages SET deleted_at = ?, deleted_by = ?
+  WHERE (id = ? OR reply_to = ?) AND deleted_at IS NULL`;
+
+function deleteIn(db: SqlDatabase, id: MessageId, deleting: Deleting): Fails<Message | undefined> {
+  return Effect.gen(function* deleteMessage() {
+    const found = yield* find(db, id);
+    if (Predicate.isUndefined(found)) {
+      return found;
+    }
+    yield* db.run(DELETE_THREAD, deleting.deletedAt, deleting.deletedBy, id, id);
+    return found;
+  });
+}
+
 type SharedMessagesSection = Omit<MessagesSection, "searchMessages"> & ReturnType<typeof sqlInbox>;
 
 function sqlMessages(db: SqlDatabase): SharedMessagesSection {
@@ -190,6 +212,8 @@ function sqlMessages(db: SqlDatabase): SharedMessagesSection {
     ...sqlClosedThreads({ db, reader: sqlMessageReader(db) }),
     ...sqlAttachments(db),
     appendMessage: (message) => db.transaction(append(db, message)),
+    deleteMessage: (id, deleting) => db.transaction(deleteIn(db, id, deleting)),
+    findReplyTarget: replyTargets(db),
     getThread: (id) => threadOf(db, id),
     latestMessageId: latestOf(db),
     listChannelMessages: (channel, page) =>

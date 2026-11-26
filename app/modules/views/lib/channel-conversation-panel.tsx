@@ -58,6 +58,7 @@ export function ChannelConversationPanel(props: ChannelConversationPanelProps): 
     selection: props.selection,
   });
   const thread = repliesOf(reply.state);
+  const handleFiles = reply.draft.attachments.attach;
   return (
     <ConversationPanel
       actions={props.actions}
@@ -67,6 +68,7 @@ export function ChannelConversationPanel(props: ChannelConversationPanelProps): 
       edge={props.edge}
       label={TEXT.conversation}
       message={reply.draft.replyTo}
+      onFiles={handleFiles}
       open={props.open}
     >
       <ReadNote reader={reader} />

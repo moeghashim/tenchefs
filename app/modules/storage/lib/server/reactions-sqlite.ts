@@ -63,7 +63,10 @@ function placesFor(ids: readonly MessageId[]): string {
 }
 
 function messageExists(db: SqlDatabase, id: MessageId): Fails<boolean> {
-  return Effect.map(db.get("SELECT 1 AS found FROM messages WHERE id = ?", id), Predicate.isObject);
+  return Effect.map(
+    db.get("SELECT 1 AS found FROM messages WHERE id = ? AND deleted_at IS NULL", id),
+    Predicate.isObject,
+  );
 }
 
 function ifMessage(
@@ -120,7 +123,11 @@ function list(db: SqlDatabase, ids: readonly MessageId[]): Fails<readonly Reacti
     return Effect.succeed([]);
   }
   return Effect.flatMap(
-    db.all(`SELECT ${COLUMNS} FROM reactions AS r WHERE r.message_id IN (${placesFor(ids)})`, ...ids),
+    db.all(
+      `SELECT ${COLUMNS} FROM reactions AS r JOIN messages AS m ON m.id = r.message_id
+       WHERE r.message_id IN (${placesFor(ids)}) AND m.deleted_at IS NULL`,
+      ...ids,
+    ),
     reactionRows,
   );
 }
@@ -129,7 +136,7 @@ function unseen(db: SqlDatabase, author: IdentityName): Fails<readonly Reaction[
   return Effect.flatMap(
     db.all(
       `SELECT ${COLUMNS} FROM reactions AS r JOIN messages AS m ON m.id = r.message_id
-       WHERE ${isFalse[db.dialect]("r.seen")} AND m.author_name = ?`,
+       WHERE ${isFalse[db.dialect]("r.seen")} AND m.author_name = ? AND m.deleted_at IS NULL`,
       author,
     ),
     reactionRows,

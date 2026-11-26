@@ -30,6 +30,23 @@ async function failedAgent(prefix: string): Promise<Owned> {
   return owned;
 }
 
+async function skippedAgent(prefix: string): Promise<Owned> {
+  const owner = await newIdentity({ kind: "human", name: `${prefix}-owner` });
+  const agent = await newIdentity({ kind: "agent", name: `${prefix}-bot`, owner: `${prefix}-owner` });
+  const bot = `${prefix}-bot`;
+  await owner.client.setTrigger(bot, { token: "routine-secret", url: UNREACHABLE_URL });
+  await agent.client.join({ as: bot });
+  await adminClient().createChannel({ name: prefix });
+  await adminClient().createMessage({ channel: prefix, text: `@${bot} are you there?` });
+  await waitFor(async () => {
+    await expect(owner.client.getTrigger(bot)).resolves.toHaveProperty(
+      "trigger.lastResult.skipped",
+      "agent_session_live",
+    );
+  });
+  return { bot, owner: owner.client };
+}
+
 function triggerForm(bot: string): HTMLElement {
   return inProfile().getByRole("form", { name: `Trigger URL for @${bot}` });
 }
@@ -82,6 +99,19 @@ it("an agent whose trigger call fails shows Unreachable, and the owner's Clear t
   await waitFor(() => {
     expect(screen.queryByText("Unreachable", { exact: false })).toBeNull();
   });
+});
+
+it("a mention of a joined agent shows on its profile as a skipped call, not a failed one", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const { bot, owner } = await skippedAgent("web-trigger-skip");
+  await openedBy({ client: owner, hash: `#/people/${bot}` });
+
+  await expect(
+    inProfile().findByText("Last mention called nothing: the agent was joined, just now"),
+  ).resolves.toBeDefined();
 });
 
 function filledWithHeaders(bot: string): HTMLElement {

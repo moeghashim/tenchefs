@@ -20,6 +20,7 @@ const SETUP = [
 
 interface Artifact {
   readonly expired?: boolean;
+  readonly recorded?: string;
   readonly sha: string;
 }
 
@@ -74,10 +75,13 @@ function fakeGh(artifacts: readonly Artifact[]): Fake {
     if (verbOf(args.join(" ")) === "api") {
       return { ok: true, value: JSON.stringify(listing) };
     }
-    const { sha } = artifacts[Number(args[RUN_ID])] ?? { sha: "" };
+    const { recorded, sha } = artifacts[Number(args[RUN_ID])] ?? { sha: "" };
     const shard = path.join(args.at(LAST) ?? "", "browser-coverage-map-1");
     mkdirSync(shard);
-    writeFileSync(path.join(shard, "map.json"), JSON.stringify({ ...mapAt(sha), incomplete: [], shard: "1/1" }));
+    writeFileSync(
+      path.join(shard, "map.json"),
+      JSON.stringify({ ...mapAt(recorded ?? sha), incomplete: [], shard: "1/1" }),
+    );
     return { ok: true, value: "" };
   }
   return { calls, gh };
@@ -102,6 +106,20 @@ it("fetches CI's newest coverage map from a commit on the branch's base, and kee
       { ok: true, value: mapAt(first) },
       { ok: true, value: mapAt(first) },
     ],
+  });
+});
+
+it("takes the map's commit from the map, since a Release run records an older v1 commit than its own", {
+  timeout: 10_000,
+}, () => {
+  expect.hasAssertions();
+
+  const { dir, first } = repo();
+  const older = "fedcba9876543210fedcba9876543210fedcba98";
+
+  expect(fetchedCoverageMap({ base: "v1", cwd: dir, gh: fakeGh([{ recorded: older, sha: first }]).gh })).toStrictEqual({
+    ok: true,
+    value: mapAt(older),
   });
 });
 

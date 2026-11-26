@@ -148,13 +148,14 @@ const AlertRow = Schema.Struct({
 type Row = typeof AlertRow.Type;
 
 function failureOf({ trigger_error: error, trigger_status: status }: Row): Omit<TriggerFailure, "message"> {
+  const answered = Option.match(Option.fromNullOr(status), {
+    onNone: () => ({}),
+    onSome: (code) => ({ status: code }),
+  });
   if (Predicate.isNotNull(error)) {
-    return { error };
+    return { error, ...answered };
   }
-  if (Predicate.isNotNull(status)) {
-    return { status };
-  }
-  return {};
+  return answered;
 }
 
 function triggerOf(row: Row): Pick<OfflineAlert, "trigger"> {

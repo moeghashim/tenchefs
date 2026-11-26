@@ -55,21 +55,27 @@ async function logInHavingRead(page: Page, channel: string): Promise<void> {
   await logInToChannels({ page, token: reader.token });
 }
 
-async function mentionedInThread(channel: string): Promise<Person> {
+interface Mentioned {
+  readonly mentionedAt: string;
+  readonly reader: Person;
+}
+
+async function mentionedInThread(channel: string): Promise<Mentioned> {
   const { poster, reader } = await subscribedPerson(channel);
   const { message: parent } = await poster.client.createMessage({ channel, text: "Deploy at noon?" });
   await poster.client.createMessage({ channel, text: "Or at one?" });
-  await poster.client.createMessage({
+  const { message: mention } = await poster.client.createMessage({
     channel,
     replyTo: parent.id,
     text: `@${channel}-reader can you check the rollout?`,
   });
-  return reader;
+  return { mentionedAt: mention.createdAt, reader };
 }
 
 test("the inbox lists the identity's unread rows for you, then activity, each leading with why", async ({ page }) => {
   const channel = unique("browser-inbox");
-  const reader = await mentionedInThread(channel);
+  const { mentionedAt, reader } = await mentionedInThread(channel);
+  await page.clock.setFixedTime(mentionedAt);
   await logInToChannels({ page, token: reader.token });
 
   await sidebarLink({ label: "Inbox", page }).click();

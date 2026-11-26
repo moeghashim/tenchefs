@@ -1,5 +1,6 @@
 import { CallChip, DataToggle, MessageBody } from "../../design-system/messages.tsx";
 import type { JsonValue, Message } from "../../sdk/index.ts";
+import type { Fold } from "./use-fold.ts";
 import { MarkdownText } from "./markdown-text.tsx";
 import { MessageAttachments } from "./message-attachments.tsx";
 import type { ReactNode } from "react";
@@ -9,6 +10,7 @@ const TEXT = { data: "Data" } as const;
 interface MessageDataProps {
   readonly message: Message;
   readonly me: string;
+  readonly fold: Fold;
 }
 
 interface Call {
@@ -39,12 +41,13 @@ export function MessageData(props: MessageDataProps): ReactNode {
   const { message } = props;
   const { data = null } = message;
   const call = callOf(message);
+  const handleUnfold = props.fold.unfold;
   if (call !== null) {
     return <CallChip command={message.text} label={`Call to /${call.command}`} value={call.value} />;
   }
   return (
     <>
-      <MessageBody>
+      <MessageBody foldable={props.fold.foldable} onUnfold={handleUnfold}>
         <MarkdownText me={props.me} message={message} />
       </MessageBody>
       <MessageAttachments linked message={message} />

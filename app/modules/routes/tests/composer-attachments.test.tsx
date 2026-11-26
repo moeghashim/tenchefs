@@ -1,13 +1,20 @@
 import {
+  dragInto,
+  dragNothingOverPage,
   dragOnto,
+  dragOutOf,
   dragTextOnto,
+  dropInto,
   dropOn,
+  dropOnPage,
   filesSupported,
   formNamed,
   hills,
+  litZones,
   namesIn,
   notes,
   pasteInto,
+  pasteItemsInto,
   pasteText,
   pendingIn,
   pickIn,
@@ -76,6 +83,54 @@ it("an image pasted into the message box waits above the text as a thumbnail, an
   const filesTakenAsText = pasteInto({ files: [hills], form: CHANNEL_FORM });
 
   expect([filesTakenAsText, pasteText(CHANNEL_FORM), pendingIn(CHANNEL_FORM)]).toStrictEqual([false, true, [HILLS]]);
+
+  close();
+});
+
+it("an image pasted with its file only in the clipboard's items waits above the text as a thumbnail", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const close = await channelOpen("web-compose-paste-items");
+  const filesTakenAsText = pasteItemsInto({ files: [hills], form: CHANNEL_FORM });
+
+  expect([filesTakenAsText, pendingIn(CHANNEL_FORM)]).toStrictEqual([false, [HILLS]]);
+
+  close();
+});
+
+it("a channel lights up while files are dragged over its messages, until the last of them leaves", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const close = await channelOpen("web-compose-drop-lit");
+  const over = { files: [notes], region: "Messages in #web-compose-drop-lit" };
+  dragInto(over);
+  dragInto(over);
+  dragOutOf(over);
+  const litInside = litZones();
+  dragOutOf(over);
+
+  expect([litInside, litZones()]).toStrictEqual([ONCE, EMPTY]);
+
+  close();
+});
+
+it("files dropped on a channel's messages wait in its box, unlit, files dropped off any conversation are refused, and a drag of nothing is left alone", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const close = await channelOpen("web-compose-drop-list");
+  const over = { files: [notes], region: "Messages in #web-compose-drop-list" };
+  dragInto(over);
+  dropInto(over);
+  const strayTaken = dropOnPage([notes]);
+  const nothingPasses = dragNothingOverPage();
+
+  expect([litZones(), strayTaken, nothingPasses, pendingIn(CHANNEL_FORM)]).toStrictEqual([EMPTY, false, true, [NOTES]]);
 
   close();
 });

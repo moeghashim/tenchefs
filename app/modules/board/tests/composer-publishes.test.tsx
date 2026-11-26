@@ -21,7 +21,7 @@ function storesOf({ admin, composer }: Composing): readonly ExternalStore<unknow
   const actions = composer.identities.actions(admin);
   return [
     composer.channelDraft("general"),
-    composer.draft("general/1"),
+    composer.draft("general/1", () => [admin]),
     {
       snapshot: () => [composer.identities.snapshot(), composer.identities.adminChange()],
       subscribe: composer.identities.subscribe,
@@ -74,8 +74,8 @@ it("a draft publishes nothing when dismissed again, or moving a highlight it has
 }, async () => {
   expect.hasAssertions();
 
-  const { composer } = await composing();
-  const draft = composer.draft("web-composer-publishes/1");
+  const { admin, composer } = await composing();
+  const draft = composer.draft("web-composer-publishes/1", () => [admin]);
   onTestFinished(draft.subscribe(vi.fn<() => void>()));
   draft.edit("Lunch?", CARET);
   draft.dismiss();

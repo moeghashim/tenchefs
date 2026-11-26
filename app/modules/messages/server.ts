@@ -1,14 +1,20 @@
 /**
  * Messages on the backend: the `Messages` service over `Storage`, and the
  * routes that post a message, get a thread from any message in it, page
- * back through a channel and search every channel by words. `Messages` also publishes each message the moment
+ * back through a channel, search every channel by words and delete a message.
+ * Deleting is a soft delete: its author may delete a message and an admin
+ * anyone's, but an agent only its own; a top-level message takes its whole
+ * thread with it. The rows stay in storage with when and by whom, and every
+ * read leaves them out: the channel page and the thread (counting only live
+ * replies), search, the open threads list, the Inbox, receipts, Reactions and
+ * Attachments. `Messages` also publishes each message the moment
  * it is stored to an in-process hub, which `posted` subscribes to, for live
  * updates. The author's name and owner are copied onto each
  * message, so they survive the identity being deleted. Routes sit behind the
  * server's token gate.
  */
-import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
+  DeletedMessageResponseSchema,
   ListMessagesQuerySchema,
   ListMessagesResponseSchema,
   MessageResponseSchema,
@@ -16,7 +22,8 @@ import {
   ThreadResponseSchema,
   TopLevelMessageResponseSchema,
 } from "./lib/server/wire.ts";
-import { channelMessagesPath, closedPath, reactionPath, threadPath } from "./index.ts";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import { channelMessagesPath, closedPath, messagePath, reactionPath, threadPath } from "./index.ts";
 import { listingResponseSchemas, listingRoutes } from "./lib/server/listings.ts";
 import { Caller } from "../identities/server.ts";
 import { Effect } from "effect";
@@ -91,6 +98,20 @@ const closeRoute: Route<Caller | Messages> = {
   segments: { id: (segment) => DIGITS.test(segment) },
 };
 
+const deleteRoute: Route<Caller | Messages> = {
+  handle: (params) =>
+    Effect.gen(function* deleteMessageRoute() {
+      const id = yield* threadIdOf(String(params["id"]));
+      const caller = yield* Caller;
+      const messages = yield* Messages;
+      const answer = yield* messages.deleteMessage(caller, id);
+      return yield* HttpServerResponse.schemaJson(DeletedMessageResponseSchema)(answer);
+    }),
+  method: "DELETE",
+  path: messagePath,
+  segments: { id: (segment) => DIGITS.test(segment) },
+};
+
 const reopenRoute: Route<Messages> = {
   handle: (params) =>
     Effect.gen(function* reopenThreadRoute() {
@@ -138,6 +159,7 @@ export const messageRoutes: readonly Route<ListingNeeds>[] = [
   reactionRoute("DELETE", (messages) => messages.unreact),
   closeRoute,
   reopenRoute,
+  deleteRoute,
   ...listingRoutes,
 ];
 
@@ -146,6 +168,9 @@ export const messageRoutes: readonly Route<ListingNeeds>[] = [
  * answer's types live in the search module.
  */
 export { searchResponseSchemas } from "./lib/server/listings.ts";
+
+/** The response Schema of deleting a message, for the SDK's generated validators; its type lives in `client.ts`. */
+export const messageDeleteResponseSchemas = { DeletedMessageResponse: DeletedMessageResponseSchema };
 
 /** The response Schemas of the message routes, for the SDK's generated validators. */
 export const messageResponseSchemas = {

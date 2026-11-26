@@ -3,14 +3,17 @@ import { expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inPane, inSidebar } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
+import type { OpenedView } from "./view-opened.ts";
 import type { Unread } from "../../unread/index.ts";
 import { boardStoreFor } from "./defaults.ts";
 import { createUnread } from "../../unread/index.ts";
-import { openAt } from "./render.tsx";
 import { subscribedReader } from "./inbox-reader.ts";
+import { viewOpened } from "./view-opened.ts";
 import { watched } from "./watched.ts";
 
 const ICON_FIRST = ':scope > svg[aria-hidden="true"]:first-child';
+
+const SUBSCRIPTIONS = ["listSubscribedChannels"] as const;
 
 type Shown = readonly (readonly [string, boolean, boolean])[];
 
@@ -71,7 +74,7 @@ it("right-clicking a sidebar channel opens its actions menu, every item with an 
   expect.hasAssertions();
 
   const { reader } = await subscribedReader("web-channel-menu-right");
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: SUBSCRIPTIONS });
   fireEvent.contextMenu(await channelLink("web-channel-menu-right"));
 
   await expect(menuItems("#web-channel-menu-right actions")).resolves.toStrictEqual([
@@ -87,7 +90,7 @@ it("a sidebar channel's More actions button opens the same menu", { timeout: 500
   expect.hasAssertions();
 
   const { reader } = await subscribedReader("web-channel-menu-more");
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: SUBSCRIPTIONS });
   const button = await moreActionsOf("web-channel-menu-more");
   pressed(() => button);
 
@@ -112,6 +115,19 @@ async function chooseFor(channel: string, name: string): Promise<void> {
   await chose(name);
 }
 
+interface Flipping {
+  readonly answered: OpenedView["answered"];
+  readonly channel: string;
+  readonly choice: keyof typeof CALL_OF;
+}
+
+const CALL_OF = { Subscribe: "subscribe", Unsubscribe: "unsubscribe" } as const;
+
+async function flippedBy({ answered, channel, choice }: Flipping): Promise<void> {
+  await chooseFor(channel, choice);
+  await answered(CALL_OF[choice]);
+}
+
 async function linkText(channel: string): Promise<string> {
   const link = await channelLink(channel);
   return link.textContent;
@@ -130,7 +146,7 @@ it.each(KEYS)(
 
     const channel = `web-channel-menu-key-${key.toLowerCase()}`;
     const { reader } = await subscribedReader(channel);
-    const close = openAt({ client: reader, hash: "#/inbox" });
+    const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: SUBSCRIPTIONS });
     fireEvent.keyDown(await channelLink(channel), { key, shiftKey });
 
     await expect(menuItems(`#${channel} actions`)).resolves.toHaveLength(EVERY_ITEM);
@@ -146,7 +162,7 @@ it("mark all as read clears a channel's unread count, its Inbox items and the ti
 
   const channel = "web-channel-mark-read";
   const reader = await unreadChannel(channel);
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: SUBSCRIPTIONS });
   const before = await titleSaying("(1) Inbox · cookout");
   await chooseFor(channel, "Mark all as read");
   const after = await titleSaying("Inbox · cookout");
@@ -200,7 +216,7 @@ it("a channel marked read in one tab drops its items in another tab live", { tim
   const channel = "web-channel-mark-read-live";
   const other = await otherTabOf(await unreadChannel(channel));
   const before = await other.texts();
-  const close = openAt({ client: other.reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: other.reader, hash: "#/inbox", waitingOn: SUBSCRIPTIONS });
   await chooseFor(channel, "Mark all as read");
 
   await waitFor(async () => {
@@ -218,10 +234,14 @@ it("subscribe and Unsubscribe in a channel's menu flip the subscription, as the 
 
   const channel = "web-channel-menu-subscribe";
   const { reader } = await subscribedReader(channel);
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
-  await chooseFor(channel, "Unsubscribe");
+  const { answered, close } = await viewOpened({
+    client: reader,
+    hash: `#/channels/${channel}`,
+    waitingOn: SUBSCRIPTIONS,
+  });
+  await flippedBy({ answered, channel, choice: "Unsubscribe" });
   const unsubscribed = [await headerPressed("Subscribe"), await subscribedNames(reader)];
-  await chooseFor(channel, "Subscribe");
+  await flippedBy({ answered, channel, choice: "Subscribe" });
 
   expect([...unsubscribed, await headerPressed("Subscribed"), await subscribedNames(reader)]).toStrictEqual([
     "false",
@@ -239,7 +259,7 @@ it("shift+F10 on a message opens its actions menu, as on a channel", { timeout: 
   const channel = "web-message-menu-key";
   const { poster, reader } = await subscribedReader(channel);
   await poster.createMessage({ channel, text: "Deploy?" });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await viewOpened({ client: reader, hash: `#/channels/${channel}`, waitingOn: ["listMessages"] });
   fireEvent.keyDown(await inPane().findByRole("article"), { key: "F10", shiftKey: true });
 
   await expect(screen.findByRole("menu", { name: "Message actions" })).resolves.toHaveProperty("tagName", "DIV");

@@ -198,6 +198,16 @@ function reactionHistoryFor({ board, identity, message }: Reacting): readonly St
   });
 }
 
+interface LiveIn {
+  readonly messages: readonly Message[];
+  readonly ids: readonly MessageId[];
+}
+
+function liveIdsIn({ ids, messages }: LiveIn): readonly MessageId[] {
+  const live = new Set(Arr.map(messages, ({ id }) => id));
+  return Arr.filter(ids, (id) => live.has(id));
+}
+
 function memoryReactions({ changeInbox, read }: MemoryReactionsAccess): ReactionsSection {
   function changing(work: (board: MemoryBoard) => Changed): Fails<boolean | undefined> {
     return Effect.map(changeInbox(work), Option.getOrUndefined);
@@ -205,7 +215,10 @@ function memoryReactions({ changeInbox, read }: MemoryReactionsAccess): Reaction
   return {
     addReaction: (adding) => changing((board) => add(board, adding)),
     listReactions: (ids) =>
-      read(({ inbox }) => listed(Arr.filter(inbox.reactions, (stored) => ids.includes(stored.messageId)))),
+      read(({ inbox, messages }) => {
+        const live = liveIdsIn({ ids, messages });
+        return listed(Arr.filter(inbox.reactions, (stored) => live.includes(stored.messageId)));
+      }),
     listUnseenReactions: (author) => read((board) => listed(unseenFor(board, author))),
     markReactionsSeen: (author, ids) =>
       Effect.asVoid(changeInbox((board) => [true, markSeen(board, author, ids)] as const)),
@@ -215,6 +228,7 @@ function memoryReactions({ changeInbox, read }: MemoryReactionsAccess): Reaction
 
 export {
   EMPTY_INBOX,
+  liveIdsIn,
   type MemoryInbox,
   memoryReactions,
   reactionHistoryFor,

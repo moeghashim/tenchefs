@@ -16,7 +16,7 @@ interface ListParts extends Parts {
 }
 
 interface FeedParts extends ListParts {
-  readonly feed?: string;
+  readonly feed?: string | null;
   readonly more: boolean;
   readonly busy: boolean;
 }
@@ -196,6 +196,11 @@ interface MessageTimeParts {
   readonly receipt: string | null;
 }
 
+interface MessageBodyParts extends Parts {
+  readonly foldable: boolean;
+  readonly onUnfold: () => void;
+}
+
 interface MentionParts extends Parts {
   readonly mine: boolean;
 }
@@ -250,6 +255,7 @@ export type {
   CallChipParts,
   ChannelStartParts,
   MentionParts,
+  MessageBodyParts,
   MessageTimeParts,
   MessageHeaderParts,
   ShownTimeParts,

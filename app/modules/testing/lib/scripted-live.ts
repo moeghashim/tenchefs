@@ -1,6 +1,7 @@
-import type { CookoutClient, EventStream, ServerSentEvent } from "../../sdk/index.ts";
+import type { CookoutClient, CookoutEvent, EventStream, ServerSentEvent } from "../../sdk/index.ts";
 import type { Live } from "../../live/index.ts";
 import { createLive } from "../../live/index.ts";
+import { heardEvents } from "./heard-events.ts";
 import { watchAdapter } from "./watch.ts";
 
 type LiveLink = ReturnType<Live["link"]>;
@@ -12,6 +13,7 @@ interface ScriptedLive {
 }
 
 interface WatchedLive {
+  readonly heard: (matches: (event: CookoutEvent) => boolean) => Promise<void>;
   readonly live: Live;
   readonly stream: Promise<EventStream>;
 }
@@ -44,16 +46,23 @@ function scriptedLive(): ScriptedLive {
 
 function watchedLive(client: Pick<CookoutClient, "watch">): WatchedLive {
   const { promise, resolve } = Promise.withResolvers<EventStream>();
-  const live = createLive(
-    watchAdapter({
-      watch: async (options) => {
-        const stream = await client.watch(options);
-        resolve(stream);
-        return stream;
-      },
-    }),
-  );
-  return { live, stream: promise };
+  const events = heardEvents();
+  const adapter = watchAdapter({
+    watch: async (options) => {
+      const stream = await client.watch(options);
+      resolve(stream);
+      return stream;
+    },
+  });
+  const live = createLive({
+    open: (onEvent, onLink) => {
+      adapter.open((frame) => {
+        onEvent(frame);
+        events.record(frame);
+      }, onLink);
+    },
+  });
+  return { heard: events.heard, live, stream: promise };
 }
 
 export type { Live } from "../../live/index.ts";

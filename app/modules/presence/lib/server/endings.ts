@@ -33,7 +33,9 @@ interface Ends {
   readonly heard: Effect.Effect<PubSub.Subscription<Ended>, never, Scope.Scope>;
 }
 
-type EndNow = Omit<Ending, "endedAt" | "state"> & { readonly refusal: Refusal };
+interface EndNow extends Omit<Ending, "endedAt" | "state"> {
+  readonly refusal: Refusal;
+}
 
 interface HeldEnding {
   readonly ended: Effect.Effect<Refusal>;

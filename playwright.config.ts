@@ -9,6 +9,16 @@ if (coverageRecords !== "") {
   recordBrowserCoverage({ dir: coverageRecords, root: import.meta.dirname });
 }
 
+const CI_WORKERS = 4;
+const LOCAL_WORKERS = "50%";
+
+function workers(): number | string {
+  if (process.env["CI"] === "true") {
+    return CI_WORKERS;
+  }
+  return LOCAL_WORKERS;
+}
+
 const chromium = {
   ...devices["Desktop Chrome"],
   baseURL: process.env["COOKOUT_URL"],
@@ -29,4 +39,5 @@ export default defineConfig<ProbeOptions & RelayOptions & SlowOptions>({
   testDir: "app/modules/routes/tests/browser",
   testMatch: "*.browser.test.ts",
   timeout: 30_000,
+  workers: workers(),
 });

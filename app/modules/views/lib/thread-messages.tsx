@@ -1,7 +1,7 @@
+import type { MessageMenu, Selection } from "../../unread/index.ts";
 import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import { LinkedScroll } from "./linked-scroll.tsx";
 import type { MessageId } from "../../sdk/index.ts";
-import type { MessageMenu } from "../../unread/index.ts";
 import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
@@ -18,6 +18,7 @@ interface ThreadMessagesProps {
   readonly me: string;
   readonly readPosition: number | null;
   readonly menu: MessageMenu;
+  readonly selection: Selection;
   readonly closing: ThreadClosing;
   readonly reply: Reply;
 }
@@ -38,10 +39,12 @@ export function ThreadMessages(props: ThreadMessagesProps): ReactNode {
       <LinkedScroll count={countOf(state)} highlighted={highlighted} label={TEXT.replies}>
         <ThreadBody
           closing={props.closing}
+          linked={props.linked}
           me={props.me}
           menu={props.menu}
           readPosition={props.readPosition}
           reply={props.reply}
+          selection={props.selection}
           state={state}
         />
       </LinkedScroll>

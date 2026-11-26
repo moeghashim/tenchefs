@@ -11,10 +11,10 @@ const LOADING = { status: "loading" } as const;
 
 const NONE = 0;
 
-type ChannelLoaded = Omit<PageLoaded, "ids"> & {
+interface ChannelLoaded extends Omit<PageLoaded, "ids"> {
   readonly messages: readonly TopLevelMessage[];
   readonly receipts: readonly ReadReceipt[];
-};
+}
 
 type ChannelMessagesState = { readonly status: "loading" } | Failure | ChannelLoaded;
 
@@ -25,6 +25,7 @@ interface ThreadMessagesLoaded {
   readonly receipts: readonly ReadReceipt[];
   readonly read: ReadState;
   readonly reply: PostState;
+  readonly deleted: ReadonlySet<MessageId>;
 }
 
 type ThreadMessagesState = { readonly status: "loading" } | Failure | ThreadMessagesLoaded;
@@ -103,8 +104,8 @@ function threadAnswer(held: MessagesHeld, thread: ThreadLoaded): ThreadMessagesL
   if (parent === null) {
     return null;
   }
-  const { read, reply } = thread;
-  return { parent, read, receipts: [], replies: repliesOf(held, thread.replies), reply, status: "loaded" };
+  const { deleted, read, reply } = thread;
+  return { deleted, parent, read, receipts: [], replies: repliesOf(held, thread.replies), reply, status: "loaded" };
 }
 
 function threadMessages(place: ThreadPlace): (held: MessagesHeld) => ThreadMessagesState {

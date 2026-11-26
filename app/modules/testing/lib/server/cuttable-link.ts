@@ -1,4 +1,15 @@
-import { Boolean as Bool, Context, Deferred, Effect, Layer, Ref, String as Str, Stream, SubscriptionRef } from "effect";
+import {
+  Boolean as Bool,
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  Ref,
+  String as Str,
+  Stream,
+  SubscriptionRef,
+} from "effect";
 import {
   Headers,
   HttpClient,
@@ -11,6 +22,7 @@ import {
 import type { HttpClientError, HttpClientResponse, HttpServerError } from "effect/http";
 import { nodeHttpServer, serverUrl } from "../../../http/server.ts";
 import type { Scope } from "effect";
+import { TestClock } from "effect/testing";
 import { layerNodeHttp as nodeHttpClient } from "@effect/platform-node/NodeHttpClient";
 
 interface CuttableLink {
@@ -20,6 +32,7 @@ interface CuttableLink {
   readonly freeze: Effect.Effect<void>;
   readonly takeDown: Effect.Effect<void>;
   readonly badGatewayFor: (requests: number, path?: string) => Effect.Effect<void>;
+  readonly delayNext: (path: string, millis: number) => Effect.Effect<void>;
   readonly answeredBadGateway: (times: number) => Effect.Effect<void>;
   readonly relayed: (text: string, times?: number) => Effect.Effect<void>;
 }
@@ -153,6 +166,38 @@ const badGateways: Effect.Effect<BadGateways> = Effect.gen(function* makeBadGate
   };
 });
 
+interface Delay {
+  readonly prefix: string;
+  readonly millis: number;
+}
+
+interface DelayedClient {
+  readonly delayNext: (path: string, millis: number) => Effect.Effect<void>;
+  readonly execute: Relay["execute"];
+}
+
+const delayedClient: Effect.Effect<DelayedClient, never, Scope.Scope> = Effect.gen(function* makeDelayedClient() {
+  const client = yield* Effect.map(Layer.build(nodeHttpClient), Context.get(HttpClient.HttpClient));
+  const due = yield* Ref.make(Option.none<Delay>());
+  function takeDelay(url: string): Effect.Effect<Option.Option<Delay>> {
+    return Ref.modify(due, (next) => {
+      const taken = Option.filter(next, ({ prefix }) => Str.startsWith(prefix)(new URL(url).pathname));
+      return [taken, Option.filter(next, () => Option.isNone(taken))];
+    });
+  }
+  return {
+    delayNext: (path, millis) => Ref.set(due, Option.some({ millis, prefix: path })),
+    execute: (request) =>
+      Effect.flatMap(
+        takeDelay(request.url),
+        Option.match({
+          onNone: () => client.execute(request),
+          onSome: ({ millis }) => Effect.andThen(TestClock.withLive(Effect.sleep(millis)), client.execute(request)),
+        }),
+      ),
+  };
+});
+
 interface Outage {
   readonly isDown: Effect.Effect<boolean>;
   readonly goDown: Effect.Effect<void>;
@@ -178,7 +223,7 @@ const outage: Effect.Effect<Outage> = Effect.gen(function* makeOutage() {
 
 function cuttableLink(target: string): Effect.Effect<CuttableLink, never, Scope.Scope> {
   return Effect.gen(function* openLink() {
-    const client = yield* Effect.map(Layer.build(nodeHttpClient), Context.get(HttpClient.HttpClient));
+    const client = yield* delayedClient;
     const drops = yield* signal;
     const stalls = yield* signal;
     const sent = yield* SubscriptionRef.make("");
@@ -202,6 +247,7 @@ function cuttableLink(target: string): Effect.Effect<CuttableLink, never, Scope.
       answeredBadGateway: gateways.answered,
       badGatewayFor: gateways.forNext,
       cut: drops.fire,
+      delayNext: client.delayNext,
       freeze: Effect.andThen(outages.goFrozen, stalls.fire),
       relayed: (text: string, times = ONCE) =>
         SubscriptionRef.changes(sent).pipe(Stream.filter(sentAtLeast(text, times)), Stream.runHead, Effect.asVoid),

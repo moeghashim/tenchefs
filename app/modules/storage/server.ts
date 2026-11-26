@@ -38,7 +38,7 @@ export type { StoredWebhookCommand } from "./lib/server/commands.ts";
 export type { DeletedChannel } from "./lib/server/channels.ts";
 export type { WebhookCommandTokenGrant } from "./lib/server/command-tokens.ts";
 export type { DeliveryOutcome, StoredDelivery } from "./lib/server/deliveries.ts";
-export type { NewMessage, StoredPage, StoredThread } from "./lib/server/messages.ts";
+export type { NewMessage, ReplyTarget, StoredPage, StoredThread } from "./lib/server/messages.ts";
 export type { OpenThreadsPageRequest } from "./lib/server/open-threads.ts";
 export type { SearchPageRequest, SearchQuery } from "./lib/server/search.ts";
 export type { AckedMessage } from "./lib/server/inbox.ts";

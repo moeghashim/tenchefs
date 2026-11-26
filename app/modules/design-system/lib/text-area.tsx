@@ -8,6 +8,22 @@ import { useTypedCaret } from "./use-typed-caret.ts";
 const ROWS = 3;
 const NONE = 0;
 
+function pastedFiles(event: ClipboardEvent<HTMLTextAreaElement>): File[] {
+  const clipboard = event.clipboardData;
+  const files = [...clipboard.files];
+  if (files.length > NONE) {
+    return files;
+  }
+  const fromItems: File[] = [];
+  for (const item of clipboard.items) {
+    const file = item.kind === "file" && item.getAsFile();
+    if (file instanceof File) {
+      fromItems.push(file);
+    }
+  }
+  return fromItems;
+}
+
 export function TextArea(parts: TextAreaParts): ReactNode {
   const { caret, choosing, focused, onClose, onEdit, onMove, onPick, value } = parts;
   const { focusRequests, onPasteFiles } = parts;
@@ -21,7 +37,7 @@ export function TextArea(parts: TextAreaParts): ReactNode {
   }, [box]);
   const handlePaste = useCallback(
     (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      const files = [...event.clipboardData.files];
+      const files = pastedFiles(event);
       if (files.length > NONE) {
         event.preventDefault();
         onPasteFiles(files);

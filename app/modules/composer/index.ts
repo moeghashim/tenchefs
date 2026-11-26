@@ -11,7 +11,8 @@
  * and caret: when the caret sits just after `@` and the start of a name, as
  * `mentionPattern` reads a mention (one space may follow the `@`, as dictation types "@ "), the suggestions are the identities whose
  * names start with it, a thread's members first (those `draft` is given,
- * most recent poster first), then the rest by name. `choose` swaps that `@` and prefix for the whole
+ * most recent poster first), then the rest by name; a channel's box puts its `channelPosters` first (#666), a replier
+ * other than a thread's latest counting as posting just after the thread's starter, as the page has no time for them. `choose` swaps that `@` and prefix for the whole
  * mention and a space (or puts it at the caret if no mention is being typed),
  * and puts the caret after it; `clear` empties the box. While there are
  * suggestions, one is `highlighted` (the first, after each edit): `highlight`
@@ -83,11 +84,6 @@ import { ownerPowersOf } from "./lib/owner-powers.ts";
 import { profileStoresOf } from "./lib/profile-stores.ts";
 
 const NO_COMMANDS: readonly Command[] = [];
-const NO_MEMBERS: readonly IdentityName[] = [];
-
-function noMembers(): readonly IdentityName[] {
-  return NO_MEMBERS;
-}
 
 function withAttachments(draft: Omit<Draft, "attachments">): Draft {
   const attachments = createPendingAttachments();
@@ -235,9 +231,11 @@ export interface Composer {
    * The draft for the box with this key (`channel/id` for a thread's reply box): the same store each time for one key. It suggests no commands.
    * `members`, read at each edit, names the identities to suggest ahead of the other matches, in its order (a thread's members, most recent poster first); the first call for a key sets it.
    */
-  readonly draft: (key: string, members?: () => readonly IdentityName[]) => Draft;
+  readonly draft: (key: string, members: () => readonly IdentityName[]) => Draft;
   /** The draft for a channel's message box, which also suggests commands: the same store each time for one channel. */
   readonly channelDraft: (channel: string) => Draft;
+  /** Who posted a message or a reply in this channel, from its messages the page has loaded, most recent first, without whoever is logged in. */
+  readonly channelPosters: (channel: string) => readonly IdentityName[];
   /** The display name being edited for this identity: the same store each time for one name. */
   readonly displayName: (name: IdentityName) => DisplayNameDraft;
   /** The description being edited for this agent: the same store each time for one name. */
@@ -281,9 +279,9 @@ export function createComposer(options: ComposerOptions): Composer {
   return {
     ...profileStoresOf(list),
     channelDraft: (channel) =>
-      keptDraft(channel, { commands: registered, identities: list.identities, members: noMembers }),
-    draft: (key, members = noMembers) =>
-      keptDraft(key, { commands: () => NO_COMMANDS, identities: list.identities, members }),
+      keptDraft(channel, { commands: registered, identities: list.identities, members: () => list.posters(channel) }),
+    channelPosters: list.posters,
+    draft: (key, members) => keptDraft(key, { commands: () => NO_COMMANDS, identities: list.identities, members }),
     identities: identitiesOf({ adminChanges: createAdminChanges(list), deletion, list, readers }),
   };
 }

@@ -45,11 +45,14 @@ async function postedFrom(posting: Posting, index: number): Promise<readonly Mes
   return [message.id, ...later];
 }
 
+async function loggedInBeside(page: Page, channel: string): Promise<void> {
+  const { token } = await newIdentity({ kind: "human", name: `${channel}-reader` });
+  await logInWithStream({ page, token });
+}
+
 async function openedWith(page: Page, posting: Posting): Promise<readonly MessageId[]> {
   await adminClient().createChannel({ name: posting.channel });
-  const ids = await postedFrom(posting, FIRST);
-  const { token } = await newIdentity({ kind: "human", name: `${posting.channel}-reader` });
-  await logInWithStream({ page, token });
+  const [ids] = await Promise.all([postedFrom(posting, FIRST), loggedInBeside(page, posting.channel)]);
   await page.goto(`/#/channels/${posting.channel}`);
   return ids;
 }

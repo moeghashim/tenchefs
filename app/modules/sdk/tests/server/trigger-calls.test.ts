@@ -207,3 +207,71 @@ it.effect("a new streak after a success raises a new alert", () =>
     );
   }).pipe(Effect.provide(testCookout({ triggers: "scripted" }))),
 );
+
+const BAD_REQUEST = 400;
+const KEPT_CHARACTERS = 200;
+const FROM_START = 0;
+const HEADER_REQUIRED = "anthropic-version: header is required";
+const ENVELOPE = { error: { message: HEADER_REQUIRED, type: "invalid_request_error" }, type: "error" };
+
+const failingWebhook = Effect.gen(function* boardWithAFailingWebhook() {
+  const on = yield* board;
+  yield* answer(() => on.matt.client.setTrigger(AGENT, { token: TOKEN, url: `${on.cookout.webhook.url}/fire` }));
+  return on;
+});
+
+it.effect("a failed call keeps the error message of its JSON envelope, and the alert carries it", () =>
+  Effect.gen(function* envelopeMessage() {
+    const on = yield* failingWebhook;
+    yield* on.cookout.webhook.failNext(ONCE, BAD_REQUEST, ENVELOPE);
+    const id = yield* on.mentionSettling(failed);
+    const stored = yield* on.settled(failed);
+    const inbox = yield* on.inbox;
+
+    expect(stored).toMatchObject({
+      trigger: { lastResult: { error: HEADER_REQUIRED, ok: false, status: BAD_REQUEST } },
+    });
+    expect(Arr.map(inbox.alerts, ({ trigger }) => trigger)).toStrictEqual([
+      { error: HEADER_REQUIRED, message: id, status: BAD_REQUEST },
+    ]);
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("a body with no envelope is kept as its text", () =>
+  Effect.gen(function* plainBody() {
+    const on = yield* failingWebhook;
+    yield* on.cookout.webhook.failNext(ONCE, BAD_REQUEST);
+    yield* on.mentionSettling(failed);
+    const stored = yield* on.settled(failed);
+
+    expect(stored).toMatchObject({ trigger: { lastResult: { error: '{"ok":false}', status: BAD_REQUEST } } });
+  }).pipe(Effect.provide(testCookout())),
+);
+
+it.effect("a long error message is kept as its first 200 characters", () =>
+  Effect.gen(function* longBody() {
+    const on = yield* board;
+    const message = `<html>${Str.repeat(KEPT_CHARACTERS)("x")}</html>`;
+    yield* on.cookout.triggers.answerNext([{ message, status: SERVER_ERROR }]);
+    yield* on.mentionSettling(failed);
+    const stored = yield* on.settled(failed);
+
+    expect(stored).toStrictEqual({
+      trigger: {
+        lastResult: { at: AT, error: Str.slice(FROM_START, KEPT_CHARACTERS)(message), ok: false, status: SERVER_ERROR },
+        url: URL_OF,
+      },
+    });
+  }).pipe(Effect.provide(testCookout({ triggers: "scripted" }))),
+);
+
+it.effect("an error message that echoes the token never keeps it", () =>
+  Effect.gen(function* echoedToken() {
+    const on = yield* board;
+    yield* on.cookout.triggers.answerNext([{ message: `bad token ${TOKEN}`, status: BAD_REQUEST }]);
+    yield* on.mentionSettling(failed);
+    const stored = yield* on.settled(failed);
+
+    expect(stored).toMatchObject({ trigger: { lastResult: { error: "bad token [redacted]" } } });
+  }).pipe(Effect.provide(testCookout({ triggers: "scripted" }))),
+);

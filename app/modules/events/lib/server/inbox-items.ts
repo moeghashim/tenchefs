@@ -121,7 +121,8 @@ function agentJoinRequests({ caller }: StreamRequest): Connected<Inbox | AgentSe
     const agentSessions = yield* AgentSessions;
     const changed = yield* agentSessions.joinRequestChanged;
     return Stream.fromSubscription(changed).pipe(
-      Stream.mapEffect((agent) => inbox.agentJoinRequestsAfterChange({ agent, caller })),
+      Stream.filter(({ reaches }) => reaches === "everyone" || caller.kind === "human"),
+      Stream.mapEffect(({ agent }) => inbox.agentJoinRequestsAfterChange({ agent, caller })),
       Stream.flatMap((listed) => Stream.fromIterable(Option.toArray(listed))),
       Stream.mapEffect((listed) => agentJoinRequestsEvent({ agentJoinRequests: listed, type: "agent-join-requests" })),
     );

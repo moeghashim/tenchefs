@@ -1,4 +1,5 @@
 import type { OfflineAlert, TriggerFailure } from "../../sdk/index.ts";
+import { answerTextOf } from "./trigger-answer.ts";
 
 const TEXT = {
   backOnline: "Back online ",
@@ -7,11 +8,8 @@ const TEXT = {
   stillUnreachable: "Still unreachable",
 } as const;
 
-function outcomeOf({ error, status }: TriggerFailure): string {
-  if (typeof status === "number") {
-    return `HTTP ${String(status)}`;
-  }
-  return error ?? "no answer";
+function outcomeOf(failure: TriggerFailure): string {
+  return answerTextOf({ answer: failure, silent: "no answer" });
 }
 
 function alertTextOf(alert: OfflineAlert): string {

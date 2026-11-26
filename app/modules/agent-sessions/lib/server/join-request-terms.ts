@@ -1,8 +1,9 @@
 import type { AgentJoinRequest, StorageUnavailable } from "../../../storage/server.ts";
-import { DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option, Predicate } from "effect";
+import type { Identity, IdentityName } from "../../../identities/index.ts";
 import { defaultIdleSeconds, idleSecondsOf } from "./idle-expiry.ts";
 import type { AgentJoinRequestView } from "../../index.ts";
-import type { IdentityName } from "../../../identities/index.ts";
+import type { Duration } from "effect";
 import type { IsoTime } from "../../../time/index.ts";
 import type { On } from "./join.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -35,6 +36,20 @@ const NOT_FOUND = 404;
 const defaults: Terms = { idleExpiry: defaultIdleExpiry, idleSeconds: defaultIdleSeconds };
 
 const REQUEST_SECONDS = 600;
+
+const peopleWaitForBroughtInJoinRequests: Duration.Input = "3 minutes";
+
+interface Requested {
+  readonly agent: Identity;
+  readonly createdAt: IsoTime;
+}
+
+function peopleShownJoinRequestAt({ agent, createdAt }: Requested): IsoTime {
+  if (agent.kind !== "agent" || Predicate.isUndefined(agent.broughtInBy)) {
+    return createdAt;
+  }
+  return isoTimeOf(DateTime.addDuration(DateTime.makeUnsafe(createdAt), peopleWaitForBroughtInJoinRequests));
+}
 
 const agentJoinRequestNotFound: Refusal = {
   code: "agent_join_request_not_found",
@@ -122,6 +137,7 @@ function liveRequest({ storage }: On) {
 }
 
 export {
+  type Lifetime,
   type Terms,
   agentJoinRequestDenied,
   agentJoinRequestNotFound,
@@ -130,6 +146,7 @@ export {
   liveRequest,
   lowered,
   now,
+  peopleShownJoinRequestAt,
   termsAsked,
   viewOf,
 };

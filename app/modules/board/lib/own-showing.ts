@@ -12,9 +12,9 @@ import { createOwnParts } from "./own-parts.ts";
 
 type Subscribe = (listener: () => void) => () => void;
 
-type ChannelPageCalls = Omit<ChannelPages, "back" | "heard" | "show"> & {
+interface ChannelPageCalls extends Omit<ChannelPages, "back" | "heard" | "show"> {
   readonly subscribeShowing: (name: ChannelName) => Subscribe;
-};
+}
 
 interface ThreadCalls {
   readonly subscribeShowing: (place: ThreadPlace, acking: boolean) => Subscribe;
@@ -40,6 +40,7 @@ interface OwnState {
   readonly subscriptions: SubscriptionsState;
   readonly messages: MessagesHeld;
   readonly closingRefusal: ClosingRefusal | null;
+  readonly messageDeleting: ReturnType<BoardCalls["deleting"]>;
 }
 
 interface Following {
@@ -117,6 +118,7 @@ function createOwn(options: OwnOptions): Own {
       channels: parts.channels.state(),
       closingRefusal: parts.calls.closingRefusal(),
       commands: parts.commands.state(),
+      messageDeleting: parts.calls.deleting(),
       messages: parts.messages.state(),
       notice: parts.notice(),
       schedules: parts.schedules.state(),

@@ -18,6 +18,7 @@ const UNAUTHORIZED = 401;
 const LIFETIME = "10 minutes";
 const ALMOST_LIFETIME = "9 minutes";
 const LAST_MINUTE = "1 minute";
+const PEOPLE_WAIT = "3 minutes";
 const asked = { as: "worker", host: "build-box" };
 
 interface Board {
@@ -123,6 +124,7 @@ it.effect("a pending join request shows in the inbox of the agent's owner and of
   Effect.gen(function* whoSeesIt() {
     const { ada, bob, chief, cookout } = yield* board;
     const request = yield* started(cookout);
+    yield* TestClock.adjust(PEOPLE_WAIT);
     const [owner, broughtInBy, other, admin] = yield* pendingInEach([
       ada.client,
       chief.client,
@@ -159,7 +161,7 @@ it.effect("approving by the item's code, under the approve-join rules, takes the
   Effect.gen(function* approvedGoes() {
     const { ada, chief, cookout } = yield* board;
     const request = yield* started(cookout);
-    const code = yield* Effect.map(pendingIn(ada.client), codeOf);
+    const code = yield* Effect.map(pendingIn(chief.client), codeOf);
     const refusedWithoutToken = yield* refusal(() => cookout.clientFor().approveAgentJoin(code));
     yield* answer(() => chief.client.approveAgentJoin(code));
     const listed = yield* pendingInEach([ada.client, chief.client]);
@@ -173,13 +175,13 @@ it.effect("approving by the item's code, under the approve-join rules, takes the
 
 it.effect("a refused approval, for an agent whose session is live, leaves the request in the inbox", () =>
   Effect.gen(function* refusedStays() {
-    const { ada, cookout } = yield* board;
+    const { ada, chief, cookout } = yield* board;
     const first = yield* started(cookout);
     yield* answer(() => ada.client.approveAgentJoin(first.userCode));
     yield* collect(cookout, first);
     const second = yield* started(cookout);
     const refused = yield* refusal(() => ada.client.approveAgentJoin(second.userCode));
-    const listed = yield* pendingIn(ada.client);
+    const listed = yield* pendingIn(chief.client);
 
     expect(refused).toMatchObject({ code: "agent_session_live", status: CONFLICT });
     expect(listed).toMatchObject([{ userCode: second.userCode }]);
@@ -208,10 +210,10 @@ function startedAgainAfterJoining(on: Board, first: AgentJoinRequestStartedRespo
   });
 }
 
-it.effect("the owner's stream hears the pending join requests as one starts, is approved, and expires", () =>
+it.effect("the bringing agent's stream hears the pending join requests as one starts, is approved, and expires", () =>
   Effect.gen(function* heardLive() {
     const on = yield* board;
-    const events = yield* watching(on.ada.client);
+    const events = yield* watching(on.chief.client);
     const first = yield* started(on.cookout);
     const raised = yield* nextJoinRequestsEvent(events);
     const approved = yield* Effect.andThen(

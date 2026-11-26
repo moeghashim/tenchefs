@@ -24,7 +24,9 @@ interface NudgeRecord {
 
 type NewNudgeRecord = Omit<NudgeRecord, "id" | "read">;
 
-type StoredNudge = Omit<InboxHistoryNudge, "channel" | "text"> & { readonly recipient: IdentityName };
+interface StoredNudge extends Omit<InboxHistoryNudge, "channel" | "text"> {
+  readonly recipient: IdentityName;
+}
 
 interface NudgeRecords {
   readonly since: Effect.Effect<IsoTime, StorageUnavailable>;

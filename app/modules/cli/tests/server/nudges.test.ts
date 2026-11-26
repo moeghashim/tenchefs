@@ -4,6 +4,7 @@ import {
   TestCookout,
   answer,
   commandLineServices,
+  cuttableLink,
   freshStateFolder,
   runCookout,
   testCookout,
@@ -13,6 +14,7 @@ import { expect, it } from "@effect/vitest";
 import type { Message } from "../../../messages/index.ts";
 import type { Scope } from "effect";
 import { TestClock } from "effect/testing";
+import { inboxPath } from "../../../inbox/index.ts";
 
 interface Board {
   readonly cookout: TestCookoutService;
@@ -27,6 +29,7 @@ const SETTLE = "30 millis";
 const ALMOST_THREE_DAYS = "259199 seconds";
 const LAST_SECOND = "1 second";
 const NUDGE_TEXT = "Quiet for 3 days: close it, or follow up?";
+const SLOW_START_UP_COUNT_MILLIS = 200;
 
 const services = Layer.merge(testCookout(), commandLineServices);
 
@@ -69,6 +72,22 @@ it.effect("cookout watch prints a line for a nudge as it is raised", () =>
     const { stdoutLines } = yield* watchCookout({
       args: ["watch"],
       env,
+      lines: ONE_LINE,
+      whileWatching: lastQuietSecond,
+    });
+
+    expect(stdoutLines).toStrictEqual([`#grill thread:${String(thread.id)} ${NUDGE_TEXT} (nudge 1)`]);
+  }).pipe(Effect.provide(services)),
+);
+
+it.effect("cookout watch says it is watching only once it has read its start-up unread count", () =>
+  Effect.gen(function* watchCountsBeforeSaying() {
+    const { cookout, env, thread } = yield* bobStartsAThread;
+    const link = yield* cuttableLink(cookout.url);
+    yield* link.delayNext(inboxPath, SLOW_START_UP_COUNT_MILLIS);
+    const { stdoutLines } = yield* watchCookout({
+      args: ["watch"],
+      env: { ...env, COOKOUT_URL: link.url },
       lines: ONE_LINE,
       whileWatching: lastQuietSecond,
     });

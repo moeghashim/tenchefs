@@ -20,6 +20,7 @@ interface PageLoaded {
   readonly callData: string;
   readonly post: PostState;
   readonly expanded: ReadonlyMap<MessageId, number>;
+  readonly deleted: ReadonlySet<MessageId>;
 }
 
 type PageState = { readonly status: "loading" } | Failure | PageLoaded;
@@ -30,6 +31,7 @@ interface ThreadLoaded {
   readonly replies: readonly MessageId[];
   readonly read: ReadState;
   readonly reply: PostState;
+  readonly deleted: ReadonlySet<MessageId>;
 }
 
 type ThreadState = { readonly status: "loading" } | Failure | ThreadLoaded;

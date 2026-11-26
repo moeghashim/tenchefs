@@ -6,6 +6,7 @@ import type { MessagesHeld } from "./messages-table.ts";
 import type { PostRequest } from "./page-calls.ts";
 import { pageCalls } from "./page-calls.ts";
 import { pageOps } from "./page-reads.ts";
+import { pageWithoutDeleted } from "./message-deletions.ts";
 import { readersOf } from "./messages-held.ts";
 
 const NONE = 0;
@@ -71,6 +72,7 @@ function showing(paging: Paging): ChannelPages["show"] {
   return (name) => {
     const started = paging.options.queues.started(keyOf(name));
     if (!open(name) && started) {
+      paging.ops(name).update(pageWithoutDeleted);
       enqueue(name, async (ops) => {
         await ops.reloadNewest();
       });

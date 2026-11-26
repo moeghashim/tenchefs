@@ -78,6 +78,7 @@ export default defineConfig({
         test: {
           environment: "./scripts/web-test-environment.ts",
           exclude: ["app/**/*.clock.test.tsx"],
+          globalSetup: ["./scripts/web-test-setup.ts"],
           include: ["app/**/*.test.tsx"],
           name: "web",
         },

@@ -61,6 +61,7 @@ export { createKeymap } from "../../keymap/index.ts";
 export { createUnread } from "../../unread/index.ts";
 export type { BoardStore } from "../../board/index.ts";
 export type { Live } from "../../testing/web.ts";
+export { settledCalls } from "../../testing/web.ts";
 export type { BoardStoreClient };
 export type { Unread } from "../../unread/index.ts";
 export type { Reading } from "../../unread/index.ts";

@@ -1,0 +1,42 @@
+name: Install headless Chromium
+description: Restore Playwright's headless Chromium shell from the Actions cache, downloading it only on a miss, and log how long the install took.
+
+# Nothing cached ~/.cache/ms-playwright, so every job downloaded the 126 MiB shell from Playwright's
+# CDN: usually 5 s, but 2:19 on one browser shard, which pushed it past its 5-minute limit (#742).
+# The key is the installed Playwright version, which names the shell's build, so the cache is
+# shared by every job and changes only when Playwright does. On a miss every job that missed tries
+# to save the same key: one wins, the others print a warning and carry on, and the next run hits.
+# No --with-deps: ubuntu-latest already has every library the headless shell needs, and
+# --with-deps sometimes took 4.5 minutes fetching fonts from the Ubuntu mirror (#265).
+
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: bash
+      run: echo "playwright=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+    - id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.playwright }}
+    - shell: bash
+      env:
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit == 'true' }}
+        CACHE_KEY: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.playwright }}
+      run: |
+        start=$SECONDS
+        pnpm exec playwright install --only-shell chromium
+        took=$((SECONDS - start))
+        if [ "$CACHE_HIT" = true ]; then
+          echo "Headless Chromium restored from cache $CACHE_KEY; install took ${took}s."
+        else
+          echo "::warning::Headless Chromium cache miss ($CACHE_KEY): downloaded in ${took}s."
+          echo "**Headless Chromium cache miss** (\`$CACHE_KEY\`): downloaded in ${took}s." >> "$GITHUB_STEP_SUMMARY"
+        fi
+    - if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+      uses: actions/cache/save@v4
+      continue-on-error: true
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-shell-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.playwright }}

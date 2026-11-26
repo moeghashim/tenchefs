@@ -1,10 +1,12 @@
 import type {
   AppendMessageResult,
   ChannelPageRequest,
+  Deleting,
   Mentioning,
   MessagesSection,
   NewMessage,
   Placement,
+  ReplyTarget,
   StoredPage,
   StoredThread,
 } from "./messages.ts";
@@ -33,6 +35,7 @@ import type { StorageUnavailable } from "./errors.ts";
 import { isMessageId } from "../../../messages/index.ts";
 
 interface MemoryMessages extends MemoryThreads {
+  readonly deleted: readonly DeletedMessage[];
   readonly last: number;
   readonly latestAt: Option.Option<NewMessage["createdAt"]>;
   readonly inbox: MemoryInbox;
@@ -51,7 +54,13 @@ type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 type ChannelName = NewMessage["channel"];
 
 const NEXT = 1;
+interface DeletedMessage {
+  readonly message: Message;
+  readonly deleting: Deleting;
+}
+
 const EMPTY: MemoryMessages = {
+  deleted: [],
   inbox: EMPTY_INBOX,
   last: 0,
   latestAt: Option.none(),
@@ -60,15 +69,30 @@ const EMPTY: MemoryMessages = {
 };
 const CHANNEL_NOT_FOUND = { status: "channel_not_found" } as const;
 
-function placementOf(messages: readonly Message[], { channel, replyTo }: NewMessage): Placement {
+function everyMessageOf({ deleted, messages }: MemoryMessages): readonly Message[] {
+  return [...messages, ...Arr.map(deleted, ({ message }) => message)];
+}
+
+function targetOf(data: MemoryMessages, found: Message): ReplyTarget {
+  const thread = threadIdOf(found);
+  const threadDeleted = Option.isNone(findMessage({ id: thread, messages: data.messages }));
+  return { channel: found.channel, thread, threadDeleted };
+}
+
+function targetIn(data: MemoryMessages, id: MessageId): ReplyTarget | undefined {
+  const found = findMessage({ id, messages: everyMessageOf(data) });
+  return Option.getOrUndefined(Option.map(found, (message) => targetOf(data, message)));
+}
+
+function placementOf(data: MemoryMessages, { channel, replyTo }: NewMessage): Placement {
   if (Predicate.isUndefined(replyTo)) {
     return { status: "top-level" };
   }
-  return placeIn({ channel, found: Option.getOrUndefined(findMessage({ id: replyTo, messages })) });
+  return placeIn({ channel, found: targetIn(data, replyTo) });
 }
 
 function append(data: MemoryMessages, appending: Mentioning): readonly [AppendMessageResult, MemoryMessages] {
-  const placement = placementOf(data.messages, appending.message);
+  const placement = placementOf(data, appending.message);
   if (!isPlaced(placement)) {
     return [placement, data];
   }
@@ -122,6 +146,51 @@ function pageIn(messages: readonly Message[], channel: ChannelName, page: Channe
   return { hasMore: older.length > shown.length, messages: Arr.map(shown, (parent) => current({ messages, parent })) };
 }
 
+interface MemoryDeleting {
+  readonly id: MessageId;
+  readonly deleting: Deleting;
+}
+
+function inThreadOf(message: Message): (other: Message) => boolean {
+  if (message.kind === "reply") {
+    return (other) => other.id === message.id;
+  }
+  return (other) => other.id === message.id || (other.kind === "reply" && other.replyTo === message.id);
+}
+
+function asItWas(messages: readonly Message[], found: Message): Message {
+  if (found.kind === "reply") {
+    return found;
+  }
+  return current({ messages, parent: found });
+}
+
+function withDeleted(
+  data: MemoryMessages,
+  { deleting, id }: MemoryDeleting,
+): readonly [Message | undefined, MemoryMessages] {
+  const found = findMessage({ id, messages: data.messages });
+  const next = Option.match(found, {
+    onNone: () => data,
+    onSome: (message) => {
+      const deletes = inThreadOf(message);
+      const inThread = Arr.map(Arr.filter(data.messages, deletes), (gone) => ({ deleting, message: gone }));
+      const live = Arr.filter(data.messages, (other) => !deletes(other));
+      return { ...data, deleted: [...data.deleted, ...inThread], messages: live };
+    },
+  });
+  return [Option.getOrUndefined(Option.map(found, (message) => asItWas(data.messages, message))), next];
+}
+
+type Lookups = Pick<MessagesSection, "findAttachment" | "findReplyTarget">;
+
+function lookupsIn(readBoard: <Value>(work: (data: MemoryMessages) => Value) => Fails<Value>): Lookups {
+  return {
+    findAttachment: (id) => readBoard((data) => attachmentIn(id)(data.messages)),
+    findReplyTarget: (id) => readBoard((data) => targetIn(data, id)),
+  };
+}
+
 type MemoryMessagesSection = MessagesSection &
   MemoryInboxSection &
   ReturnType<typeof memoryReactions> & {
@@ -153,13 +222,14 @@ function withScheduleDeleted(schedule: ScheduledMessageId) {
 }
 
 function withoutMessagesIn(data: MemoryMessages, channel: ChannelName): readonly [ForgottenChannel, MemoryMessages] {
-  const gone = Arr.filter(data.messages, (message) => message.channel === channel);
+  const gone = Arr.filter(everyMessageOf(data), (message) => message.channel === channel);
   const kept = Arr.filter(data.messages, (message) => message.channel !== channel);
+  const deleted = Arr.filter(data.deleted, ({ message }) => message.channel !== channel);
   const ids = new Set(Arr.map(gone, (message) => message.id));
   const attachments = Arr.flatMap(gone, (message) => Arr.map(message.attachments ?? [], ({ id }) => id));
   return [
     { attachments, messageIds: ids },
-    { ...data, inbox: withoutChannel({ channel, ids, inbox: data.inbox }), messages: kept },
+    { ...data, deleted, inbox: withoutChannel({ channel, ids, inbox: data.inbox }), messages: kept },
   ];
 }
 
@@ -206,8 +276,9 @@ function memoryMessages({ channels, identities, state }: MemoryMessagesOptions):
         }
         return Effect.succeed(CHANNEL_NOT_FOUND);
       }),
-    countMessagesBy: (identity) => read((messages) => Arr.filter(messages, namesAuthor(identity)).length),
-    findAttachment: (id) => read(attachmentIn(id)),
+    countMessagesBy: (identity) => readBoard((data) => Arr.filter(everyMessageOf(data), namesAuthor(identity)).length),
+    deleteMessage: (id, deleting) => change((data) => withDeleted(data, { deleting, id })),
+    ...lookupsIn(readBoard),
     forgetChannel: (channel) => change((data) => withoutMessagesIn(data, channel)),
     forgetIdentity: (identity) =>
       Effect.asVoid(change((data) => [true, { ...data, inbox: withoutIdentity({ identity, inbox: data.inbox }) }])),

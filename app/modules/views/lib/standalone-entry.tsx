@@ -49,7 +49,7 @@ export function StandaloneEntry(props: StandaloneEntryProps): ReactNode {
       time={useMessageTime({ message, parent: null, receipts: props.receipts })}
       unreadLine={false}
     >
-      <MessageContent me={props.me} message={message} />
+      <MessageContent me={props.me} message={message} opened={false} />
     </StandaloneMessage>
   );
 }

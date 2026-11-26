@@ -5,6 +5,7 @@ import type { InboxAgentJoinRequest } from "../agent-join-requests.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { agentJoinRequestText } from "../agent-join-requests.ts";
 import { isoTimeOf } from "../../../time/server.ts";
+import { peopleShownJoinRequestAt } from "../../../agent-sessions/server.ts";
 
 type Listed = Effect.Effect<readonly InboxAgentJoinRequest[], StorageUnavailable>;
 
@@ -31,8 +32,14 @@ function mayApprove(caller: IdentityName, agent: Identity): boolean {
 
 interface Showing {
   readonly storage: Storage["Service"];
-  readonly caller: IdentityName;
+  readonly caller: Identity;
   readonly now: IsoTime;
+}
+
+function shownNow({ caller, now }: Showing, pending: PendingAgentJoinRequest) {
+  return (agent: Identity): boolean =>
+    mayApprove(caller.name, agent) &&
+    (caller.kind === "agent" || peopleShownJoinRequestAt({ agent, createdAt: pending.createdAt }) <= now);
 }
 
 function itemOf(pending: PendingAgentJoinRequest, { now, storage }: Showing) {
@@ -51,7 +58,7 @@ function shownTo(showing: Showing) {
   return (pending: PendingAgentJoinRequest): Listed =>
     Effect.flatMap(showing.storage.findIdentityByName(pending.agent), (found) =>
       Effect.forEach(
-        Arr.filter(Arr.fromNullishOr(found), (agent) => mayApprove(showing.caller, agent)),
+        Arr.filter(Arr.fromNullishOr(found), shownNow(showing, pending)),
         itemOf(pending, showing),
         ONE_AT_A_TIME,
       ),
@@ -64,7 +71,7 @@ function listedFor(storage: Storage["Service"]): AgentJoinRequestCalls["agentJoi
       const clock = yield* DateTime.now;
       const now = isoTimeOf(clock);
       const pending = yield* storage.listPendingAgentJoinRequests(now);
-      const shown = yield* Effect.forEach(pending, shownTo({ caller: caller.name, now, storage }), ONE_AT_A_TIME);
+      const shown = yield* Effect.forEach(pending, shownTo({ caller, now, storage }), ONE_AT_A_TIME);
       return Arr.flatten(shown);
     });
 }

@@ -51,11 +51,12 @@ interface MemoryWebhookCommandsOptions {
   readonly findIdentity: FindIdentity;
 }
 
-type MemoryWebhookCommandsSection = WebhookCommandsSection &
-  Pick<MemoryWebhookCommandTokensSection, "dropWebhookCommandTokens" | "dropWebhookCommandTokensOf"> &
-  Pick<MemoryDeliveriesSection, "dropDeliveries"> & {
-    readonly dropWebhookCommandsOf: (handler: IdentityName) => void;
-  };
+interface MemoryWebhookCommandsSection
+  extends WebhookCommandsSection,
+    Pick<MemoryWebhookCommandTokensSection, "dropWebhookCommandTokens" | "dropWebhookCommandTokensOf">,
+    Pick<MemoryDeliveriesSection, "dropDeliveries"> {
+  readonly dropWebhookCommandsOf: (handler: IdentityName) => void;
+}
 
 function memoryWebhookCommands(options: MemoryWebhookCommandsOptions): MemoryWebhookCommandsSection {
   const { findIdentity, state, placeHandler } = options;

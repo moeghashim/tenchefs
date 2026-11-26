@@ -1,5 +1,7 @@
 # The e2e suite runs only on CI
 
+Superseded on 2026-11-25 by [ADR 0114](0114-release-is-the-gate-on-the-newest-green-v1-commit.md): the e2e suite runs in the Release gate on the newest green v1 commit, and Deploy no longer runs it again after the gate.
+
 2026-11-24 (mattpocock/cookout#412). Matt decided on the board on 2026-11-24 (thread 3416, msgs 3439 and 3441) to keep local resources free by running the e2e suite only on CI: "I do still want it to do browser checking locally, but just not with the e2e suite".
 
 ## Context

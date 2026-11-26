@@ -1,4 +1,5 @@
 import type { ChannelName, CookoutClient, MessageId, TopLevelMessage } from "../../sdk/index.ts";
+import { NOTHING_DELETED, withDeletedKept } from "./message-deletions.ts";
 import { withEntry, withFresh } from "./messages-table.ts";
 import type { Held } from "./messages-held.ts";
 import { LOADING } from "./message-states.ts";
@@ -52,6 +53,7 @@ function firstPage(page: Page): PageLoaded {
   return {
     call: { status: "idle" },
     callData: "",
+    deleted: NOTHING_DELETED,
     expanded: new Map(),
     hasMore: page.hasMore,
     ids: idsOf(page.messages),
@@ -65,10 +67,11 @@ function firstPage(page: Page): PageLoaded {
 function withNewest(page: PageLoaded, read: Page): PageLoaded {
   const oldest = Math.min(...read.messages.map((message) => message.id));
   const kept = page.ids.filter((id) => id < oldest);
+  const ids = withDeletedKept({ before: page.ids, deleted: page.deleted, read: [...kept, ...idsOf(read.messages)] });
   if (kept.length === NONE) {
-    return { ...page, hasMore: read.hasMore, ids: idsOf(read.messages) };
+    return { ...page, hasMore: read.hasMore, ids };
   }
-  return { ...page, ids: [...kept, ...idsOf(read.messages)] };
+  return { ...page, ids };
 }
 
 function changedIn(at: PageAt): PageOps["changed"] {

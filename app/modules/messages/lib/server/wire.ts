@@ -28,6 +28,7 @@ import {
 } from "../../../identities/index.ts";
 import { isMessageId, messageTextLength, pageSize, reactionNames, shownRepliers } from "../../index.ts";
 import type { Attachment } from "../../../attachments/index.ts";
+import type { DeletedMessageResponse } from "../../client.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import { Schema } from "effect";
 import { isScheduledMessageId } from "../../../scheduled-messages/index.ts";
@@ -214,6 +215,10 @@ export const ReactionsResponseSchema = matchesWire<ReactionsResponse>()(
 
 export const TopLevelMessageResponseSchema = matchesWire<TopLevelMessageResponse>()(
   Schema.Struct({ message: TopLevelMessageSchema }),
+);
+
+export const DeletedMessageResponseSchema = matchesWire<DeletedMessageResponse>()(
+  Schema.Struct({ message: MessageSchema }),
 );
 
 export {

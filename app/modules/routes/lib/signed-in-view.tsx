@@ -1,5 +1,5 @@
 import type { Identity, IdentityName } from "../../sdk/index.ts";
-import { KeyAnnouncements, ScheduleLists, SidebarKeys, SidebarView } from "../../views/index.tsx";
+import { KeyAnnouncements, MessageDeleteConfirm, ScheduleLists, SidebarKeys, SidebarView } from "../../views/index.tsx";
 import type { ReactNode } from "react";
 import type { Route } from "../../paths/index.ts";
 import type { Stores } from "./stores.ts";
@@ -39,6 +39,7 @@ export function SignedInView(props: SignedInViewProps): ReactNode {
           unread={stores.unread}
         />
         <KeyAnnouncements keymap={stores.keymap} />
+        <MessageDeleteConfirm />
         <WorkspaceBody
           me={props.identity.name}
           profile={props.profile}

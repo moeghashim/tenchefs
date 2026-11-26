@@ -53,6 +53,23 @@ function duplicateNumbers(files: readonly string[]): readonly string[] {
   });
 }
 
+function takenOnV1({ added, v1 }: Renumbering): readonly string[] {
+  const theirs = numbered(v1);
+  const highest = Math.max(NONE, ...theirs.map((adr) => adr.number));
+  const files = new Set(theirs.map((adr) => adr.file));
+  const fresh = numbered(added).filter((adr) => !files.has(adr.file));
+  return fresh.flatMap((adr, index) => {
+    const taken = theirs.filter((their) => their.number === adr.number).map((their) => their.file);
+    if (taken.length === NONE) {
+      return [];
+    }
+    const next = padded(highest + index + ONE);
+    return [
+      `${adr.file} takes ADR number ${padded(adr.number)}, which origin/v1 already gives ${taken.join(" and ")}. Renumber it to ${next}, past origin/v1's highest, and fix every link to it.`,
+    ];
+  });
+}
+
 function renumbering({ added, v1 }: Renumbering): readonly Rename[] {
   const highest = Math.max(NONE, ...numbered(v1).map((adr) => adr.number));
   const ours = numbered(added);
@@ -86,4 +103,4 @@ function rewriteReferences({ renames, text }: References): string {
 }
 
 export type { Rename };
-export { duplicateNumbers, renumbering, rewriteReferences };
+export { duplicateNumbers, renumbering, rewriteReferences, takenOnV1 };

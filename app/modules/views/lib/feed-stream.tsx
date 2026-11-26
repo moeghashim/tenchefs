@@ -1,9 +1,9 @@
 import type { ChannelMessagesState, ThreadClosing } from "../../board/index.ts";
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
+import { DeletedMessage, MessageList } from "../../design-system/messages.tsx";
 import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
 import { FoldEntry } from "./fold-entry.tsx";
 import { MessageEntry } from "./message-entry.tsx";
-import { MessageList } from "../../design-system/messages.tsx";
 import { MessageRefusals } from "./message-refusals.tsx";
 import type { ReactNode } from "react";
 import { feedRows } from "./feed-rows.ts";
@@ -26,13 +26,7 @@ interface FeedStreamProps {
 
 export function FeedStream(props: FeedStreamProps): ReactNode {
   const { state } = props;
-  const rows = feedRows({
-    expanded: state.expanded,
-    held: props.held,
-    me: props.me,
-    messages: state.messages,
-    readPosition: props.readPosition,
-  });
+  const rows = feedRows({ ...props, expanded: state.expanded, messages: state.messages });
   return (
     <>
       <MessageList busy={state.older.status === "loading"} feed={props.feed} label={props.label} more={state.hasMore}>
@@ -45,8 +39,12 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
                 fold={row.fold}
                 channel={props.channel}
                 key={`fold-${row.fold.run.join("-")}`}
+                open={props.open}
               />
             );
+          }
+          if (state.deleted.has(row.row.message.id)) {
+            return <DeletedMessage key={row.row.message.id} />;
           }
           return (
             <MessageEntry
@@ -58,6 +56,7 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
               menu={props.menu}
               news={props.threads.get(row.row.message.id) ?? null}
               open={props.open}
+              opened={false}
               parent={null}
               threadParent={null}
               receipts={state.receipts}

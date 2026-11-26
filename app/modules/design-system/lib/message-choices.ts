@@ -4,7 +4,7 @@ import type { MessageItemParts } from "./message-parts.ts";
 import { MessageKeys } from "./message-keys-parts.ts";
 import type { MessageShortcuts } from "./message-keys-parts.ts";
 
-const TEXT = { copyLink: "Copy link", markUnread: "Mark unread", openThread: "Open thread" } as const;
+const TEXT = { copyLink: "Copy link", delete: "Delete", markUnread: "Mark unread", openThread: "Open thread" } as const;
 
 interface ChoicesOf extends MessageActionParts {
   readonly menu: MessageMenuParts;
@@ -33,6 +33,13 @@ function openThreadOf({ keys, parts }: Keyed): readonly MenuChoice[] {
   return [
     { href: parts.threadHref, icon: "open-thread", keys: keys.openThread, label: TEXT.openThread, onSelect: null },
   ];
+}
+
+function deleteOf(menu: MessageMenuParts, keys: MessageShortcuts): readonly MenuChoice[] {
+  if (menu.onDelete === null) {
+    return [];
+  }
+  return [{ href: null, icon: "delete", keys: keys.delete, label: TEXT.delete, onSelect: menu.onDelete }];
 }
 
 export function hoverThread(parts: Pick<MessageItemParts, "menu" | "threadOnHover">): ThreadChoice | null {
@@ -76,6 +83,7 @@ export function useMessageChoices({
             onSelect: choice.onSelect,
           }),
         ),
+      ...deleteOf(menu, keys),
     ],
     [actionHref, actionLabel, keys, menu, onAction, threadHref],
   );

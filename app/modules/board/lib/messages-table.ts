@@ -12,6 +12,7 @@ import type {
 } from "../../sdk/index.ts";
 import { LOADING } from "./message-states.ts";
 import { closedAs } from "./thread-closing.ts";
+import { viewsMarked } from "./message-deletions.ts";
 import { withNewestReply } from "../../messages/index.ts";
 import { withReceipts } from "./receipts.ts";
 
@@ -236,6 +237,24 @@ function withSearched({ held, results }: Searched): MessagesHeld {
   return { ...held, table, threadsClosed };
 }
 
+function withDeleted(held: MessagesHeld, deletion: Extract<CookoutEvent, { type: "message-deleted" }>): MessagesHeld {
+  const marked = viewsMarked({ deletion, held });
+  if (typeof deletion.parent !== "object") {
+    return marked;
+  }
+  return withFresh({ fresh: { messages: [deletion.parent], receipts: [] }, held: marked });
+}
+
+function appliedToItems({ event, held }: HeldEvent): MessagesHeld {
+  if (event.type === "inbox-item") {
+    return withItemMessages(held, [event.item]);
+  }
+  if (event.type === "message-deleted") {
+    return withDeleted(held, event);
+  }
+  return held;
+}
+
 function appliedToMessages({ event, held }: HeldEvent): MessagesHeld {
   if (event.type === "message") {
     return withMessage(held, event.message);
@@ -246,10 +265,7 @@ function appliedToMessages({ event, held }: HeldEvent): MessagesHeld {
   if (event.type === "thread") {
     return withClosing(held, event.parent);
   }
-  if (event.type === "inbox-item") {
-    return withItemMessages(held, [event.item]);
-  }
-  return held;
+  return appliedToItems({ event, held });
 }
 
 function heldTopLevel({ held, id }: { readonly held: MessagesHeld; readonly id: MessageId }): TopLevelMessage | null {

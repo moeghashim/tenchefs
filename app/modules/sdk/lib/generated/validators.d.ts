@@ -2,12 +2,13 @@
 import type { AgentJoinCollectedResponse, AgentJoinRequestResponse, AgentJoinRequestStartedResponse, AgentSessionResponse, DenyAgentJoinResponse, LeaveResponse, ListAgentSessionsResponse, RevokeAgentSessionResponse } from "../../../agent-sessions/index.ts";
 import type { JoinCodeResponse } from "../../../agent-sessions/join-codes.ts";
 import type { ChannelResponse, ListChannelsResponse } from "../../../channels/index.ts";
-import type { AgentJoinRequestsEvent, AgentSessionEvent, ChannelDeletedEvent, ChannelEvent, CleanCloseResponse, CommandEvent, ConnectedEvent, DeactivatedQuietAgentEvent, DeactivationOfferEvent, IdentityDeletedEvent, IdentityEvent, InboxItemEvent, MessageEvent, NudgeEvent, NudgeReadEvent, OfflineAlertEvent, PresenceEvent, PresenceResponse, ReactionEvent, ReadPositionEvent, ReadPositionMovedBackEvent, ReadReceiptEvent, SubscriptionEvent, ThreadEvent } from "../../../events/index.ts";
+import type { AgentJoinRequestsEvent, AgentSessionEvent, ChannelDeletedEvent, ChannelEvent, CleanCloseResponse, CommandEvent, ConnectedEvent, DeactivatedQuietAgentEvent, DeactivationOfferEvent, IdentityDeletedEvent, IdentityEvent, InboxItemEvent, MessageDeletedEvent, MessageEvent, NudgeEvent, NudgeReadEvent, OfflineAlertEvent, PresenceEvent, PresenceResponse, ReactionEvent, ReadPositionEvent, ReadPositionMovedBackEvent, ReadReceiptEvent, SubscriptionEvent, ThreadEvent } from "../../../events/index.ts";
 import type { ErrorResponse, HealthResponse, SchemaProblems } from "../../../http/index.ts";
 import type { DeactivateIdentityResponse, IdentityMessageCountResponse, IdentityResponse, IdentityWithTokenResponse, ListIdentitiesResponse } from "../../../identities/index.ts";
 import type { AckAllResponse, AckResponse, DeactivatedQuietAgentResponse, DeactivationOfferResponse, FollowResponse, InboxHistoryResponse, InboxResponse, MarkUnreadResponse, NudgeResponse, OfflineAlertResponse, ReadPositionsResponse, SubscriptionResponse } from "../../../inbox/index.ts";
 import type { LoginCollectedResponse, LoginRequestResponse, LoginRequestStartedResponse, LogoutResponse } from "../../../logins/index.ts";
 import type { ListMessagesResponse, MessageResponse, ReactionsResponse, ThreadResponse, TopLevelMessageResponse, ListOpenThreadsResponse } from "../../../messages/index.ts";
+import type { DeletedMessageResponse } from "../../../messages/client.ts";
 import type { ListScheduledMessagesResponse, ScheduledMessageEvent, ScheduledMessagePreviewResponse, ScheduledMessageResponse } from "../../../scheduled-messages/index.ts";
 import type { SearchResponse } from "../../../search/index.ts";
 import type { TriggerEvent, TriggerResponse } from "../../../triggers/index.ts";
@@ -36,6 +37,7 @@ export declare function isDeactivationOfferEvent(data: unknown): data is Deactiv
 export declare function isIdentityDeletedEvent(data: unknown): data is IdentityDeletedEvent;
 export declare function isIdentityEvent(data: unknown): data is IdentityEvent;
 export declare function isInboxItemEvent(data: unknown): data is InboxItemEvent;
+export declare function isMessageDeletedEvent(data: unknown): data is MessageDeletedEvent;
 export declare function isMessageEvent(data: unknown): data is MessageEvent;
 export declare function isNudgeEvent(data: unknown): data is NudgeEvent;
 export declare function isNudgeReadEvent(data: unknown): data is NudgeReadEvent;
@@ -78,6 +80,7 @@ export declare function isReactionsResponse(data: unknown): data is ReactionsRes
 export declare function isThreadResponse(data: unknown): data is ThreadResponse;
 export declare function isTopLevelMessageResponse(data: unknown): data is TopLevelMessageResponse;
 export declare function isListOpenThreadsResponse(data: unknown): data is ListOpenThreadsResponse;
+export declare function isDeletedMessageResponse(data: unknown): data is DeletedMessageResponse;
 export declare function isListScheduledMessagesResponse(data: unknown): data is ListScheduledMessagesResponse;
 export declare function isScheduledMessageEvent(data: unknown): data is ScheduledMessageEvent;
 export declare function isScheduledMessagePreviewResponse(data: unknown): data is ScheduledMessagePreviewResponse;

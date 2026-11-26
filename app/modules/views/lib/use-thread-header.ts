@@ -35,6 +35,7 @@ interface ThreadChoicesOf extends Omit<ThreadHeaderOf, "alone" | "state" | "thre
 interface ThreadHeader {
   readonly alone: PanelAloneParts;
   readonly closeHref: string;
+  readonly gone: boolean;
   readonly menu: ActionMenuParts | null;
   readonly onClose: () => void;
 }
@@ -63,7 +64,8 @@ function aloneLink({ alone, channel, thread }: Pick<ThreadHeaderOf, "alone" | "c
 }
 
 function useThreadHeader({ alone, channel, closing, menu, state, thread }: ThreadHeaderOf): ThreadHeader {
-  const parent = state.status === "loaded" && state.parent;
+  const gone = state.status === "loaded" && state.deleted.has(state.parent.id);
+  const parent = state.status === "loaded" && !gone && state.parent;
   const announce = useContext(Announcer);
   const { watch } = useContext(LandingContext);
   const onClose = useCallback(() => {
@@ -74,6 +76,7 @@ function useThreadHeader({ alone, channel, closing, menu, state, thread }: Threa
     const shown = {
       alone: aloneLink({ alone, channel, thread }),
       closeHref: hrefOf({ channel, name: "channel" }),
+      gone,
       onClose,
     };
     if (parent === false) {
@@ -83,7 +86,7 @@ function useThreadHeader({ alone, channel, closing, menu, state, thread }: Threa
       ...shown,
       menu: { choices: threadChoices({ announce, channel, closing, menu, parent }), label: TEXT.menu },
     };
-  }, [alone, announce, channel, closing, menu, onClose, parent, thread]);
+  }, [alone, announce, channel, closing, gone, menu, onClose, parent, thread]);
 }
 
 export { useThreadHeader };

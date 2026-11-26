@@ -42,12 +42,13 @@ const READ_RECEIPTS_MIGRATION = `CREATE TABLE read_receipts (
 
 const RECORD_IN_CHANNEL = `INSERT INTO read_receipts (message_id, identity_name, seen_at)
   SELECT m.id, ?1, ?4 FROM messages AS m
-  WHERE m.channel = ?2 AND m.reply_to IS NULL AND m.id <= ?3 AND ${receiptIdentitySql("?1")}
+  WHERE m.channel = ?2 AND m.reply_to IS NULL AND m.id <= ?3 AND m.deleted_at IS NULL
+    AND ${receiptIdentitySql("?1")}
   ON CONFLICT DO NOTHING RETURNING message_id, identity_name, seen_at`;
 
 const RECORD_IN_THREAD = `INSERT INTO read_receipts (message_id, identity_name, seen_at)
   SELECT m.id, ?1, ?4 FROM messages AS m
-  WHERE m.reply_to = ?2 AND m.id <= ?3 AND ${receiptIdentitySql("?1")}
+  WHERE m.reply_to = ?2 AND m.id <= ?3 AND m.deleted_at IS NULL AND ${receiptIdentitySql("?1")}
   ON CONFLICT DO NOTHING RETURNING message_id, identity_name, seen_at`;
 
 const ReceiptRow = Schema.Struct({
@@ -105,7 +106,11 @@ function receiptsOf({ db, ids }: Listing): Fails<readonly ReadReceipt[]> {
     ", ",
   );
   return Effect.flatMap(
-    db.all(`SELECT message_id, identity_name, seen_at FROM read_receipts WHERE message_id IN (${places})`, ...ids),
+    db.all(
+      `SELECT r.message_id, r.identity_name, r.seen_at FROM read_receipts AS r JOIN messages AS m ON m.id = r.message_id
+        WHERE r.message_id IN (${places}) AND m.deleted_at IS NULL`,
+      ...ids,
+    ),
     receiptRows,
   );
 }

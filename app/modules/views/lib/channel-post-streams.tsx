@@ -1,14 +1,13 @@
 import type { Message, MessageId, ReadReceipt, Reply, TopLevelMessage } from "../../sdk/index.ts";
-import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
-import { MessageStream } from "./message-stream.tsx";
+import type { MessageMenu } from "../../unread/index.ts";
 import { PostReplies } from "./post-replies.tsx";
+import { PostStream } from "./post-stream.tsx";
 import type { ReactNode } from "react";
 import type { Reply as ReplyAction } from "./use-message-menu.ts";
 import { useMemo } from "react";
 
 const TEXT = { later: "Later posts", posts: "Posts" } as const;
 const NONE = 0;
-const NO_THREADS: ReadonlyMap<MessageId, ThreadNews> = new Map();
 
 interface ChannelPostStreamsProps {
   readonly before: TopLevelMessage | null;
@@ -44,39 +43,29 @@ export function ChannelPostStreams(props: ChannelPostStreamsProps): ReactNode {
   const later = useMemo(() => shown.filter((message) => message.id > post.id), [shown, post]);
   return (
     <>
-      <MessageStream
-        closing={null}
+      <PostStream
         after={null}
-        channel={null}
         label={TEXT.posts}
         me={me}
         menu={menu}
         messages={upTo}
-        open={null}
         readPosition={readPosition}
         receipts={receipts}
         reply={props.reply}
-        threads={NO_THREADS}
-        threadParent={null}
       />
       {props.replies.length > NONE && (
         <PostReplies me={me} menu={menu} post={post} receipts={props.replyReceipts} replies={props.replies} />
       )}
       {later.length > NONE && (
-        <MessageStream
-          closing={null}
+        <PostStream
           after={post}
-          channel={null}
           label={TEXT.later}
           me={me}
           menu={menu}
           messages={later}
-          open={null}
           readPosition={readPosition}
           receipts={receipts}
           reply={props.reply}
-          threads={NO_THREADS}
-          threadParent={null}
         />
       )}
     </>

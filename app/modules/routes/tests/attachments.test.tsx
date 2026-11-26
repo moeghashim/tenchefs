@@ -7,6 +7,7 @@ import { hillsPng } from "../../testing/index.ts";
 import { openWithClockStopped } from "./clock.ts";
 import { postedWithFiles } from "./attachment-posts.ts";
 import { subscribedReader } from "./inbox-reader.ts";
+import { viewOpened } from "./view-opened.ts";
 
 const NOTES_LENGTH = 1536;
 const LOG_LENGTH = 12_000;
@@ -154,7 +155,12 @@ it("a message's attachments show in the Inbox conversation", { timeout: 5000 }, 
     client: poster,
     text: "Here are the files",
   });
-  const close = openWithClockStopped({ client: reader, hash: "#/inbox/web-attachments-inbox" });
+  const { close } = await viewOpened({
+    client: reader,
+    hash: "#/inbox/web-attachments-inbox",
+    open: openWithClockStopped,
+    waitingOn: ["inbox", "listMessages"],
+  });
   await inConversation().findByRole("list", { name: "Attachments" });
 
   expect(shownIn(inConversation())).toStrictEqual(expected(message));

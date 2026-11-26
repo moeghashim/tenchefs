@@ -5,20 +5,21 @@ import { useId } from "react";
 
 interface ClosedFoldParts extends ButtonParts {
   readonly day: string | null;
+  readonly current: boolean;
 }
 
 export function ClosedFold(parts: ClosedFoldParts): ReactNode {
-  const { day, onClick } = parts;
+  const { current, day, onClick } = parts;
   const button = useId();
   if (day !== null) {
     return (
-      <FoldDay label={day} onClick={onClick}>
+      <FoldDay current={current} label={day} onClick={onClick}>
         {parts.children}
       </FoldDay>
     );
   }
   return (
-    <article aria-labelledby={button} data-closed-fold className="my-3 flex items-center px-5">
+    <article aria-current={current} aria-labelledby={button} data-closed-fold className="my-3 flex items-center px-5">
       <span className="h-px flex-1 border-t border-dashed" />
       <button
         id={button}

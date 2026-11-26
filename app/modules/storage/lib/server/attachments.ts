@@ -145,10 +145,13 @@ function rowToAttachment(row: unknown): Fails<Attachment> {
   );
 }
 
+const FIND_ATTACHMENT = `SELECT a.id, a.name, a.size, a.content_type, a.image, a.width, a.height
+  FROM attachments AS a JOIN messages AS m ON m.id = a.message_id WHERE a.id = ? AND m.deleted_at IS NULL`;
+
 function sqlAttachments(db: SqlDatabase): AttachmentsSection {
   return {
     findAttachment: (id) =>
-      db.get("SELECT id, name, size, content_type, image, width, height FROM attachments WHERE id = ?", id).pipe(
+      db.get(FIND_ATTACHMENT, id).pipe(
         Effect.flatMap((row) => {
           if (Predicate.isObject(row)) {
             return rowToAttachment(row);

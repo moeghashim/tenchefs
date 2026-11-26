@@ -45,15 +45,15 @@ function openThreadsSql(db: SqlDatabase): string {
   return `WITH open_threads AS (
     SELECT parent.id AS thread_id, ${greatest}(
       coalesce(
-        (SELECT latest.created_at FROM messages AS latest WHERE latest.reply_to = parent.id
+        (SELECT latest.created_at FROM messages AS latest WHERE latest.reply_to = parent.id AND latest.deleted_at IS NULL
           ORDER BY latest.id DESC LIMIT 1),
         parent.created_at
       ),
       coalesce(parent.reopened_at, '')
     ) AS last_activity_at
     FROM messages AS parent
-    WHERE parent.reply_to IS NULL AND parent.closed_at IS NULL AND (? = ${String(ALL)} OR EXISTS (
-      SELECT 1 FROM messages AS involved WHERE (involved.id = parent.id OR involved.reply_to = parent.id)
+    WHERE parent.reply_to IS NULL AND parent.closed_at IS NULL AND parent.deleted_at IS NULL AND (? = ${String(ALL)} OR EXISTS (
+      SELECT 1 FROM messages AS involved WHERE (involved.id = parent.id OR involved.reply_to = parent.id) AND involved.deleted_at IS NULL
         AND (involved.author_name = ? OR EXISTS (SELECT 1 FROM ${mentionsOf}(involved.mentions) WHERE value = ?))
     ))
   )

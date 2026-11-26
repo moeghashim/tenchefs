@@ -3,7 +3,7 @@ import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
 import { inPane, inProfile, inSidebar, inTopBar, sidebarLink } from "./regions.ts";
 import type { Person } from "./people.ts";
-import { logInWithStream } from "./login.ts";
+import { logInThroughFormWithStream } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
@@ -32,7 +32,7 @@ async function boardOf(prefix: string): Promise<Board> {
 
 async function loggedIn(page: Page, prefix: string): Promise<Board> {
   const board = await boardOf(prefix);
-  await logInWithStream({ page, token: board.reader.token });
+  await logInThroughFormWithStream({ page, token: board.reader.token });
 
   await expect(page.getByRole("list", { exact: true, name: "Channels" })).toBeVisible();
 

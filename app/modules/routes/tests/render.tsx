@@ -1,7 +1,15 @@
 import type { AgentJoinApprovals, LoginApprovals, Session } from "../../board/index.ts";
 import type { BoardStore, BoardStoreClient, ComposerOptions, Live, Reading, Unread } from "./defaults.ts";
 import { adminClient, anonymousClient } from "./identities.ts";
-import { boardStoreFor, composerFor, createKeymap, createUnread, readingFor, unreadFor } from "./defaults.ts";
+import {
+  boardStoreFor,
+  composerFor,
+  createKeymap,
+  createUnread,
+  readingFor,
+  settledCalls,
+  unreadFor,
+} from "./defaults.ts";
 import { cleanup, render } from "@testing-library/react";
 import { createAgentJoinApprovals, createLoginApprovals } from "../../board/index.ts";
 import { onTestFinished, vi } from "vitest";
@@ -152,7 +160,10 @@ export function openBoard(opening: BoardOpening): () => void {
   const unread = unreadFor({ boardStore, unread: opening.unread });
   const layout = opening.layout ?? browserLayout();
   const { agentJoinApprovals, loginApprovals } = approvalsOf(opening);
-  onTestFinished(cleanup);
+  onTestFinished(async () => {
+    await settledCalls();
+    cleanup();
+  });
   return render(
     <CookoutApp
       agentJoinApprovals={agentJoinApprovals}

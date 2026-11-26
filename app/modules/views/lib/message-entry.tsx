@@ -16,6 +16,7 @@ interface Row {
   readonly day: string | null;
   readonly grouped: boolean;
   readonly unreadLine: boolean;
+  readonly belowNewLine: boolean;
 }
 
 interface MessageEntryProps {
@@ -31,6 +32,7 @@ interface MessageEntryProps {
   readonly closing: MenuClosing;
   readonly threadParent: TopLevelMessage | null;
   readonly reply: Reply | null;
+  readonly opened: boolean;
 }
 
 export function MessageEntry(props: MessageEntryProps): ReactNode {
@@ -66,7 +68,14 @@ export function MessageEntry(props: MessageEntryProps): ReactNode {
       time={useMessageTime({ message, parent: props.parent, receipts: props.receipts })}
       unreadLine={props.row.unreadLine}
     >
-      <MessageEntryBody closed={props.closed} href={href} me={props.me} message={message} news={props.news} />
+      <MessageEntryBody
+        closed={props.closed}
+        href={href}
+        me={props.me}
+        message={message}
+        news={props.news}
+        opened={props.opened || props.row.belowNewLine}
+      />
     </MessageItem>
   );
 }

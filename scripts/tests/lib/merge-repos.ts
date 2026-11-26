@@ -2,9 +2,11 @@ import { DONE, stop } from "../../lib/merge-steps.ts";
 import type { Landing, PullRequest } from "../../lib/merge-pull-request.ts";
 import type { MergeOptions, Merged } from "../../lib/merge-ticket.ts";
 import type { Step, Stopped } from "../../lib/merge-steps.ts";
+import { builtOnce, writeSnapshot } from "./directory-snapshot.ts";
 import { continueMerge, mergeTicket } from "../../lib/merge-ticket.ts";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { MergeRules } from "../../lib/merge-resolve.ts";
+import type { Snapshot } from "./directory-snapshot.ts";
 import { execFileSync } from "node:child_process";
 import { onTestFinished } from "vitest";
 import path from "node:path";
@@ -33,6 +35,9 @@ const INDENT = 2;
 const START = 0;
 const SHORT = 12;
 const BRANCH = `ticket-${TICKET}`;
+const ORIGIN = "origin.git";
+const WORK = "work";
+const OTHER = "other";
 const ATTEMPTS = 3;
 const PR = { number: 9, url: "https://github.com/o/r/pull/9" } as const;
 const FLOOR = { base: ["90", "95"], merged: ["91", "94"], ticket: ["92", "94"], v1: ["91", "95"] } as const;
@@ -90,7 +95,8 @@ function floor([branches, lines]: readonly [string, string]): string {
 
 function clone(root: string, origin: string, name: string): string {
   const dir = path.join(root, name);
-  git(root, "init", "-q", "-b", "v1", dir);
+  git(root, "init", "-q", "--template=", "-b", "v1", dir);
+  mkdirSync(path.join(dir, ".git", "hooks"));
   git(dir, "config", "user.name", "Test");
   git(dir, "config", "user.email", "test@example.com");
   git(dir, "config", "commit.gpgsign", "false");
@@ -107,8 +113,9 @@ function temporaryRoot(): string {
 }
 
 function bareOrigin(root: string): string {
-  const origin = path.join(root, "origin.git");
-  git(root, "init", "-q", "--bare", "-b", "v1", origin);
+  const origin = path.join(root, ORIGIN);
+  git(root, "init", "-q", "--template=", "--bare", "-b", "v1", origin);
+  mkdirSync(path.join(origin, "hooks"));
   git(origin, "config", "receive.denyNonFastForwards", "true");
   return origin;
 }
@@ -118,11 +125,10 @@ function pushToV1(other: string, files: Readonly<Record<string, string>>): void 
   git(other, "push", "-q", "origin", "v1");
 }
 
-function repos(): Repos {
-  const root = temporaryRoot();
+function build(root: string): void {
   const origin = bareOrigin(root);
-  const work = clone(root, origin, "work");
-  const other = clone(root, origin, "other");
+  const work = clone(root, origin, WORK);
+  const other = clone(root, origin, OTHER);
   const base = { "floor.ts": floor(FLOOR.base), "gen/out.txt": generated("a"), "migrations.ts": migrations("a") };
   commit(work, "base", {
     ...base,
@@ -137,7 +143,22 @@ function repos(): Repos {
   git(work, "push", "-q", "origin", "v1");
   git(other, "pull", "-q", "origin", "v1");
   git(work, "checkout", "-q", "-b", BRANCH);
-  return { origin, other, root, work };
+}
+
+function pointedAtOrigin(snapshot: Snapshot, root: string): void {
+  for (const cloned of [path.join(root, WORK), path.join(root, OTHER)]) {
+    const config = path.join(cloned, ".git", "config");
+    writeFileSync(config, readFileSync(config, "utf8").replaceAll(snapshot.root, root));
+    git(cloned, "update-index", "-q", "--refresh");
+  }
+}
+
+function repos(): Repos {
+  const root = temporaryRoot();
+  const snapshot = builtOnce({ build, name: "merge-ticket" });
+  writeSnapshot({ root, snapshot });
+  pointedAtOrigin(snapshot, root);
+  return { origin: path.join(root, ORIGIN), other: path.join(root, OTHER), root, work: path.join(root, WORK) };
 }
 
 function attemptOf(sha: string): string {

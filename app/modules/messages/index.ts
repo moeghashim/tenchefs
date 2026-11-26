@@ -1,7 +1,8 @@
 /**
  * Messages and threads on the wire, shared by the server, the SDK and the web: the `MessageId` brand and its check,
  * `Message` as a union tagged by `kind`, the requests and answers of posting, threads and channel pages, their paths,
- * and the error codes they refuse with.
+ * and the error codes they refuse with. Every read leaves deleted messages out (pages, threads counting only live
+ * replies, search, open threads, receipts, Reactions, Attachments), and reacting to one is 404 `message_not_found`.
  */
 import type { Harness, IdentityName, Owner } from "../identities/index.ts";
 import type { ChannelName } from "../channels/index.ts";
@@ -264,6 +265,9 @@ export const messagesPath = "/v1/messages";
 
 /** `GET /v1/channels/:name/messages?before=<id>&limit=<n>`: a page of the channel's top-level messages. */
 export const channelMessagesPath = "/v1/channels/:name/messages";
+
+/** `DELETE /v1/messages/:id`: deletes a message, and a top-level message's whole thread. */
+export const messagePath = "/v1/messages/:id";
 
 /** `GET /v1/messages/:id/thread`: the thread holding the message. */
 export const threadPath = "/v1/messages/:id/thread";

@@ -1,18 +1,27 @@
 # Deploy the cookout to Fly (app `cookout`, lhr) and the example handler (app
-# `cookout-handler-example`, lhr) on every push to main, after `pnpm e2e:docker` passes, then check
-# the deployed stream, that a command call gets the handler's reply, and that the full e2e suite
-# passes against the deployed URL and leaves none of its e2e- identities there, then tags the deployed
-# commit deploy/<short-sha>. A failure in either e2e
-# stage fails the run. A workflow_dispatch on any branch runs the same e2e and the deployed checks
-# without deploying the cookout; `restart: true`
-# also restarts its machine first, and `handler: true` deploys the example handler from that branch.
-# If the cookout's deploy or the deployed checks fail on main, `rollback` redeploys the image it ran before.
-# Recipes: docs/verification.md ("Deploy it to Fly").
+# `cookout-handler-example`, lhr) when the Release workflow calls it after its gate passed on a
+# commit (`gated: true`, `ref: <sha>`; its own e2e-docker is skipped, since the gate ran it), or on a
+# workflow_dispatch on main after `pnpm e2e:docker` passes. Then it checks the deployed stream, that
+# a command call gets the handler's reply, and that the full e2e suite passes against the deployed
+# URL and leaves none of its e2e- identities there, then tags the deployed commit deploy/<short-sha>.
+# A push to main starts nothing: Release moves main with its own token, which starts no workflow.
+# A workflow_dispatch on any other branch runs the same e2e and the deployed checks without
+# deploying the cookout; `restart: true` also restarts its machine first, and `handler: true`
+# deploys the example handler from that branch. If the cookout's deploy or the deployed checks fail,
+# `rollback` redeploys the image it ran before. Recipes: docs/verification.md ("Deploy it to Fly").
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      gated:
+        description: Release's gate passed on ref, so deploy it and skip e2e-docker
+        type: boolean
+        default: false
+      ref:
+        description: The commit to deploy
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       restart:
@@ -33,19 +42,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Release's gate already ran it on the commit it calls Deploy with.
   e2e-docker:
+    if: ${{ !inputs.gated }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: e2e-docker
-      - run: pnpm exec playwright install --only-shell chromium
+      - uses: ./.github/actions/install-chromium
       - run: pnpm e2e:docker
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: ${{ !cancelled() && (needs.e2e-docker.result == 'success' || inputs.gated) && (github.ref == 'refs/heads/main' || inputs.gated) }}
     needs: e2e-docker
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -55,6 +77,8 @@ jobs:
       previous-image: ${{ steps.previous.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       # Only for scripts/rollback-image.ts, which needs no installed dependencies.
       - uses: actions/setup-node@v4
         with:
@@ -73,8 +97,8 @@ jobs:
   deploy-handler:
     needs: [e2e-docker, deploy]
     if: >-
-      ${{ !cancelled() && needs.e2e-docker.result == 'success' && needs.deploy.result != 'failure'
-      && (github.ref == 'refs/heads/main' || inputs.handler) }}
+      ${{ !cancelled() && (needs.e2e-docker.result == 'success' || inputs.gated) && needs.deploy.result != 'failure'
+      && ((github.ref == 'refs/heads/main' || inputs.gated) || inputs.handler) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -88,6 +112,17 @@ jobs:
             if [ -z "${!name}" ]; then echo "::error::$name is empty: set its GitHub secret (docs/verification.md, \"Deploy the example handler to Fly\")"; exit 1; fi
           done
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: deploy-handler
@@ -99,7 +134,7 @@ jobs:
 
   deployed:
     needs: [e2e-docker, deploy, deploy-handler]
-    if: ${{ !cancelled() && needs.e2e-docker.result == 'success' && needs.deploy.result != 'failure' && needs.deploy-handler.result != 'failure' }}
+    if: ${{ !cancelled() && (needs.e2e-docker.result == 'success' || inputs.gated) && needs.deploy.result != 'failure' && needs.deploy-handler.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -113,6 +148,17 @@ jobs:
             if [ -z "${!name}" ]; then echo "::error::$name is empty: set its GitHub secret (docs/verification.md, \"Deploy it to Fly\")"; exit 1; fi
           done
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
       - uses: ./.github/actions/setup
         with:
           cache-name: deployed
@@ -131,7 +177,7 @@ jobs:
         run: scripts/stream-check.sh 65
       - name: A call to the example handler gets its reply within 30 s
         run: scripts/handler-check.sh
-      - run: pnpm exec playwright install --only-shell chromium
+      - uses: ./.github/actions/install-chromium
       - name: The full e2e suite passes against the deployed cookout
         run: pnpm --filter ./packages/e2e test
         env:
@@ -160,7 +206,7 @@ jobs:
   rollback:
     needs: [deploy, deployed]
     if: >-
-      ${{ !cancelled() && github.ref == 'refs/heads/main'
+      ${{ !cancelled() && (github.ref == 'refs/heads/main' || inputs.gated)
       && (needs.deploy.result == 'failure' || needs.deployed.result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -170,6 +216,8 @@ jobs:
       FAILED_JOB: ${{ needs.deploy.result == 'failure' && 'deploy' || 'deployed' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -191,21 +239,25 @@ jobs:
   # migrations list with the newest deploy/* tag's (#249). Tags are only ever added, never moved or force-pushed.
   tag-deployed:
     needs: [deploy, deployed]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.deploy.result == 'success' && needs.deployed.result == 'success' }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || inputs.gated) && needs.deploy.result == 'success' && needs.deployed.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - name: Tag the deployed commit deploy/<short-sha>
+        env:
+          SHA: ${{ inputs.ref || github.sha }}
         run: |
-          tag="deploy/${GITHUB_SHA::8}"
+          tag="deploy/${SHA::8}"
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
             echo "$tag already exists; tags are never moved."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Deployed to Fly by run $GITHUB_RUN_ID" "$GITHUB_SHA"
+          git tag -a "$tag" -m "Deployed to Fly by run $GITHUB_RUN_ID" "$SHA"
           git push origin "refs/tags/$tag"

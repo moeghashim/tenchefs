@@ -14,7 +14,15 @@ const EXIT_SUCCESS = 0;
 rmSync(OUTPUT, { force: true, recursive: true });
 mkdirSync(RECORDS, { recursive: true });
 
-const ran = spawnSync("pnpm", ["exec", "playwright", "test", ...process.argv.slice(FIRST_ARGUMENT)], {
+const RECORD_PREFIX = "--record-shard=";
+const SHARD_PREFIX = "--shard=";
+const args = process.argv.slice(FIRST_ARGUMENT);
+const playwrightArgs = args.filter((arg) => !arg.startsWith(RECORD_PREFIX));
+const labelled = args.find((arg) => arg.startsWith(RECORD_PREFIX)) ?? "";
+const sharded = args.find((arg) => arg.startsWith(SHARD_PREFIX)) ?? `${SHARD_PREFIX}1/1`;
+const shard = labelled.slice(RECORD_PREFIX.length) || sharded.slice(SHARD_PREFIX.length);
+
+const ran = spawnSync("pnpm", ["exec", "playwright", "test", ...playwrightArgs], {
   stdio: "inherit",
 });
 
@@ -24,11 +32,6 @@ function records(): readonly string[] {
     .flatMap((file) => readFileSync(path.join(RECORDS, file), "utf8").split("\n"))
     .filter((line) => line !== "");
 }
-
-const SHARD_PREFIX = "--shard=";
-const shard = (process.argv.find((arg) => arg.startsWith(SHARD_PREFIX)) ?? `${SHARD_PREFIX}1/1`).slice(
-  SHARD_PREFIX.length,
-);
 
 if (ran.status === EXIT_SUCCESS) {
   const commit = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();

@@ -177,9 +177,11 @@ function whileUnavailable<Value, Needs>(
 function start(
   opened: ClientWithAgentSessionState,
 ): Effect.Effect<Stream.Stream<readonly Heard[], CallFailure>, CallFailure, Scope.Scope> {
-  return whileUnavailable(connect(opened, Option.none())).pipe(
-    Effect.tap(() => note({ watching: `${opened.connection.url}${eventsPath}` })),
-  );
+  return whileUnavailable(connect(opened, Option.none()));
+}
+
+function sayWatching(opened: ClientWithAgentSessionState): Effect.Effect<void> {
+  return note({ watching: `${opened.connection.url}${eventsPath}` });
 }
 
 function lastSeenAfter(event: Heard): (seen: Option.Option<MessageId>) => Option.Option<MessageId> {
@@ -251,4 +253,4 @@ function source({ first, opened }: Resuming): Stream.Stream<Heard, CallFailure> 
   );
 }
 
-export { type Heard, type WatchedEvent, isWatched, source, start, whileUnavailable };
+export { type Heard, type WatchedEvent, isWatched, sayWatching, source, start, whileUnavailable };

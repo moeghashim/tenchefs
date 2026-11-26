@@ -1,11 +1,10 @@
-import { changesetMissing, packageShips } from "./lib/changesets.ts";
+import { duplicateNumbers, takenOnV1 } from "./lib/adr-numbers.ts";
 import { existsSync, readFileSync } from "node:fs";
-import type { Change } from "./lib/changesets.ts";
 import { MIGRATION_LISTS } from "./lib/migration-lists.ts";
 import type { SpawnSyncReturns } from "node:child_process";
 import { adrEdits } from "./lib/adr-append-only.ts";
-import { duplicateNumbers } from "./lib/adr-numbers.ts";
 import { migrationsInserted } from "./lib/migrations-append-only.ts";
+import { mixedLocalActions } from "./lib/workflow-actions.ts";
 import { spawnSync } from "node:child_process";
 
 const SELF = "scripts/hygiene.ts";
@@ -137,6 +136,13 @@ function appendOnlyAdrs(): readonly string[] {
   });
 }
 
+function adrsTakenOnV1(): readonly string[] {
+  return takenOnV1({
+    added: git(["diff", "--name-only", "--no-renames", "--diff-filter=A", ...adrSides(), "--", ADRS]),
+    v1: git(["ls-tree", "--name-only", "origin/v1", "--", "docs/adr/"]),
+  });
+}
+
 function headList(file: string): string {
   if (!existsSync(file)) {
     return "";
@@ -165,35 +171,9 @@ function deployedMigrations(): readonly string[] {
   return MIGRATION_LISTS.flatMap((file) => deployedList(tag, file));
 }
 
-const MERGE_PARENTS_LINE = 3;
-
-function isMergeOnV1(): boolean {
-  const [mergeBase = ""] = git(["merge-base", "HEAD", "origin/v1"]);
-  const headAndParents = git(["rev-list", "--parents", "--max-count=1", "HEAD"]).join(" ").split(" ");
-  const [head] = headAndParents;
-  return head === mergeBase && headAndParents.length >= MERGE_PARENTS_LINE;
-}
-
-function change(line: string): Change {
-  const [status = "", ...files] = line.split("\t");
-  const [kind = ""] = status;
-  const [file = ""] = files.toReversed();
-  return { file, status: kind };
-}
-
-function changesetSides(): readonly string[] {
-  if (STAGED) {
-    return ["--cached", comparedBase()];
-  }
-  return [comparedBase(), "HEAD"];
-}
-
-async function changesets(): Promise<readonly string[]> {
-  if (!STAGED && isMergeOnV1()) {
-    return [];
-  }
-  const changes = git(["diff", "--name-status", "--find-renames", ...changesetSides()]).map((line) => change(line));
-  return changesetMissing({ changes, ships: await packageShips() });
+function workflowActions(): readonly string[] {
+  const files = git(["ls-files", ".github/workflows/*.yml"]);
+  return mixedLocalActions(files.map((file) => ({ path: file, text: readFileSync(file, "utf8") })));
 }
 
 const failures = [
@@ -204,8 +184,9 @@ const failures = [
   ...wikiCitations(),
   ...adrNumbers(),
   ...appendOnlyAdrs(),
+  ...adrsTakenOnV1(),
   ...deployedMigrations(),
-  ...(await changesets()),
+  ...workflowActions(),
 ];
 for (const failure of failures) {
   console.error(`hygiene: ${failure}`);

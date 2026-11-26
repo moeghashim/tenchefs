@@ -15,7 +15,7 @@ interface ReceivedCall {
 interface Receiver {
   readonly answerWith: (body: unknown) => Effect.Effect<void>;
   readonly calls: Effect.Effect<readonly ReceivedCall[]>;
-  readonly failNext: (count: number, status: number) => Effect.Effect<void>;
+  readonly failNext: (count: number, status: number, body: Option.Option<unknown>) => Effect.Effect<void>;
   readonly url: string;
   readonly waitForCalls: (count: number) => Effect.Effect<readonly ReceivedCall[]>;
 }
@@ -33,28 +33,36 @@ function headersFor(status: number): Readonly<Record<string, string>> {
   return {};
 }
 
-function answerFor(ok: boolean, given: Option.Option<unknown>): unknown {
+interface Failure {
+  readonly status: number;
+  readonly body: Option.Option<unknown>;
+}
+
+const SUCCEED: Failure = { body: Option.none(), status: OK };
+
+function answerFor(ok: boolean, given: Option.Option<unknown>, failure: Failure): unknown {
   return Option.getOrElse(
-    Option.filter(given, () => ok),
+    Option.orElse(failure.body, () => Option.filter(given, () => ok)),
     () => ({ ok }),
   );
 }
 
-function nextStatus(queued: readonly number[]): readonly [number, readonly number[]] {
-  const [status = OK, ...rest] = queued;
-  return [status, rest];
+function nextFailure(queued: readonly Failure[]): readonly [Failure, readonly Failure[]] {
+  const [next = SUCCEED, ...rest] = queued;
+  return [next, rest];
 }
 
 const receiver: Effect.Effect<Receiver, never, Scope.Scope> = Effect.gen(function* startReceiver() {
   const calls = yield* SubscriptionRef.make<readonly ReceivedCall[]>([]);
-  const failures = yield* Ref.make<readonly number[]>([]);
+  const failures = yield* Ref.make<readonly Failure[]>([]);
   const answer = yield* Ref.make<Option.Option<unknown>>(Option.none());
 
   const receive = Effect.gen(function* receiveCall() {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const rawBody = yield* Effect.orDie(request.text);
     const body = yield* Effect.option(request.json);
-    const status = yield* Ref.modify(failures, nextStatus);
+    const failure = yield* Ref.modify(failures, nextFailure);
+    const { status } = failure;
     const call: ReceivedCall = {
       body: Option.getOrUndefined(body),
       headers: request.headers,
@@ -65,12 +73,12 @@ const receiver: Effect.Effect<Receiver, never, Scope.Scope> = Effect.gen(functio
     };
     yield* SubscriptionRef.update(calls, (before) => [...before, call]);
     const ok = status < FIRST_FAILURE;
-    const answered = yield* Effect.map(Ref.get(answer), (given) => answerFor(ok, given));
+    const answered = yield* Effect.map(Ref.get(answer), (given) => answerFor(ok, given, failure));
     return HttpServerResponse.jsonUnsafe(answered, { headers: headersFor(status), status });
   });
 
-  function failNext(count: number, status: number): Effect.Effect<void> {
-    const more = Array.from({ length: count }, () => status);
+  function failNext(count: number, status: number, body: Option.Option<unknown>): Effect.Effect<void> {
+    const more = Array.from({ length: count }, () => ({ body, status }));
     return Ref.update(failures, (queued) => [...queued, ...more]);
   }
 

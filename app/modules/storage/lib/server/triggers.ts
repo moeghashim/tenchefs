@@ -1,6 +1,6 @@
 import { Array as Arr, Effect, Option, Order, Predicate, Schema, String as Str } from "effect";
-import type { TriggerHeader, TriggerResult, TriggerToken } from "../../../triggers/index.ts";
-import { isOkStatus, isTriggerToken } from "../../../triggers/index.ts";
+import type { TriggerHeader, TriggerResult, TriggerSkip, TriggerToken } from "../../../triggers/index.ts";
+import { isOkStatus, isTriggerToken, triggerSkips } from "../../../triggers/index.ts";
 import type { Fails } from "./errors.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
@@ -85,6 +85,7 @@ const TriggerRow = Schema.Struct({
   headers: HeadersJson,
   last_at: Schema.NullOr(IsoTimeSchema),
   last_error: Schema.NullOr(Schema.String),
+  last_skipped: Schema.NullOr(Schema.Literals(triggerSkips)),
   last_status: Schema.NullOr(Schema.Int),
   token: Schema.String.pipe(Schema.refine(isTriggerToken)),
   url: Schema.String,
@@ -99,12 +100,27 @@ function answered(at: TriggerResult["at"], status: number | null): TriggerResult
   return { at, ok: isOkStatus(status), status };
 }
 
-function resultOf({ last_at: at, last_error: error, last_status: status }: Row): Option.Option<TriggerResult> {
+function skippedOr(at: TriggerResult["at"], skipped: TriggerSkip | null, status: number | null): TriggerResult {
+  if (Predicate.isNull(skipped)) {
+    return answered(at, status);
+  }
+  return { at, ok: true, skipped };
+}
+
+function resultOf({
+  last_at: at,
+  last_error: error,
+  last_skipped: skipped,
+  last_status: status,
+}: Row): Option.Option<TriggerResult> {
   return Option.map(Option.fromNullishOr(at), (when) => {
     if (Predicate.isNull(error)) {
-      return answered(when, status);
+      return skippedOr(when, skipped, status);
     }
-    return { at: when, error, ok: false };
+    if (Predicate.isNull(status)) {
+      return { at: when, error, ok: false };
+    }
+    return { at: when, error, ok: false, status };
   });
 }
 
@@ -119,7 +135,7 @@ function triggersOf(rows: readonly unknown[]): Fails<readonly StoredTrigger[]> {
   );
 }
 
-const COLUMNS = "agent_name, url, token, headers, last_at, last_status, last_error";
+const COLUMNS = "agent_name, url, token, headers, last_at, last_status, last_error, last_skipped";
 
 function sqlTriggers(db: SqlDatabase): TriggersSection {
   return {
@@ -136,12 +152,13 @@ function sqlTriggers(db: SqlDatabase): TriggersSection {
       const listed = Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM triggers ORDER BY agent_name`), triggersOf);
       return Effect.map(listed, Arr.filter(among(agents)));
     },
-    recordTriggerResult: (agent, { at, error, status }) =>
+    recordTriggerResult: (agent, { at, error, skipped, status }) =>
       db.run(
-        "UPDATE triggers SET last_at = ?, last_status = ?, last_error = ? WHERE agent_name = ?",
+        "UPDATE triggers SET last_at = ?, last_status = ?, last_error = ?, last_skipped = ? WHERE agent_name = ?",
         at,
         status ?? null,
         error ?? null,
+        skipped ?? null,
         agent,
       ),
     setTrigger: (agent, { headers = [], token, url }) =>
@@ -149,7 +166,7 @@ function sqlTriggers(db: SqlDatabase): TriggersSection {
         db.run(
           `INSERT INTO triggers (agent_name, url, token, headers) VALUES (?, ?, ?, ?)
          ON CONFLICT (agent_name) DO UPDATE SET url = excluded.url, token = excluded.token, headers = excluded.headers,
-           last_at = NULL, last_status = NULL, last_error = NULL`,
+           last_at = NULL, last_status = NULL, last_error = NULL, last_skipped = NULL`,
           agent,
           url,
           token,
@@ -191,10 +208,18 @@ const POSTGRES_TRIGGER_HEADERS_MIGRATION: readonly string[] = [
   `ALTER TABLE triggers ADD COLUMN headers text COLLATE "C" NOT NULL DEFAULT '[]'`,
 ];
 
+const TRIGGER_SKIPPED_MIGRATION = "ALTER TABLE triggers ADD COLUMN last_skipped TEXT;";
+
+const POSTGRES_TRIGGER_SKIPPED_MIGRATION: readonly string[] = [
+  `ALTER TABLE triggers ADD COLUMN last_skipped text COLLATE "C"`,
+];
+
 export {
   POSTGRES_TRIGGER_HEADERS_MIGRATION,
+  POSTGRES_TRIGGER_SKIPPED_MIGRATION,
   POSTGRES_TRIGGERS_MIGRATION,
   TRIGGER_HEADERS_MIGRATION,
+  TRIGGER_SKIPPED_MIGRATION,
   type StoredTrigger,
   TRIGGERS_MIGRATION,
   type TriggersSection,

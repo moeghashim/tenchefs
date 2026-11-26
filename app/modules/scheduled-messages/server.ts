@@ -147,4 +147,4 @@ export const scheduledMessageResponseSchemas = {
   ScheduledMessageResponse: ScheduledMessageResponseSchema,
 };
 
-export { messageResponseSchemas, searchResponseSchemas } from "../messages/server.ts";
+export { messageDeleteResponseSchemas, messageResponseSchemas, searchResponseSchemas } from "../messages/server.ts";

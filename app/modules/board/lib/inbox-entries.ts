@@ -20,11 +20,11 @@ import type { Place, ReadPositions } from "./read-positions-slice.ts";
 import type { Failure } from "./failure.ts";
 import { placeOfMessage } from "./read-positions-slice.ts";
 
-type InboxEntry = Omit<InboxItem, "message" | "parent"> & {
+interface InboxEntry extends Omit<InboxItem, "message" | "parent"> {
   readonly message: MessageId;
   readonly parent: MessageId;
   readonly place: Place;
-};
+}
 
 type Loaded = { readonly status: "loading" } | { readonly status: "loaded" } | Failure;
 

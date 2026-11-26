@@ -62,7 +62,19 @@ function withoutNudgesIn(entries: InboxEntries, name: ChannelName): InboxEntries
   return withPart({ entries, key: "nudges", value });
 }
 
-function nudgesApplied({ change, entries }: Applying): InboxEntries {
+function nudgesGone({ change, entries }: Applying): InboxEntries {
+  if (change.type === "channel-deleted") {
+    return withoutNudgesIn(entries, change.channel.name);
+  }
+  if (change.type === "message-deleted") {
+    const value = withoutWhere({ gone: ({ parent }) => parent.id === change.message.id, held: entries.nudges });
+    return withPart({ entries, key: "nudges", value });
+  }
+  return readByThread(entries, change);
+}
+
+function nudgesApplied(applying: Applying): InboxEntries {
+  const { change, entries } = applying;
   if (change.type === "nudge") {
     const value = withAll({ entries: [{ ...change.nudge, read: false }], held: entries.nudges });
     return withPart({ entries, key: "nudges", value });
@@ -71,10 +83,7 @@ function nudgesApplied({ change, entries }: Applying): InboxEntries {
     const read = new Set<number>(change.nudgeIds);
     return nudgesRead(entries, ({ id }) => read.has(id));
   }
-  if (change.type === "channel-deleted") {
-    return withoutNudgesIn(entries, change.channel.name);
-  }
-  return readByThread(entries, change);
+  return nudgesGone(applying);
 }
 
 function offersUpTo(entries: InboxEntries, upTo: number): InboxEntries {

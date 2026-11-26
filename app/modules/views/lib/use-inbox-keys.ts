@@ -1,4 +1,5 @@
 import type { Act, Action, Keymap } from "../../keymap/index.ts";
+import { clickOn } from "./message-keys.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { isNarrowWindow } from "./narrow-window.ts";
 import { useEffect } from "react";
@@ -7,6 +8,7 @@ const ROWS = "a[data-feed-row]";
 const INBOX_ROW = "#/inbox/";
 const CONTROLS = "a, button";
 const REPLY_BOX = "textarea";
+const TOP_MESSAGE = 'article[aria-label="First message"]';
 const FIRST = 0;
 const STEPS = { next: 1, previous: -1 } as const;
 const NOT_FOUND = -1;
@@ -15,6 +17,7 @@ interface InboxKeys {
   readonly keymap: Keymap;
   readonly selected: boolean;
   readonly conversation: string;
+  readonly watch: (target: () => unknown) => void;
 }
 
 function rowAddresses(): readonly string[] {
@@ -52,9 +55,17 @@ function firstOf(step: "next" | "previous", addresses: readonly string[]): strin
   return addresses[FIRST] ?? null;
 }
 
+function currentAddress(): string {
+  const focusedRow = globalThis.document.activeElement;
+  if (focusedRow instanceof HTMLAnchorElement && focusedRow.matches(ROWS)) {
+    return focusedRow.hash;
+  }
+  return globalThis.location.hash;
+}
+
 function besideCurrent(step: "next" | "previous"): string | null {
   const addresses = rowAddresses();
-  const at = addresses.indexOf(globalThis.location.hash);
+  const at = addresses.indexOf(currentAddress());
   if (at === NOT_FOUND) {
     return firstOf(step, addresses);
   }
@@ -73,13 +84,21 @@ function select(step: "next" | "previous"): Act {
   };
 }
 
-function reply(conversation: string): Act {
-  return ({ target }) => {
-    if (target instanceof HTMLElement && target.matches(CONTROLS) && !target.matches(ROWS)) {
-      return false;
-    }
-    return focused(inConversation(conversation, REPLY_BOX));
-  };
+function onAControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.matches(CONTROLS) && !target.matches(ROWS);
+}
+
+function focusIn(conversation: string, selector: string): Act {
+  return ({ target }) => !onAControl(target) && focused(inConversation(conversation, selector));
+}
+
+function onTopMessage({ conversation, keymap }: Pick<InboxKeys, "conversation" | "keymap">, action: Action): Act {
+  const click = clickOn({
+    action,
+    keymap,
+    messageOf: () => globalThis.document.querySelector(inConversation(conversation, TOP_MESSAGE)),
+  });
+  return (event) => !onAControl(event.target) && click(event);
 }
 
 function leaveTextBox({ target }: KeyboardEvent): boolean {
@@ -90,17 +109,22 @@ function leaveTextBox({ target }: KeyboardEvent): boolean {
   return true;
 }
 
-function back(selected: boolean): Act {
+function rowOrNewest(address: string): () => unknown {
+  return () => globalThis.document.querySelector(rowAt(address)) ?? globalThis.document.querySelector(ROWS);
+}
+
+function back({ selected, watch }: Pick<InboxKeys, "selected" | "watch">): Act {
   return () => {
     if (!selected || !isNarrowWindow()) {
       return false;
     }
+    watch(rowOrNewest(globalThis.location.hash));
     globalThis.location.hash = hrefOf({ name: "inbox", selected: null });
     return true;
   };
 }
 
-function press({ conversation, keymap }: InboxKeys, action: Action): Act {
+function press({ conversation, keymap }: Pick<InboxKeys, "conversation" | "keymap">, action: Action): Act {
   return () => {
     const selector = inConversation(conversation, `[aria-keyshortcuts="${keymap.shortcutOf(action).keys}"]`);
     const button = globalThis.document.querySelector<HTMLElement>(selector);
@@ -112,19 +136,35 @@ function press({ conversation, keymap }: InboxKeys, action: Action): Act {
   };
 }
 
+function thenNext(act: Act): Act {
+  const next = select("next");
+  return (event) => {
+    if (!act(event)) {
+      return false;
+    }
+    next(event);
+    return true;
+  };
+}
+
 function useInboxKeys(keys: InboxKeys): void {
-  const { conversation, keymap, selected } = keys;
+  const { conversation, keymap, selected, watch } = keys;
   useEffect(() => {
     const unbindRows = keymap.bind({
       actions: {
-        backToRows: back(selected),
-        markRowRead: press({ conversation, keymap, selected }, "markRowRead"),
-        markRowUnread: press({ conversation, keymap, selected }, "markRowUnread"),
-        markSelectedRowRead: press({ conversation, keymap, selected }, "markRowRead"),
+        backToRows: back({ selected, watch }),
+        copyMessageLink: onTopMessage({ conversation, keymap }, "copyMessageLink"),
+        markRowRead: thenNext(press({ conversation, keymap }, "markRowRead")),
+        markRowUnread: press({ conversation, keymap }, "markRowUnread"),
+        markSelectedRowRead: press({ conversation, keymap }, "markRowRead"),
         nextRow: select("next"),
-        openRow: press({ conversation, keymap, selected }, "openRow"),
+        openRow: press({ conversation, keymap }, "openRow"),
+        openThread: focusIn(conversation, TOP_MESSAGE),
         previousRow: select("previous"),
-        replyToRow: reply(conversation),
+        replyToRow: focusIn(conversation, REPLY_BOX),
+        toggleThreadClosed: onTopMessage({ conversation, keymap }, "toggleThreadClosed"),
+        toggleThumbsDown: onTopMessage({ conversation, keymap }, "toggleThumbsDown"),
+        toggleThumbsUp: onTopMessage({ conversation, keymap }, "toggleThumbsUp"),
       },
       scope: "inbox",
     });
@@ -133,7 +173,7 @@ function useInboxKeys(keys: InboxKeys): void {
       unbindRows();
       unbindTextBox();
     };
-  }, [conversation, keymap, selected]);
+  }, [conversation, keymap, selected, watch]);
 }
 
 export { type InboxKeys, useInboxKeys };

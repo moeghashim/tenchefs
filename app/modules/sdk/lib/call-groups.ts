@@ -2,6 +2,7 @@ import type { AgentCreationCalls, DescriptionCalls } from "../../identities/clie
 import type {
   AttachmentCalls,
   ClosedThreadCalls,
+  MessageDeleteCalls,
   OpenThreadCalls,
   ScheduledMessageCalls,
   SearchCalls,
@@ -26,6 +27,7 @@ export type CallGroups = LoginCalls &
   IdentityDeletionCalls &
   DescriptionCalls<IdentityResponse> &
   ClosedThreadCalls &
+  MessageDeleteCalls &
   OpenThreadCalls &
   SearchCalls &
   ScheduledMessageCalls &

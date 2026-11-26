@@ -13,6 +13,7 @@ const EARLIER_MESSAGES = 30;
 const SPOTS_ACROSS = 10;
 const HALF = 0.5;
 const NONE = 0;
+const LAST = -1;
 const LIST = '[aria-label="Mention suggestions"]';
 const REPLIERS = ["ada", "alan", "grace"];
 const EARLIER = Array.from({ length: EARLIER_MESSAGES }, (_value, at) => `Earlier message ${String(at)}`);
@@ -20,7 +21,12 @@ const SPOTS = Array.from({ length: SPOTS_ACROSS }, (_value, at) => (at + HALF) /
 
 type Point = readonly [number, number];
 
-async function threadSummaryAboveTheBox(channel: string): Promise<string> {
+interface Summarised {
+  readonly lastReplyAt: string;
+  readonly token: string;
+}
+
+async function threadSummaryAboveTheBox(channel: string): Promise<Summarised> {
   const admin = adminClient();
   await admin.createChannel({ name: channel });
   await Promise.all(
@@ -29,14 +35,15 @@ async function threadSummaryAboveTheBox(channel: string): Promise<string> {
     }),
   );
   const { message } = await admin.createMessage({ channel, text: "Who can review this?" });
-  await Promise.all(
+  const replies = await Promise.all(
     REPLIERS.map(async (name) => {
       const { client } = await newIdentity({ kind: "human", name: `${channel}-${name}` });
-      await client.createMessage({ channel, replyTo: message.id, text: "I can" });
+      const { message: reply } = await client.createMessage({ channel, replyTo: message.id, text: "I can" });
+      return reply.createdAt;
     }),
   );
   const { token } = await newIdentity({ kind: "human", name: `${channel}-reader` });
-  return token;
+  return { lastReplyAt: replies.toSorted().at(LAST) ?? "", token };
 }
 
 async function pointsOver(list: Locator): Promise<readonly Point[]> {
@@ -66,7 +73,8 @@ test("the @ suggestion box is the topmost element everywhere it shows, over the 
   page,
 }) => {
   const channel = unique(CHANNEL);
-  const token = await threadSummaryAboveTheBox(channel);
+  const { lastReplyAt, token } = await threadSummaryAboveTheBox(channel);
+  await page.clock.setFixedTime(lastReplyAt);
   await logIn({ page, token });
   await page.goto(`/#/channels/${channel}`);
 

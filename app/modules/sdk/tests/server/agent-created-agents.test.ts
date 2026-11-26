@@ -142,22 +142,26 @@ it.effect("an agent can't create a human, an agent for anyone else, or a taken n
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("the new agent's join request shows in its creator's inbox, and the creator's approval joins it", () =>
-  Effect.gen(function* creatorApproves() {
-    const { ada, chief, cookout } = yield* board;
-    yield* answer(() => createTestAgent({ broughtIn: true, by: chief.client, displayName: "worker", name: "worker" }));
-    const started = yield* answer(() => cookout.clientFor().startAgentJoin({ as: "worker", host: "build-box" }));
-    const creatorInbox = yield* answer(() => chief.client.inbox());
-    const ownerInbox = yield* answer(() => ada.client.inbox());
-    yield* answer(() => chief.client.approveAgentJoin(started.userCode));
-    const joined = yield* answer(() => cookout.clientFor().collectAgentJoin(started.requestId));
+it.effect(
+  "the new agent's join request shows in its creator's inbox at once, not yet its owner's, and the creator's approval joins it",
+  () =>
+    Effect.gen(function* creatorApproves() {
+      const { ada, chief, cookout } = yield* board;
+      yield* answer(() =>
+        createTestAgent({ broughtIn: true, by: chief.client, displayName: "worker", name: "worker" }),
+      );
+      const started = yield* answer(() => cookout.clientFor().startAgentJoin({ as: "worker", host: "build-box" }));
+      const creatorInbox = yield* answer(() => chief.client.inbox());
+      const ownerInbox = yield* answer(() => ada.client.inbox());
+      yield* answer(() => chief.client.approveAgentJoin(started.userCode));
+      const joined = yield* answer(() => cookout.clientFor().collectAgentJoin(started.requestId));
 
-    expect(creatorInbox.agentJoinRequests).toMatchObject([
-      { agent: { broughtInBy: "chief", name: "worker", owner: "ada" }, userCode: started.userCode },
-    ]);
-    expect(ownerInbox.agentJoinRequests).toStrictEqual(creatorInbox.agentJoinRequests);
-    expect(joinedAgentOf(joined)).toBe("worker");
-  }).pipe(Effect.provide(testCookout())),
+      expect(creatorInbox.agentJoinRequests).toMatchObject([
+        { agent: { broughtInBy: "chief", name: "worker", owner: "ada" }, userCode: started.userCode },
+      ]);
+      expect(ownerInbox.agentJoinRequests).toStrictEqual([]);
+      expect(joinedAgentOf(joined)).toBe("worker");
+    }).pipe(Effect.provide(testCookout())),
 );
 
 function requestedAs(on: Board, as: string): Effect.Effect<string> {

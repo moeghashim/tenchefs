@@ -1,12 +1,13 @@
 import type { Message, MessageId, TopLevelMessage } from "../../sdk/index.ts";
+import type { MessageDeletes, ThreadClosing } from "../../board/index.ts";
 import type { ReactionChoice, ThreadChoice } from "../../design-system/messages.tsx";
 import { useContext, useMemo } from "react";
 import type { Announce } from "./announcer.ts";
 import { Announcer } from "./announcer.ts";
 import type { MessageMenu } from "../../unread/index.ts";
-import type { ThreadClosing } from "../../board/index.ts";
 import { createCopier } from "./copying.ts";
 import { hrefOf } from "../../paths/index.ts";
+import { useBoardStore } from "./use-board.ts";
 import { useReactionChoices } from "./use-reactions.ts";
 
 const TEXT = {
@@ -25,6 +26,7 @@ interface MenuParts {
   readonly onCopyLink: () => void;
   readonly reactions: readonly ReactionChoice[];
   readonly thread: ThreadChoice | null;
+  readonly onDelete: (() => void) | null;
 }
 
 interface MenuOf {
@@ -113,13 +115,30 @@ function copyLinkOf(message: Message, announce: Announce): () => void {
   return copyingLink({ announce, link: () => linkOf(message) });
 }
 
+interface DeleteOf {
+  readonly deletes: MessageDeletes;
+  readonly me: string;
+  readonly message: Message;
+}
+
+function deleteOf({ deletes, me, message }: DeleteOf): (() => void) | null {
+  if (message.author.name !== me) {
+    return null;
+  }
+  return () => {
+    deletes.askDelete(message);
+  };
+}
+
 function useMessageMenu({ closing, me, menu, message, threadParent }: MenuOf): MenuParts {
   const messageId = message.id;
   const announce = useContext(Announcer);
   const reactions = useReactionChoices({ announce, me, message });
+  const deletes = useBoardStore().calls;
   return useMemo(
     () => ({
       onCopyLink: copyLinkOf(message, announce),
+      onDelete: deleteOf({ deletes, me, message }),
       onMarkUnread: () => {
         menu.markUnread(messageId);
         announce(TEXT.markedUnread);
@@ -127,7 +146,7 @@ function useMessageMenu({ closing, me, menu, message, threadParent }: MenuOf): M
       reactions,
       thread: threadChoice({ announce, closing, message: threadOf(message, threadParent) }),
     }),
-    [announce, closing, menu, message, messageId, reactions, threadParent],
+    [announce, closing, deletes, me, menu, message, messageId, reactions, threadParent],
   );
 }
 

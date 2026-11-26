@@ -4,13 +4,19 @@ import { useId } from "react";
 
 interface FoldDayParts extends ButtonParts {
   readonly label: string;
+  readonly current: boolean;
 }
 
 export function FoldDay(parts: FoldDayParts): ReactNode {
   const { onClick } = parts;
   const button = useId();
   return (
-    <article aria-labelledby={button} data-closed-fold className="my-3 grid grid-cols-[1fr_auto_1fr] items-center px-5">
+    <article
+      aria-current={parts.current}
+      aria-labelledby={button}
+      data-closed-fold
+      className="my-3 grid grid-cols-[1fr_auto_1fr] items-center px-5"
+    >
       <hr aria-label={parts.label} className="border-t border-dashed" />
       <span
         aria-hidden="true"

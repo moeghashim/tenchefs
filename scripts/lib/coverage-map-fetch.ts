@@ -88,7 +88,7 @@ function newestOnBase(listing: string, cwd: string, base: string): Outcome<Recor
   return found[NONE] ?? NONE_ON_BASE;
 }
 
-function downloaded(gh: Gh, { commit, run }: Recording): Outcome<CoverageMap> {
+function downloaded(gh: Gh, { run }: Recording): Outcome<CoverageMap> {
   const dir = mkdtempSync(path.join(tmpdir(), "browser-coverage-"));
   try {
     const ran = gh(["run", "download", run, "--pattern", `${ARTIFACT}-*`, "--dir", dir]);
@@ -98,7 +98,7 @@ function downloaded(gh: Gh, { commit, run }: Recording): Outcome<CoverageMap> {
     const sources = readdirSync(dir, { encoding: "utf8", recursive: true })
       .filter((file) => path.basename(file) === MAP_FILE)
       .map((file) => readFileSync(path.join(dir, file), "utf8"));
-    return mergedShards({ commit, sources });
+    return mergedShards(sources);
   } finally {
     rmSync(dir, { force: true, recursive: true });
   }

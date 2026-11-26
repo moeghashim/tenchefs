@@ -12,6 +12,7 @@ interface Landing {
   readonly watch: (target: Target) => void;
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () => boolean;
+  readonly isLanding: () => boolean;
 }
 
 function isLost(): boolean {
@@ -61,9 +62,15 @@ function watched(target: Target): AbortController {
   return control;
 }
 
+function stopped(): AbortController {
+  const control = new AbortController();
+  control.abort();
+  return control;
+}
+
 function createLanding(): Landing {
   const listeners = new Set<() => void>();
-  let watching = new AbortController();
+  let watching = stopped();
   let following = new AbortController();
   let pending = false;
   function told(): void {
@@ -88,6 +95,7 @@ function createLanding(): Landing {
       following = new AbortController();
       globalThis.addEventListener("hashchange", ask, { once: true, signal: following.signal });
     },
+    isLanding: () => pending || !watching.signal.aborted,
     settle: (target) => {
       if (pending) {
         pending = false;

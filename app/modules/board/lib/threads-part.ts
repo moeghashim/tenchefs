@@ -1,9 +1,11 @@
 import type { ChannelName, CookoutEvent, MessageId } from "../../sdk/index.ts";
 import type { Held, Queues } from "./messages-held.ts";
 import type { ReplyRequest, ThreadOps, ThreadsClient } from "./thread-reads.ts";
+import { LOADING } from "./message-states.ts";
 import type { MessagesHeld } from "./messages-table.ts";
 import { createThreadReaders } from "./thread-readers.ts";
 import { threadOps } from "./thread-reads.ts";
+import { threadWithoutDeleted } from "./message-deletions.ts";
 
 interface ThreadPlace {
   readonly channel: ChannelName;
@@ -96,11 +98,26 @@ function hearing({ enqueue, opened, options }: Threading): Threads["heard"] {
   };
 }
 
+function withoutDeleted({ held }: ThreadsOptions, key: string): void {
+  const state = held.current();
+  const thread = state.threads.get(key) ?? LOADING;
+  if (thread.status !== "loaded") {
+    return;
+  }
+  const kept = threadWithoutDeleted(thread) ?? LOADING;
+  if (kept !== thread) {
+    held.put({ ...state, threads: new Map(state.threads).set(key, kept) });
+  }
+}
+
 function showing({ enqueue, openedAt, options }: Threading): Threads["show"] {
   return (place, { acking, listener }) => {
     const thread = openedAt(place);
     const started = options.queues.started(queueKey(thread));
     const reopened = started && !thread.readers.any();
+    if (reopened) {
+      withoutDeleted(options, thread.key);
+    }
     thread.readers.add(listener, acking);
     if (reopened || !started) {
       enqueue(thread, async (ops) => {

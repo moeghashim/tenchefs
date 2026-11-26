@@ -1,4 +1,5 @@
 const ITEM = "article";
+const FOLD = "[data-closed-fold]";
 const INNER =
   "a[href], button, input, select, textarea, summary, [tabindex], [contenteditable]:not([contenteditable=false])";
 const SAVED = "data-feed-tabindex";
@@ -99,9 +100,22 @@ function focusIf(focused: boolean, item: Readonly<Pick<HTMLElement, "focus">>): 
   }
 }
 
+function besideFoldAt(feed: string, at: number): HTMLElement | null {
+  const items: readonly unknown[] = itemsIn(feed);
+  const folds: readonly unknown[] = [...globalThis.document.querySelectorAll(`${feedOf(feed)} ${ITEM}${FOLD}`)];
+  const messages = [...globalThis.document.querySelectorAll<HTMLElement>(`${feedOf(feed)} ${ITEM}:not(${FOLD})`)];
+  const passed = at - folds.indexOf(items[at]);
+  return messages[passed] ?? messages[passed - FIRST_POSITION] ?? null;
+}
+
 function itemAt(feed: string, index: number): HTMLElement | null {
   const items = itemsIn(feed);
-  return items[Math.min(index, items.length - FIRST_POSITION)] ?? null;
+  const at = Math.min(index, items.length - FIRST_POSITION);
+  const item = items[at] ?? null;
+  if (item === null || !item.matches(FOLD)) {
+    return item;
+  }
+  return besideFoldAt(feed, at) ?? item;
 }
 
 function rovingOf(shown: Feed): Roving {

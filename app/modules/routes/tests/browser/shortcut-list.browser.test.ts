@@ -130,3 +130,19 @@ test("with the shortcut list open, the Inbox keys behind it do nothing", async (
   await expect(page.getByRole("dialog", LIST)).toBeHidden();
   await expect(page).toHaveURL(/#\/inbox$/u);
 });
+
+test("the shortcut list names →, Enter and r for replying, and t for the top message, on a message and an Inbox row", async ({
+  page,
+}) => {
+  await followedInbox(page, unique("browser-shortcuts-same-keys"));
+  await page.keyboard.press("?");
+  const list = page.getByRole("dialog", LIST);
+
+  await Promise.all(
+    ["Message", "Inbox row"].map(async (group) => {
+      await expect(rowOf({ does: "Reply in its thread", group, list })).toContainText("→");
+      await expect(rowOf({ does: "Reply in its thread", group, list })).toContainText("Enter");
+      await expect(rowOf({ does: "Open its thread at its top message", group, list })).toContainText("t");
+    }),
+  );
+});

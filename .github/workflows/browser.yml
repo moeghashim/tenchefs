@@ -1,0 +1,118 @@
+name: Browser
+
+# The browser tests in 6 shards, as one reusable job that both gates call (#737). Release calls it on
+# the commit it chose, with every browser test, and each shard uploads its timings and its browser
+# coverage map for the next runs to read. Check calls it on a pull request into v1 with `reached`,
+# and each shard runs only its share of the browser tests the change reaches, picked by
+# `scripts/check.ts` from the coverage map Release recorded (#619): a docs-only change runs none.
+# A `reached` run uploads no timings or coverage map, since it ran only some of the tests.
+#
+# Every browser test in one job took 205s of a passing run and was cancelled at the 5-minute
+# limit on loaded runners (#455), so they're split across jobs. Each shard runs the files that
+# give it a sixth of the test time the newest earlier run recorded in its test-timings-browser-*
+# artifacts, falling back to Playwright's --shard by test count when there are none (#619). A
+# runner has 4 cores, and Playwright runs 4 workers on CI. 3 shards took 3:57-4:50 of their 5
+# minutes once the suite's test time reached about 2,800 s (#715); 6 give each about 470 s, about
+# 2:40 with the job's 33 s of setup.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to test; the calling run's commit when empty
+        type: string
+        default: ""
+      reached:
+        description: Run only the browser tests the change since origin/v1 reaches, and upload nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: browser ${{ matrix.shard }}/6
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # To read the timings and the coverage map an earlier run uploaded.
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          # Picking the reached tests diffs against origin/v1 and checks the map's commit is on it.
+          fetch-depth: ${{ inputs.reached && '0' || '1' }}
+      # A local action resolves from the checked-out tree: take .github/actions from the workflow's own
+      # commit, which may differ from the commit under test (#748, docs/adr/0122).
+      - name: Local actions from the workflow's commit
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --quiet --depth=1 origin "$WORKFLOW_SHA"
+          rm -rf .github/actions
+          git checkout "$WORKFLOW_SHA" -- .github/actions
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: browser
+      - uses: ./.github/actions/install-chromium
+      - name: pnpm check --job=browser --shard=${{ matrix.shard }}/6
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+          REACHED: ${{ inputs.reached && '--reached' || '' }}
+        run: node scripts/check.ts --job=browser --shard=${{ matrix.shard }}/6 --run=${{ github.run_id }} $REACHED --all --ci
+      # A failed test leaves its error-context.md (the error and the page's ARIA snapshot) in
+      # test-results/. Recording a trace of every test made a passing run 40% slower and failed tests
+      # that pass without it (#714), so the run that decides the verdict records none. Instead a
+      # failed shard runs only its failed tests again with a trace, to read with `pnpm exec playwright
+      # show-trace`; that run changes no verdict, and its trace may show a pass.
+      - name: Run the failed tests again with a trace
+        if: failure()
+        continue-on-error: true
+        env:
+          NODE_COMPILE_CACHE: node_modules/.cache/node-compile
+        run: |
+          mv test-results test-results-first-run
+          mkdir test-results
+          cp test-results-first-run/.last-run.json test-results/
+          pnpm exec playwright test --last-failed --trace on
+      # Both folders, kept 14 days. A passing shard uploads nothing; a shard cut off at its time limit
+      # uploads what had failed by then.
+      - name: Upload the failed tests' error context and traces
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results-${{ matrix.shard }}
+          path: |
+            test-results-first-run/
+            test-results/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload the per-file test timings
+        if: always() && !inputs.reached
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-timings-browser-${{ matrix.shard }}
+          path: |
+            .timings/*.txt
+            .timings/browser.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+      # A local pnpm check fetches the newest of these on its base to pick the browser tests a branch
+      # reaches (#444). Each shard's map names the chosen commit, which the check reads from the map.
+      - name: Upload the browser coverage map
+        if: ${{ !inputs.reached }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-coverage-map-${{ matrix.shard }}
+          path: .browser-coverage/map.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30

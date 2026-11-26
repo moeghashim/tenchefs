@@ -3,7 +3,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Mock } from "vitest";
 import { inPane } from "./regions.ts";
-import { openAt } from "./render.tsx";
+import { viewOpened } from "./view-opened.ts";
 
 const TWO_PEOPLE = 2;
 const TAB_STOP = 0;
@@ -46,7 +46,7 @@ async function peopleOf(prefix: string): Promise<Pair> {
   const second = `${prefix}-bea`;
   const { client } = await newIdentity({ kind: "human", name: first });
   await newIdentity({ kind: "human", name: second });
-  const close = openAt({ client, hash: "#/people" });
+  const { close } = await viewOpened({ client, hash: "#/people", waitingOn: ["listIdentities"] });
   fireEvent.change(await screen.findByRole("textbox", { name: "Filter by name" }), { target: { value: prefix } });
   await waitFor(() => {
     expect(within(screen.getByRole("list", { name: "Identities" })).getAllByRole("link")).toHaveLength(TWO_PEOPLE);
@@ -157,7 +157,11 @@ async function authorIn(channel: string, deactivated: boolean): Promise<Authored
   if (deactivated) {
     await adminClient().deactivateIdentity(author);
   }
-  const close = openAt({ client: reader.client, hash: `#/channels/${channel}` });
+  const { close } = await viewOpened({
+    client: reader.client,
+    hash: `#/channels/${channel}`,
+    waitingOn: ["listMessages", "listIdentities"],
+  });
   const name = await within(await screen.findByRole("feed", { name: "Messages" })).findByRole("link", { name: author });
   return { author, close, name };
 }

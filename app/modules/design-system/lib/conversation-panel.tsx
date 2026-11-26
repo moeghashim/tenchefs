@@ -1,4 +1,6 @@
 import { BackLink } from "./back-link.tsx";
+import { FileDrop } from "./file-drop.tsx";
+import type { FilesHandler } from "./drop-zone.tsx";
 import { IdentityCardComposer } from "./identity-card-parts.ts";
 import type { IdentityCardComposerParts } from "./identity-card-parts.ts";
 import type { PanelAction } from "./panel-action-button.tsx";
@@ -21,6 +23,7 @@ interface ConversationPanelParts {
   readonly actions?: readonly PanelAction[];
   readonly edge: PanelEdgeParts | null;
   readonly message: IdentityCardComposerParts;
+  readonly onFiles?: FilesHandler | null;
   readonly children: ReactNode;
 }
 
@@ -45,7 +48,9 @@ export function ConversationPanel(parts: ConversationPanelParts): ReactNode {
           <ShortcutLink href={parts.open.href} label={parts.open.label} shortcut={parts.open.shortcut} />
         )}
       </header>
-      <IdentityCardComposer value={parts.message}>{parts.children}</IdentityCardComposer>
+      <IdentityCardComposer value={parts.message}>
+        <FileDrop onFiles={parts.onFiles ?? null}>{parts.children}</FileDrop>
+      </IdentityCardComposer>
     </aside>
   );
 }

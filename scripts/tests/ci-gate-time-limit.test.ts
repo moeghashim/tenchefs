@@ -88,7 +88,7 @@ it("treats a cancelled job as before when there is no workflow to read its limit
 it("reads each job's limit from the repo's own Check workflow", { timeout: 10_000 }, () => {
   expect.hasAssertions();
 
-  const jobs = ["static", "browser 3/3", "coverage"].map((name) => cancelledAfter(name, AT_LIMIT));
+  const jobs = ["static", "tests 3/3", "coverage"].map((name) => cancelledAfter(name, AT_LIMIT));
   const gh = fake({
     list: [RUN],
     view: [view({ jobs, status: COMPLETED })],
@@ -96,7 +96,7 @@ it("reads each job's limit from the repo's own Check workflow", { timeout: 10_00
   });
 
   expect(reasonOf(gh.gate(["--commit", "abc"]).step)).toBe(
-    `v1's latest Check run was cancelled: browser 3/3 was cut off at its time limit of 5 minutes; coverage was cut off at its time limit of 5 minutes. A rerun would hit the same limit, so it was not rerun.\n${URL}`,
+    `v1's latest Check run was cancelled: tests 3/3 was cut off at its time limit of 5 minutes; coverage was cut off at its time limit of 5 minutes. A rerun would hit the same limit, so it was not rerun.\n${URL}`,
   );
 });
 

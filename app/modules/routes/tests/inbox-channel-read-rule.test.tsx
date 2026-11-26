@@ -5,6 +5,7 @@ import { adminClient } from "./identities.ts";
 import { clicked } from "./reading.ts";
 import { inConversation } from "./regions.ts";
 import { openWithClockStopped } from "./clock.ts";
+import { viewOpened } from "./view-opened.ts";
 
 const TWO = 2;
 const NONE = 0;
@@ -104,7 +105,12 @@ it("mark read on a channel deleted while its conversation is open still shows th
   expect.hasAssertions();
 
   const news = await channelToRead("web-channel-read-deleted");
-  const unmount = openWithClockStopped({ client: news.reader, hash: `#/inbox/${news.channel}` });
+  const { close: unmount } = await viewOpened({
+    client: news.reader,
+    hash: `#/inbox/${news.channel}`,
+    open: openWithClockStopped,
+    waitingOn: ["inbox", "listMessages"],
+  });
   await inConversation().findByText("New two");
   await adminClient().deleteChannel(news.channel);
   clicked(MARK_READ);

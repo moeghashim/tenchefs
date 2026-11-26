@@ -155,3 +155,35 @@ it("fails rewriting an ADR that is on v1", { timeout: 1000 }, () => {
     `${BRANCH_NEW} is append-only, but this change adds the line "# A second draft", which is not a dated note. Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
   ]);
 });
+
+const TABLE = ["| trace | time |", "| --- | :---: |", "| off | 86 s  and  more |"];
+
+it("passes reformatting an ADR's spacing and table padding, and a change of its mode alone", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const hunk = [
+    ...TABLE.map((line) => `-${line}`),
+    "+| trace | time           |",
+    "+| ----- | :------------: |",
+    "+| off   | 86 s and more  |",
+  ].join("\n");
+  const modeOnly = [`diff --git a/${ADR} b/${ADR}`, "old mode 100644", "new mode 100755"].join("\n");
+  const originals = new Map([[ADR, TABLE]]);
+
+  expect([
+    adrEdits({ diff: changed(ADR, hunk), locked: new Set([ADR]), originals }),
+    adrEdits({ diff: modeOnly, locked: new Set([ADR]), originals }),
+  ]).toStrictEqual([[], []]);
+});
+
+it("fails a reformat of an ADR's table that also changes a word", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const hunk = ["-| off | 86 s  and  more |", "+| off   | 96 s and more |"].join("\n");
+  const originals = new Map([[ADR, TABLE]]);
+
+  expect(adrEdits({ diff: changed(ADR, hunk), locked: new Set([ADR]), originals })).toStrictEqual([
+    `${ADR} is append-only, but this change removes the line "| off | 86 s  and  more |". Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+    `${ADR} is append-only, but this change adds the line "| off   | 96 s and more |", which is not a dated note. Write a new ADR and add a dated line here, such as "Superseded in part on YYYY-MM-DD by [ADR NNNN](…): …".`,
+  ]);
+});

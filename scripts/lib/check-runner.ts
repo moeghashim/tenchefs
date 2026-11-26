@@ -6,6 +6,7 @@ import { firstError } from "./first-error.ts";
 import { once } from "node:events";
 import { rmSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { timedStage } from "./stage-log.ts";
 import { verdictLine } from "./verdict.ts";
 
 interface Check {
@@ -20,6 +21,7 @@ interface Check {
 interface CiOnly {
   readonly ciJob: string;
   readonly command: string;
+  readonly hook?: true;
   readonly name: string;
   readonly workflow?: string;
 }
@@ -30,6 +32,7 @@ interface Checks {
   readonly inCi: boolean;
   readonly job: string;
   readonly lockFile: string;
+  readonly recordTime?: boolean;
 }
 
 interface Outcome {
@@ -211,18 +214,23 @@ function ownerOf(suite: CiOnly): string {
   return `the ${workflow} workflow's`;
 }
 
+function skippedLine(suite: CiOnly): string {
+  if (suite.hook === true) {
+    return `skipped: ${suite.name}, the pre-commit hook's, which it ran on every commit and CI runs as its ${suite.ciJob} job. Run them here on purpose with ${suite.command}.`;
+  }
+  return `skipped: ${suite.name}, which CI runs as ${ownerOf(suite)} ${suite.ciJob} job. Run it here on purpose with ${suite.command}.`;
+}
+
 function reportSkipped({ ciOnly, inCi, job }: Checks): void {
   if (inCi || job !== "") {
     return;
   }
   for (const suite of ciOnly) {
-    console.log(
-      `skipped: ${suite.name}, which CI runs as ${ownerOf(suite)} ${suite.ciJob} job. Run it here on purpose with ${suite.command}.`,
-    );
+    console.log(skippedLine(suite));
   }
 }
 
-async function runChecks(options: Checks): Promise<number> {
+async function runJob(options: Checks): Promise<number> {
   const { checks, inCi, job } = options;
   const selected = checks.filter((check) => job === "" || check.job === job);
   if (selected.length === NONE) {
@@ -235,6 +243,15 @@ async function runChecks(options: Checks): Promise<number> {
   }
   reportSkipped(options);
   return exitCodeOf(final.filter((outcome) => !passed(outcome)).map((outcome) => outcome.check.name));
+}
+
+async function runChecks(options: Checks): Promise<number> {
+  if (options.recordTime !== true) {
+    const code = await runJob(options);
+    return code;
+  }
+  const code = await timedStage({ cwd: process.cwd(), exit: runJob(options), stage: "pnpm check" });
+  return code;
 }
 
 export type { Check, CiOnly };

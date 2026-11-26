@@ -1,17 +1,24 @@
-import { AgentSessionEventSchema, ChannelDeletedEventSchema, CommandEventSchema } from "./wire.ts";
+import {
+  AgentSessionEventSchema,
+  ChannelDeletedEventSchema,
+  CommandEventSchema,
+  MessageDeletedEventSchema,
+} from "./wire.ts";
 import type { Connected, EventSource, StreamRequest } from "./source.ts";
 import { Effect, Stream } from "effect";
 import { ScheduledMessageEventSchema, ScheduledMessages } from "../../../scheduled-messages/server.ts";
 import { AgentSessions } from "../../../agent-sessions/server.ts";
 import { Channels } from "../../../channels/server.ts";
 import type { Identity } from "../../../identities/index.ts";
+import { Messages } from "../../../messages/server.ts";
 import { WebhookCommandChanges } from "../../../webhook-commands/server.ts";
 import { asksForAllChannels } from "./all-channels.ts";
 import { sseEvent } from "./source.ts";
 
-type BoardChangesNeeds = Channels | WebhookCommandChanges | AgentSessions | ScheduledMessages;
+type BoardChangesNeeds = Channels | Messages | WebhookCommandChanges | AgentSessions | ScheduledMessages;
 
 const channelDeletedEvent = sseEvent(ChannelDeletedEventSchema);
+const messageDeletedEvent = sseEvent(MessageDeletedEventSchema);
 const webhookCommandEvent = sseEvent(CommandEventSchema);
 const agentSessionEvent = sseEvent(AgentSessionEventSchema);
 const scheduledMessageEvent = sseEvent(ScheduledMessageEventSchema);
@@ -25,6 +32,19 @@ function channelDeletions(request: StreamRequest): Connected<Channels> {
     const deleted = yield* service.deleted;
     return Stream.fromSubscription(deleted).pipe(
       Stream.mapEffect((channel) => channelDeletedEvent({ channel, type: "channel-deleted" })),
+    );
+  });
+}
+
+function messageDeletions(request: StreamRequest): Connected<Messages> {
+  return Effect.gen(function* subscribeToMessageDeletions() {
+    if (!asksForAllChannels(request)) {
+      return Stream.empty;
+    }
+    const service = yield* Messages;
+    const deleted = yield* service.deleted;
+    return Stream.fromSubscription(deleted).pipe(
+      Stream.mapEffect((deletion) => messageDeletedEvent({ ...deletion, type: "message-deleted" })),
     );
   });
 }
@@ -72,6 +92,7 @@ function scheduledMessages(): Connected<ScheduledMessages> {
 
 const boardChanges: readonly EventSource<BoardChangesNeeds>[] = [
   channelDeletions,
+  messageDeletions,
   commands,
   agentSessions,
   scheduledMessages,

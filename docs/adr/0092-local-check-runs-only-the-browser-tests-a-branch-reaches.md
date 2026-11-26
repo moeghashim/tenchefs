@@ -23,3 +23,5 @@ This widens the departure from "CI runs exactly the local check script" that the
 Because every browser test drives the whole served cookout, a branch changing any source the cookout serves (a view, a route, the server) still runs every browser test locally. Only branches outside the served cookout save the run.
 
 Superseded in part on 2026-11-24 by [ADR 0096](0096-a-local-check-picks-browser-tests-from-ci-s-recorded-coverage.md): a change to a file of the served app (a view) now runs only the browser tests whose recorded coverage reaches it, and every one only when the map is missing or stale (mattpocock/cookout#444).
+
+Superseded in part on 2026-11-25 by [ADR 0113](0113-a-local-check-runs-only-what-the-change-reaches-and-never-repeats-the-hook.md): a local check also runs only the unit tests the change reaches, a change to a file on its list (configs, the lockfile, the testing module, test servers) runs every test, and a docs-only change runs none (mattpocock/cookout#633).

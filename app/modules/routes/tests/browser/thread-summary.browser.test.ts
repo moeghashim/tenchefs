@@ -31,7 +31,8 @@ async function lookOf(link: Locator): Promise<Look> {
 async function openSummary(page: Page, channel: string): Promise<Locator> {
   await adminClient().createChannel({ name: channel });
   const { message: parent } = await adminClient().createMessage({ channel, text: "Ship it?" });
-  await adminClient().createMessage({ channel, replyTo: parent.id, text: "Yes" });
+  const { message: reply } = await adminClient().createMessage({ channel, replyTo: parent.id, text: "Yes" });
+  await page.clock.setFixedTime(reply.createdAt);
   const reader = await newIdentity({ kind: "human", name: unique("browser-summary-reader") });
   await logIn({ page, token: reader.token });
   await sidebarLink({ label: `#${channel}`, page }).click();

@@ -51,7 +51,7 @@ const SECOND = valueOf(
 it("merges every shard's map into one, leaving out a test some shard couldn't record all of", { timeout: 1000 }, () => {
   expect.hasAssertions();
 
-  expect(mergedShards({ commit: "abc123", sources: [SECOND, FIRST] })).toStrictEqual({
+  expect(mergedShards([SECOND, FIRST])).toStrictEqual({
     ok: true,
     value: {
       commit: "abc123",
@@ -61,20 +61,19 @@ it("merges every shard's map into one, leaving out a test some shard couldn't re
   });
 });
 
-it("makes no map from shards that aren't one whole run at the commit", { timeout: 1000 }, () => {
+it("makes no map from shards that aren't one whole run at one commit", { timeout: 1000 }, () => {
   expect.hasAssertions();
 
+  const elsewhere = FIRST.replace("abc123", "def456");
   const merged = [
-    mergedShards({ commit: "abc123", sources: [FIRST] }),
-    mergedShards({ commit: "def456", sources: [FIRST, SECOND] }),
-    mergedShards({ commit: "abc123", sources: [FIRST, FIRST] }),
-    mergedShards({ commit: "abc123", sources: [FIRST, "not json"] }),
+    mergedShards([FIRST]),
+    mergedShards([elsewhere, SECOND]),
+    mergedShards([FIRST, FIRST]),
+    mergedShards([FIRST, "not json"]),
+    mergedShards([]),
   ];
 
-  expect(merged).toStrictEqual([
-    { ok: false, reason: "CI's coverage maps for abc123 aren't every shard of one run" },
-    { ok: false, reason: "CI's coverage maps for def456 aren't every shard of one run" },
-    { ok: false, reason: "CI's coverage maps for abc123 aren't every shard of one run" },
-    { ok: false, reason: "CI's coverage maps for abc123 aren't every shard of one run" },
-  ]);
+  expect(merged).toStrictEqual(
+    merged.map(() => ({ ok: false, reason: "CI's coverage maps aren't every shard of one run at one commit" })),
+  );
 });

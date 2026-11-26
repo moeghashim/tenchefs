@@ -4,6 +4,7 @@ import { expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import type { Cuttable } from "./cuttable.ts";
 import { alertSaying } from "./alerts.ts";
+import { answering } from "./answering.ts";
 import { cuttable } from "./cuttable.ts";
 import { inSidebar } from "./regions.ts";
 import { messagesIn } from "./messages.ts";
@@ -152,13 +153,16 @@ it("every message posted while the live link was down shows once it is back, tho
   expect.hasAssertions();
 
   const { poster, reader } = await reading("web-catch-up-pages");
-  const report = opened({ client: reader, hash: "#/channels/web-catch-up-pages", pageSize: 1 });
+  const { answered, client } = answering(reader);
+  const report = opened({ client, hash: "#/channels/web-catch-up-pages", pageSize: 1 });
+  await answered("ack");
   await screen.findByText("Deploy at noon?");
 
   await whileDown(report, async () => {
     await poster.createMessage({ channel: "web-catch-up-pages", text: "Or at one?" });
     await poster.createMessage({ channel: "web-catch-up-pages", text: "Or at two?" });
   });
+  await answered("ack");
   await screen.findByText("Or at two?");
 
   await expect(messagesIn("Messages")).resolves.toStrictEqual([

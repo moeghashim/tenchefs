@@ -1,8 +1,10 @@
 import type { InboxRow, Unread, UnreadState } from "../../unread/index.ts";
-import { inboxRows, rowKey, rowsOf } from "../../board/index.ts";
+import { inboxRows, rowKey, rowsOf, threadOf } from "../../board/index.ts";
 import { useMemo, useSyncExternalStore } from "react";
+import type { BoardState } from "../../board/index.ts";
 import type { InboxItem } from "../../sdk/index.ts";
 import type { InboxSelection } from "../../paths/index.ts";
+import { isThreadDeleted } from "./thread-deleted.ts";
 import { useBoardInbox } from "./use-board-inbox.ts";
 
 interface InboxRows {
@@ -27,14 +29,26 @@ function isSelected({ row, selected }: Choice): boolean {
 }
 
 interface Holding {
+  readonly gone: boolean;
   readonly rows: readonly InboxRow[];
   readonly kept: readonly InboxItem[];
   readonly me: string;
   readonly selected: InboxSelection | null;
 }
 
-function heldOf({ kept, me, rows, selected }: Holding): InboxRow | null {
-  if (rows.some((row) => isSelected({ row, selected }))) {
+function isGone(state: BoardState, selected: InboxSelection | null): boolean {
+  if (selected === null) {
+    return false;
+  }
+  const { channel, thread } = selected;
+  if (thread === null) {
+    return false;
+  }
+  return isThreadDeleted(threadOf({ channel, id: thread })(state));
+}
+
+function heldOf({ gone, kept, me, rows, selected }: Holding): InboxRow | null {
+  if (gone || rows.some((row) => isSelected({ row, selected }))) {
     return null;
   }
   return rowsOf({ items: kept, me }).find((row) => isSelected({ row, selected })) ?? null;
@@ -54,7 +68,8 @@ function useInboxRows({ me, selected, unread }: RowsOf): InboxRows {
   const selection = unread.selection(selected);
   const { items: kept } = useSyncExternalStore(selection.subscribe, selection.snapshot);
   const rows = useBoardInbox((state) => inboxRows({ me, state }));
-  return useMemo(() => shownWith(rows, heldOf({ kept, me, rows, selected })), [kept, me, rows, selected]);
+  const gone = useBoardInbox((state) => isGone(state, selected));
+  return useMemo(() => shownWith(rows, heldOf({ gone, kept, me, rows, selected })), [gone, kept, me, rows, selected]);
 }
 
 function heldKey(rows: InboxRows): string | null {

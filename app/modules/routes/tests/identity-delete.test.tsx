@@ -4,6 +4,7 @@ import { fireEvent, waitFor } from "@testing-library/react";
 import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
 import type { OpenedView } from "./view-opened.ts";
+import { holdsCallsOpen } from "../../testing/web.ts";
 import { profileOpened } from "./view-opened.ts";
 
 async function listedNames(prefix: string): Promise<readonly string[]> {
@@ -72,6 +73,7 @@ function deferredCount(): {
   readonly resolve: (messages: number) => void;
 } {
   const { promise, resolve } = Promise.withResolvers<{ readonly messages: number }>();
+  holdsCallsOpen("countMessagesBy");
   return {
     countMessagesBy: vi.fn<CookoutClient["countMessagesBy"]>().mockReturnValue(promise),
     resolve: (messages) => {

@@ -1,5 +1,12 @@
 import type { Applying, EarlierHeld, InboxEntries, InboxEntry } from "./inbox-entries.ts";
-import type { ChannelName, InboxHistoryItem, InboxItem, MovedBackReadPosition, ReadPosition } from "../../sdk/index.ts";
+import type {
+  ChannelName,
+  InboxHistoryItem,
+  InboxItem,
+  Message,
+  MovedBackReadPosition,
+  ReadPosition,
+} from "../../sdk/index.ts";
 import { entryOf, same, withoutWhere } from "./inbox-entries.ts";
 import { isReadAtPlace, placeKey } from "./read-positions-slice.ts";
 import type { ReadPositions } from "./read-positions-slice.ts";
@@ -102,6 +109,18 @@ function withoutChannel(entries: InboxEntries, channel: ChannelName): InboxEntri
   return { ...entries, earlier, items };
 }
 
+function withoutDeleted(entries: InboxEntries, deleted: Message): InboxEntries {
+  function gone(entry: InboxEntry): boolean {
+    return entry.message === deleted.id || (deleted.kind === "top-level" && entry.parent === deleted.id);
+  }
+  const items = withoutWhere({ gone, held: entries.items });
+  const earlier = earlierWithout(entries.earlier, gone);
+  if (items === entries.items && earlier === entries.earlier) {
+    return entries;
+  }
+  return { ...entries, earlier, items };
+}
+
 interface Paging {
   readonly entries: InboxEntries;
   readonly page: readonly InboxHistoryItem[];
@@ -160,6 +179,9 @@ function itemsApplied(applying: Applying): InboxEntries {
   }
   if (change.type === "channel-deleted") {
     return withoutChannel(entries, change.channel.name);
+  }
+  if (change.type === "message-deleted") {
+    return withoutDeleted(entries, change.message);
   }
   return readApplied(applying);
 }

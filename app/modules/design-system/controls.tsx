@@ -21,15 +21,14 @@
  * - `QuietButton` is a muted centred button, naming what it `controls`, such as loading older messages.
  * - `Form` hands one field's value to `onSubmit` without reloading the page.
  * - `TextField` is a labelled secret input in a `Form`, such as a token. It takes focus when it first appears if `focused`.
- * - `TextArea` is a labelled box to write in, such as a reply, whose text and caret its owner holds, where Enter sends the form and Shift+Enter starts a new line, and, while its owner is `choosing` from suggestions, is a combobox naming the highlighted option as its active descendant, where the arrows move it, Enter or Tab picks it and Escape closes the list. It takes focus when it first appears if `focused`, and puts the caret at the end of any text it appears with. Files pasted into it go to `onPasteFiles` instead of the text; it needs text to send only while `required`.
+ * - `TextArea` is a labelled box to write in, such as a reply, whose text and caret its owner holds, where Enter sends the form and Shift+Enter starts a new line, and, while its owner is `choosing` from suggestions, is a combobox naming the highlighted option as its active descendant, where the arrows move it, Enter or Tab picks it and Escape closes the list. It takes focus when it first appears if `focused`, and puts the caret at the end of any text it appears with. Files pasted into it, whether the clipboard holds them as files or only as items of kind `file`, go to `onPasteFiles` instead of the text; it needs text to send only while `required`.
  * - `SubmitButton` sends a `Form`.
  * - `SendButton` is its paper-plane icon form, named and tooltipped by `label`.
  * - `AttachButton` is a paperclip icon button, named and tooltipped by `label`, that opens the file picker for several files and hands what is picked to `onFiles`.
- * - `FileDrop` hands files dropped anywhere on its children to `onFiles`; anything else dropped is left alone.
  * - `PendingList` is a box's named list of files waiting to be sent, above its text, each in a `PendingItem`: its children (a thumbnail or a chip) with a small remove button named by `removeLabel` at its corner.
- * - `Suggestions` is a named listbox of options under a box, such as mentions or commands (each with any muted detail), one selected, which leaves the box focused even when a pointer picks one; it floats above the box (or below it, with `place` `below`), out of its layout, over all in the pane.
+ * - `Suggestions` is a named listbox of options under a box, such as mentions or commands (each with any muted detail), one selected, which leaves the box focused even when a pointer picks one; it lists every option, shows about 8 rows at most and scrolls the rest; it floats above the box (or below it, with `place` `below`), out of its layout, over all in the pane.
  * - `ComboboxField` is a named search input (`box` its ID) that is a combobox controlling the listbox `list`, its option at `active` the active one while `expanded`.
- * - `Listbox` is the named listbox (`list` its ID) both draw, of options in optional named groups, drawn by its children, the one at `highlighted` selected (scrolled into view in the `results` look); pressing one calls `onChoose` with its `value`, leaving the box focused.
+ * - `Listbox` is the named listbox (`list` its ID) both draw, of options in optional named groups, drawn by its children, the one at `highlighted` selected and scrolled into view; pressing one calls `onChoose` with its `value`, leaving the box focused.
  * - `ResultOption` is a result's label, detail and children.
  * - `DataArea` is a labelled box to write JSON in, whose text its owner holds.
  * - `LinesArea` is an optional labelled box for lines (`name: value` headers), whose text its owner holds.
@@ -71,7 +70,6 @@ export {
   ResultOption,
   SendButton,
   AttachButton,
-  FileDrop,
   PendingItem,
   PendingList,
   SubmitButton,

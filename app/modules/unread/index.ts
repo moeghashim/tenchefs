@@ -36,7 +36,8 @@
  * line sits above the first message after it, kept while the view is open.
  * A closed thread's items stay in `items`, listed and counted like any other;
  * `thread` events keep each item's `parent` current, so its `closedAt` follows
- * a close or reopen live. `channel-deleted` takes the channel's items, Earlier rows and Nudges out.
+ * a close or reopen live. `channel-deleted` takes the channel's items, Earlier rows and Nudges out, and
+ * `message-deleted` the deleted message's (or, for a top-level message, its whole thread's), so the counts drop.
  * `markChannelRead` acks one channel's items, the newest in its top-level messages and in each of its threads
  * (`POST /v1/ack`), and drops the items the read positions it moved cover, as `markAllRead` does; `markChannel` holds
  * why the last one failed, with its channel, until the next one starts.

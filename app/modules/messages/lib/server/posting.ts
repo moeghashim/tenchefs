@@ -4,7 +4,13 @@ import type { Author, JsonValue, Message, MessageId, MessageResponse } from "../
 import type { Harness, Identity } from "../../../identities/index.ts";
 import type { NewMessage, ScheduledRun, Storage, StorageUnavailable } from "../../../storage/server.ts";
 import type { PubSub, Scope } from "effect";
-import { closeWithoutReplyTo, messageNotFound, replyInOtherChannel, seenWithoutReplyTo } from "./refusals.ts";
+import {
+  closeWithoutReplyTo,
+  messageNotFound,
+  replyInOtherChannel,
+  seenWithoutReplyTo,
+  threadDeleted,
+} from "./refusals.ts";
 import type { ChannelName } from "../../../channels/index.ts";
 import type { Refusal } from "./refusals.ts";
 import { channelNotFound } from "../../../channels/server.ts";
@@ -24,7 +30,7 @@ interface PostMessage {
   readonly attachments?: Post["attachments"];
 }
 
-type Refused = "channel_not_found" | "reply_to_not_found" | "reply_in_other_channel";
+type Refused = "channel_not_found" | "reply_to_not_found" | "reply_in_other_channel" | "thread_deleted";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
@@ -91,6 +97,9 @@ function refusalOf(status: Refused, message: PostMessage): Refusal {
   }
   if (status === "reply_to_not_found") {
     return messageNotFound(String(message.replyTo));
+  }
+  if (status === "thread_deleted") {
+    return threadDeleted(message);
   }
   return replyInOtherChannel(message);
 }

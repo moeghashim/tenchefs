@@ -13,6 +13,7 @@ interface MessageEntryBodyProps {
   readonly closed: boolean;
   readonly href: string | null;
   readonly news: ThreadNews | null;
+  readonly opened: boolean;
 }
 
 export function MessageEntryBody(props: MessageEntryBodyProps): ReactNode {
@@ -20,7 +21,7 @@ export function MessageEntryBody(props: MessageEntryBodyProps): ReactNode {
   const summary = threadSummaryOf(props.message);
   return (
     <>
-      <MessageContent me={props.me} message={props.message} />
+      <MessageContent me={props.me} message={props.message} opened={props.opened} />
       <ScheduledMarker message={props.message} />
       <FeedRowClosed closed={props.closed} />
       {href !== null && summary !== null && <ReplySummary href={href} news={props.news} summary={summary} />}

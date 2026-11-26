@@ -6,6 +6,7 @@ import { fireEvent, screen } from "@testing-library/react";
 import { inPane } from "./regions.ts";
 import { messagesIn } from "./messages.ts";
 import { openWithClockStopped } from "./clock.ts";
+import { viewOpened } from "./view-opened.ts";
 
 const ONE_A_PAGE = 1;
 const TWO_A_PAGE = 2;
@@ -219,7 +220,12 @@ it("a refused ack says the channel couldn't be marked read", { timeout: 5000 }, 
   await channelWith("web-channel-ack-refused", ["Hello"]);
   const agent = await newIdentity({ kind: "agent", name: "web-channel-left" });
   const client = await ackingWithALeftSession(agent.token, "web-channel-left");
-  const close = openWithClockStopped({ client, hash: "#/channels/web-channel-ack-refused" });
+  const { close } = await viewOpened({
+    client,
+    hash: "#/channels/web-channel-ack-refused",
+    open: openWithClockStopped,
+    waitingOn: ["ack"],
+  });
 
   const alert = await alertSaying("Couldn't mark the channel read");
 

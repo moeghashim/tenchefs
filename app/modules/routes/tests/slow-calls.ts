@@ -1,4 +1,5 @@
 import { inject } from "vitest";
+import { trackedCalls } from "../../testing/web.ts";
 
 const NO_DELAY = 0;
 const realTimeout = globalThis.setTimeout;
@@ -37,7 +38,7 @@ function heldBack<Client extends object>({ client, delay }: Holding<Client>): Cl
 }
 
 function slowCalls<Client extends object>(client: Client): Client {
-  return heldBack({ client, delay: inject("webSlowMs") ?? NO_DELAY });
+  return trackedCalls(heldBack({ client, delay: inject("webSlowMs") ?? NO_DELAY }));
 }
 
-export { heldBack, slowCalls };
+export { heldBack, slept, slowCalls };

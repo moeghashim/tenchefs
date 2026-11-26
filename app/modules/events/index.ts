@@ -1,11 +1,8 @@
 /**
- * Live updates on the wire, shared by the server, the SDK and the web: the
- * events one Server-Sent Events stream sends (ADR 0002) and the stream's
- * path. Each event's SSE `event` field is its `type`, its SSE `id` is the
- * message ID, and its SSE `data` is the event as JSON. The stream starts
- * with one `connected` event, which isn't a `CookoutEvent`: the SDK reads it
- * for the caller. A stream that can't go on ends with one `refusal` event
- * instead.
+ * Live updates on the wire, shared by the server, the SDK and the web: the events one Server-Sent Events stream sends
+ * (ADR 0002) and the stream's path. Each event's SSE `event` field is its `type`, its SSE `id` is the message ID, and
+ * its SSE `data` is the event as JSON. The stream starts with one `connected` event, which isn't a `CookoutEvent`: the
+ * SDK reads it for the caller. A stream that can't go on ends with one `refusal` event instead.
  */
 import type {
   DeactivatedQuietAgent,
@@ -23,10 +20,12 @@ import type { Identity, IdentityName } from "../identities/index.ts";
 import type { LiveConnectionId, Presence, presenceName } from "../presence/index.ts";
 import type { Message, MessageId, ReactionsResponse, ReadReceipt, TopLevelMessage } from "../messages/index.ts";
 import type { Channel } from "../channels/index.ts";
+import type { MessageDeletedEvent } from "../messages/client.ts";
 import type { RegisteredWebhookCommand } from "../webhook-commands/index.ts";
 import type { ScheduledMessageEvent } from "../scheduled-messages/index.ts";
 import type { Trigger } from "../triggers/index.ts";
 
+export type { MessageDeletedEvent } from "../messages/client.ts";
 export type { ScheduledMessageEvent } from "../scheduled-messages/index.ts";
 export type {
   LiveConnectionDetail,
@@ -270,6 +269,7 @@ export type CookoutEvent =
   | ReactionEvent
   | ChannelEvent
   | ChannelDeletedEvent
+  | MessageDeletedEvent
   | IdentityDeletedEvent
   | CommandEvent
   | AgentSessionEvent

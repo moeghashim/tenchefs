@@ -121,14 +121,14 @@ it.effect("the agent that brought the agent in may dismiss its join request too"
 
 it.effect("only someone who could approve a join request may dismiss it, and a refused dismissal leaves it", () =>
   Effect.gen(function* refusedDismissal() {
-    const { ada, bob, cookout } = yield* board;
+    const { bob, chief, cookout } = yield* board;
     const request = yield* started(cookout);
     const refused = yield* Effect.forEach(
       [bob.client, cookout.client, cookout.clientFor()],
       deniedBy(request.userCode),
       { concurrency: 1 },
     );
-    const listed = yield* pendingIn(ada.client);
+    const listed = yield* pendingIn(chief.client);
     const pending = yield* collect(cookout, request);
 
     expect(refused).toMatchObject([{ status: NOT_FOUND }, { status: NOT_FOUND }, { status: UNAUTHORIZED }]);
@@ -142,9 +142,9 @@ it.effect("a join request for an agent already joined in another session says so
     const on = yield* board;
     const liveUntil = yield* joinedOnce(on);
     const second = yield* started(on.cookout);
-    const listed = yield* pendingIn(on.ada.client);
+    const listed = yield* pendingIn(on.chief.client);
     yield* answer(() => on.ada.client.denyAgentJoin(second.userCode));
-    const after = yield* pendingIn(on.ada.client);
+    const after = yield* pendingIn(on.chief.client);
 
     expect(listed).toMatchObject([{ liveSessionExpiresAt: liveUntil, userCode: second.userCode }]);
     expect(after).toStrictEqual([]);
@@ -166,11 +166,11 @@ it.effect("the owner's stream hears a dismissed join request leave", () =>
 
 it.effect("someone whose own <name>/agent approving would join can't dismiss another owner's join request", () =>
   Effect.gen(function* namespacedRefused() {
-    const { ada, bob, cookout } = yield* board;
+    const { bob, chief, cookout } = yield* board;
     yield* cookout.createIdentity("bob/worker", { owner: "bob" });
     const request = yield* started(cookout);
     const refused = yield* refusal(() => bob.client.denyAgentJoin(request.userCode));
-    const listed = yield* pendingIn(ada.client);
+    const listed = yield* pendingIn(chief.client);
 
     expect(refused).toMatchObject({ code: "not_owner", status: FORBIDDEN });
     expect(listed).toMatchObject([{ userCode: request.userCode }]);

@@ -1,8 +1,7 @@
 import { expect, it } from "vitest";
+import { feedOpened, postedIn } from "./feed.ts";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { inPane } from "./regions.ts";
-import { openAt } from "./render.tsx";
-import { postedIn } from "./feed.ts";
 
 const ONE = 1;
 
@@ -23,7 +22,7 @@ it("a fold before the day's first shown message shares the day separator's row",
     closed: ["Done a.", "Done b."],
     texts: ["Done a.", "Done b.", "Open one."],
   });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await feedOpened({ hash: `#/channels/${channel}`, reader });
   const fold = await itemOf("2 closed threads");
 
   expect(within(fold).getByRole("separator", { name: "Today" })).toBeDefined();
@@ -40,7 +39,7 @@ it("unfolding the fold gives the day separator back to the first message", { tim
     closed: ["Done a."],
     texts: ["Done a.", "Open one."],
   });
-  const close = openAt({ client: reader, hash: `#/channels/${channel}` });
+  const { close } = await feedOpened({ hash: `#/channels/${channel}`, reader });
   fireEvent.click(await inPane().findByRole("button", { name: "1 closed thread" }));
 
   expect(within(await itemOf("Done a.")).getByRole("separator", { name: "Today" })).toBeDefined();

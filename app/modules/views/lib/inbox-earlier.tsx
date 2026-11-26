@@ -36,6 +36,7 @@ export function InboxEarlier(props: InboxEarlierProps): ReactNode {
       <FeedHeading count={null} title={TITLE} />
       <EarlierNotices identities={props.identities} unread={unread} />
       <EarlierItems
+        alerts={unread.alerts}
         hasMore={state.hasMore}
         hidden={heldKey(props.rows)}
         items={state.items}

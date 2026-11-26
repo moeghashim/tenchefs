@@ -24,6 +24,7 @@ const SIXTY = 60;
 const NINETY = 90;
 const SETTLE = "30 millis";
 const JUST_UNDER_THIRTY_DAYS = "2591999999 millis";
+const JUST_UNDER_TEN_DAYS = "863999999 millis";
 const TEXT = "@bob has had no activity for 30 days. Deactivate them?";
 
 const settled: Effect.Effect<void> = TestClock.withLive(Effect.sleep(SETTLE));
@@ -138,10 +139,10 @@ it.effect(
     Effect.gen(function* agentsHoldOff() {
       const { act, cookout, watcher } = yield* fourOwners;
       yield* Effect.andThen(quietFor("20 days"), act);
-      yield* quietFor("9 days");
-      const pastThirty = Effect.andThen(quietFor("2 days"), offersOnceThere(cookout.client, ONE));
-      const whileOnline = yield* Effect.scoped(Effect.andThen(stayOnline(watcher), pastThirty));
-      const atFifty = yield* Effect.andThen(quietFor("19 days"), offersOnceThere(cookout.client, THREE));
+      yield* quietFor(JUST_UNDER_TEN_DAYS);
+      const atThirty = Effect.andThen(quietFor("1 millis"), offersOnceThere(cookout.client, ONE));
+      const whileOnline = yield* Effect.scoped(Effect.andThen(stayOnline(watcher), atThirty));
+      const atFifty = yield* Effect.andThen(quietFor("20 days"), offersOnceThere(cookout.client, THREE));
 
       expect([namesIn(whileOnline), namesIn(atFifty)]).toStrictEqual([["eve"], ["eve", "bob", "cy"]]);
     }).pipe(Effect.provide(testCookout())),

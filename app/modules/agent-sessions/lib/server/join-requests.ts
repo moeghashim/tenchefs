@@ -1,3 +1,4 @@
+import type { AgentIdentity, Identity, IdentityName, Token } from "../../../identities/index.ts";
 import type {
   AgentJoinApproval,
   AgentJoinCollection,
@@ -12,7 +13,7 @@ import type {
   DenyAgentJoinResponse,
 } from "../../index.ts";
 import { Effect, Function, Option, Predicate } from "effect";
-import type { Identity, IdentityName, Token } from "../../../identities/index.ts";
+import type { Lifetime, Terms } from "./join-request-terms.ts";
 import {
   agentJoinRequestDenied,
   agentJoinRequestNotFound,
@@ -21,6 +22,7 @@ import {
   liveRequest,
   lowered,
   now,
+  peopleShownJoinRequestAt,
   termsAsked,
   viewOf,
 } from "./join-request-terms.ts";
@@ -28,7 +30,6 @@ import { agentNotFound, agentSessionLive, joinNotOwned } from "./refusals.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { On } from "./join.ts";
 import type { Refusal } from "../../../http/index.ts";
-import type { Terms } from "./join-request-terms.ts";
 import { agentJoinApprovalPathOf } from "../../index.ts";
 import { agentToApprove } from "./resolve.ts";
 
@@ -52,8 +53,20 @@ interface Viewing {
   readonly userCode: string;
 }
 
+interface JoinRequestChange {
+  readonly agent: IdentityName;
+  readonly reaches: "everyone" | "people";
+}
+
+interface StartedJoinRequest {
+  readonly agent: IdentityName;
+  readonly createdAt: IsoTime;
+  readonly shownToPeopleAt: IsoTime;
+  readonly expiresAt: IsoTime;
+}
+
 interface JoinRequestChanges {
-  readonly started: (agent: IdentityName, expiresAt: IsoTime) => Effect.Effect<void>;
+  readonly started: (started: StartedJoinRequest) => Effect.Effect<void>;
   readonly approved: (agent: IdentityName) => Effect.Effect<void>;
   readonly denied: (agent: IdentityName) => Effect.Effect<void>;
 }
@@ -72,14 +85,17 @@ interface Changing extends On {
 
 const codeTaken = new Error("The new user code was taken: start again.");
 
-function isActiveAgent(found: Identity | undefined): boolean {
+function isActiveAgent(found: Identity | undefined): found is AgentIdentity {
   return Predicate.isNotUndefined(found) && found.kind === "agent" && found.deactivated !== true;
 }
 
-function refuseUnlessAgent(on: On, agent: IdentityName): Fails<void> {
-  return Effect.asVoid(
-    Effect.filterOrFail(on.storage.findIdentityByName(agent), isActiveAgent, () => agentNotFound(agent)),
-  );
+function refuseUnlessAgent(on: On, agent: IdentityName): Fails<AgentIdentity> {
+  return Effect.filterOrFail(on.storage.findIdentityByName(agent), isActiveAgent, () => agentNotFound(agent));
+}
+
+function startedOf(agent: AgentIdentity, { createdAt, expiresAt }: Lifetime): StartedJoinRequest {
+  const shownToPeopleAt = peopleShownJoinRequestAt({ agent, createdAt });
+  return { agent: agent.name, createdAt, expiresAt, shownToPeopleAt };
 }
 
 function starter(on: Changing): JoinRequests["startJoin"] {
@@ -87,7 +103,7 @@ function starter(on: Changing): JoinRequests["startJoin"] {
   return ({ as: agent, ...request }) =>
     Effect.gen(function* startAgentJoinRequest() {
       yield* asked(request.idleExpiry);
-      yield* refuseUnlessAgent(on, agent);
+      const identity = yield* refuseUnlessAgent(on, agent);
       const requestId = yield* on.secrets.newToken;
       const requestHash = yield* on.secrets.hashToken(requestId);
       const userCode = yield* on.secrets.newUserCode;
@@ -96,8 +112,12 @@ function starter(on: Changing): JoinRequests["startJoin"] {
         { ...request, agent, createdAt, expiresAt, requestHash, userCode },
         createdAt,
       );
-      yield* Effect.filterOrElse(added, (result) => result === "added", Function.constant(Effect.die(codeTaken)));
-      yield* on.joinRequestChanges.started(agent, expiresAt);
+      const stored = Effect.filterOrElse(
+        added,
+        (result) => result === "added",
+        Function.constant(Effect.die(codeTaken)),
+      );
+      yield* Effect.andThen(stored, on.joinRequestChanges.started(startedOf(identity, { createdAt, expiresAt })));
       return { approvalPath: agentJoinApprovalPathOf(userCode), expiresAt, requestId, userCode };
     });
 }
@@ -236,4 +256,4 @@ function joinRequestsOn(on: Changing): JoinRequests {
   };
 }
 
-export { type JoinRequestChanges, type JoinRequests, joinRequestsOn };
+export { type JoinRequestChange, type JoinRequestChanges, type JoinRequests, type StartedJoinRequest, joinRequestsOn };

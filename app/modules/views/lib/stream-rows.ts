@@ -10,6 +10,7 @@ interface StreamRow {
   readonly grouped: boolean;
   readonly day: string | null;
   readonly unreadLine: boolean;
+  readonly belowNewLine: boolean;
 }
 
 interface StreamOf {
@@ -57,7 +58,14 @@ function newLineAt({ me, messages, readPosition }: StreamOf): MessageId | null {
 function rowOf(message: Message, previous: Message | null, stream: StreamOf & Lined): StreamRow {
   const day = dayStarted(previous ?? stream.after, message);
   const unreadLine = message.id === stream.lineAt;
-  return { day, grouped: day === null && !unreadLine && joins(previous, message), message, unreadLine };
+  const belowNewLine = stream.lineAt !== null && message.id >= stream.lineAt;
+  return {
+    belowNewLine,
+    day,
+    grouped: day === null && !unreadLine && joins(previous, message),
+    message,
+    unreadLine,
+  };
 }
 
 function streamRows(stream: StreamOf): readonly StreamRow[] {

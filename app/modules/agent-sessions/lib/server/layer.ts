@@ -2,43 +2,47 @@ import { AgentSessions, agentSessionsOn } from "./service.ts";
 import type { Config, Scope } from "effect";
 import { DateTime, Effect, Layer, Option, PubSub } from "effect";
 import type { Identity, IdentityName } from "../../../identities/index.ts";
+import type { JoinRequestChange, JoinRequestChanges, StartedJoinRequest } from "./join-requests.ts";
 import { IdentityChanges } from "../../../identities/server.ts";
 import type { IsoTime } from "../../../time/index.ts";
-import type { JoinRequestChanges } from "./join-requests.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
 import type { StorageUnavailable } from "../../../storage/server.ts";
 import { idleSecondsOf } from "./idle-expiry.ts";
 import { maxIdleExpiry } from "../../../config/server.ts";
 
-function untilExpiry(expiresAt: IsoTime): Effect.Effect<void> {
-  return Effect.flatMap(DateTime.now, (now) => {
-    const expiry = DateTime.makeUnsafe(expiresAt);
-    return Effect.sleep(DateTime.distance(now, expiry));
-  });
+function until(moment: IsoTime): Effect.Effect<void> {
+  return Effect.flatMap(DateTime.now, (now) => Effect.sleep(DateTime.distance(now, DateTime.makeUnsafe(moment))));
 }
 
 function joinRequestChangesOn(): Effect.Effect<
-  JoinRequestChanges & { readonly hub: PubSub.PubSub<IdentityName> },
+  JoinRequestChanges & { readonly hub: PubSub.PubSub<JoinRequestChange> },
   never,
   Scope.Scope
 > {
   return Effect.gen(function* openJoinRequestChanges() {
     const scope = yield* Effect.scope;
-    const hub = yield* PubSub.unbounded<IdentityName>();
+    const hub = yield* PubSub.unbounded<JoinRequestChange>();
     function publish(agent: IdentityName): Effect.Effect<void> {
-      return Effect.asVoid(PubSub.publish(hub, agent));
+      const change: JoinRequestChange = { agent, reaches: "everyone" };
+      return Effect.asVoid(PubSub.publish(hub, change));
     }
-    function publishAtExpiry(agent: IdentityName, expiresAt: IsoTime): Effect.Effect<void> {
-      const expired = Effect.andThen(untilExpiry(expiresAt), publish(agent));
-      return Effect.asVoid(Effect.forkIn(expired, scope));
+    function publishAt(moment: IsoTime, change: JoinRequestChange): Effect.Effect<void> {
+      const published = Effect.andThen(until(moment), PubSub.publish(hub, change));
+      return Effect.asVoid(Effect.forkIn(published, scope));
     }
-    return {
-      approved: publish,
-      denied: publish,
-      hub,
-      started: (agent, expiresAt) => Effect.andThen(publish(agent), publishAtExpiry(agent, expiresAt)),
-    };
+    function started({ agent, createdAt, expiresAt, shownToPeopleAt }: StartedJoinRequest): Effect.Effect<void> {
+      const shownToPeople = publishAt(shownToPeopleAt, { agent, reaches: "people" });
+      return Effect.all(
+        [
+          publish(agent),
+          Effect.when(shownToPeople, Effect.succeed(shownToPeopleAt !== createdAt)),
+          publishAt(expiresAt, { agent, reaches: "everyone" }),
+        ],
+        { concurrency: 1, discard: true },
+      );
+    }
+    return { approved: publish, denied: publish, hub, started };
   });
 }
 

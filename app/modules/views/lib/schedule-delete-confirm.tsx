@@ -1,6 +1,7 @@
 import type { ScheduleList, ScheduleListState } from "../../board/index.ts";
 import { ConfirmDialog } from "../../design-system/controls.tsx";
 import type { ReactNode } from "react";
+import type { ScheduledMessageId } from "../../scheduled-messages/index.ts";
 import { refusalWords } from "./schedule-words.ts";
 import { useCallback } from "react";
 
@@ -12,25 +13,23 @@ const TEXT = {
 } as const;
 
 interface ScheduleDeleteConfirmProps {
+  readonly deleting: ScheduledMessageId;
   readonly scheduleList: ScheduleList;
   readonly state: ScheduleListState;
 }
 
 function errorOf(state: ScheduleListState): string | null {
-  if (state.change.status !== "failed" || state.deleting === null) {
+  if (state.change.status !== "failed") {
     return null;
   }
   return `${TEXT.failed} ${refusalWords(state.change)}`;
 }
 
 export function ScheduleDeleteConfirm(props: ScheduleDeleteConfirmProps): ReactNode {
-  const { scheduleList, state } = props;
-  const { deleting } = state;
+  const { deleting, scheduleList, state } = props;
   const handleCancel = scheduleList.cancelDelete;
   const handleConfirm = useCallback(() => {
-    if (deleting !== null) {
-      scheduleList.change(deleting, "remove");
-    }
+    scheduleList.change(deleting, "remove");
   }, [deleting, scheduleList]);
   return (
     <ConfirmDialog
@@ -40,7 +39,7 @@ export function ScheduleDeleteConfirm(props: ScheduleDeleteConfirmProps): ReactN
       error={errorOf(state)}
       onCancel={handleCancel}
       onConfirm={handleConfirm}
-      open={deleting !== null}
+      open
       pending={state.change.status === "changing"}
       title={TEXT.title}
     />

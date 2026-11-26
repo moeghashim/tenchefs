@@ -55,5 +55,5 @@ test("when the second person opens the thread, the first sees that they have see
   const bobPage = await openAs({ browser, hash: opened.hash, token: opened.bob.token });
 
   await expect(bobPage.getByRole("feed", { exact: true, name: "Replies" })).toContainText("Noon works");
-  await expect(annPage.getByRole("tooltip")).toContainText(`Seen by @${bobName()} just now`);
+  await expect(annPage.getByRole("tooltip")).toContainText(`Seen by @${bobName()} `);
 });

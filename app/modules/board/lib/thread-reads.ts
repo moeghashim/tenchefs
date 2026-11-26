@@ -1,4 +1,5 @@
 import type { ChannelName, CookoutClient, MessageId, ThreadResponse } from "../../sdk/index.ts";
+import { NOTHING_DELETED, withDeletedKept } from "./message-deletions.ts";
 import { withEntry, withFresh } from "./messages-table.ts";
 import type { Held } from "./messages-held.ts";
 import { LOADING } from "./message-states.ts";
@@ -57,6 +58,7 @@ function latestOf({ parent, replies }: ThreadResponse): MessageId {
 
 function firstRead(read: ThreadResponse): ThreadLoaded {
   return {
+    deleted: NOTHING_DELETED,
     parent: read.parent.id,
     read: { status: "none" },
     replies: read.replies.map((reply) => reply.id),
@@ -84,7 +86,12 @@ async function readThread(at: ThreadAt, change: ThreadChange): Promise<ThreadRes
 }
 
 function withRead(thread: ThreadLoaded, read: ThreadResponse): ThreadLoaded {
-  return { ...thread, parent: read.parent.id, replies: read.replies.map((reply) => reply.id) };
+  const replies = read.replies.map((reply) => reply.id);
+  return {
+    ...thread,
+    parent: read.parent.id,
+    replies: withDeletedKept({ before: thread.replies, deleted: thread.deleted, read: replies }),
+  };
 }
 
 function repliedRead(thread: ThreadLoaded, read: ThreadResponse): ThreadLoaded {

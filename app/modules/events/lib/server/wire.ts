@@ -11,6 +11,7 @@ import type {
   IdentityDeletedEvent,
   IdentityEvent,
   InboxItemEvent,
+  MessageDeletedEvent,
   MessageEvent,
   NudgeEvent,
   NudgeReadEvent,
@@ -121,6 +122,14 @@ export const ChannelEventSchema = matchesWire<ChannelEvent>()(
 
 export const ChannelDeletedEventSchema = matchesWire<ChannelDeletedEvent>()(
   Schema.Struct({ channel: ChannelSchema, type: Schema.Literal("channel-deleted") }),
+);
+
+export const MessageDeletedEventSchema = matchesWire<MessageDeletedEvent>()(
+  Schema.Struct({
+    message: MessageSchema,
+    parent: Schema.optionalKey(TopLevelMessageSchema),
+    type: Schema.Literal("message-deleted"),
+  }),
 );
 
 export const IdentityDeletedEventSchema = matchesWire<IdentityDeletedEvent>()(

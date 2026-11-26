@@ -2,7 +2,7 @@
  * Trigger URLs on the backend (mattpocock/cookout#378). `triggerRoutes` let an agent's owner, and nobody else, read,
  * set and clear the agent's trigger URL and token; the token is stored for the call alone and never answered.
  * `mentionTriggersLayer` subscribes to every stored message, whatever posted it, and for each agent it mentions that
- * has a trigger URL, is active and isn't its author, POSTs `{ text }` (the message's link and text) to the URL with
+ * has a trigger URL, is active, isn't its author and holds no live agent session, POSTs `{ text }` (the message's link and text) to the URL with
  * `Authorization: Bearer <token>` and the owner's extra headers (mattpocock/cookout#440), whose values are kept like
  * the token and never answered, in the background, through the `TriggerCaller` seam: one attempt, given up after
  * 10 s, never retried, and never holding up or failing the post. Each result is stored as the URL's last result and
@@ -41,6 +41,9 @@ export { triggerRoutes } from "./lib/server/routes.ts";
  * follows a redirect, so one counts as a failed call. Tests swap in their own.
  */
 export { type TriggerCall, TriggerCaller, type TriggerCallerService, triggerCallerLive } from "./lib/server/caller.ts";
+
+/** What a trigger URL answered: its status and, for a failed call, its response body. */
+export { type TriggerAnswer } from "./lib/server/answer.ts";
 
 /** The response Schemas of the trigger URL routes, and of the `trigger` event, for the SDK's generated validators. */
 export const triggerResponseSchemas = { TriggerEvent: TriggerEventSchema, TriggerResponse: TriggerResponseSchema };

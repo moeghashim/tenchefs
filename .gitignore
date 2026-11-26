@@ -13,3 +13,4 @@ test-results/
 playwright-report/
 .timings/
 .browser-coverage/
+test-results-first-run/

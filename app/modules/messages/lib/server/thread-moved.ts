@@ -37,11 +37,20 @@ function laterOf(replyTo: MessageId, seen: MessageId): MessageId {
   return replyTo;
 }
 
+function liveThreadOf(storage: Store, replyTo: MessageId): Fails<StoredThread | undefined> {
+  return Effect.flatMap(storage.findReplyTarget(replyTo), (target) => {
+    if (Predicate.isUndefined(target) || target.threadDeleted) {
+      return Effect.undefined;
+    }
+    return storage.getThread(target.thread);
+  });
+}
+
 function movedSince({ author, replyTo, seen, storage }: Moving): Fails<readonly Reply[]> {
   if (author.kind !== "agent" || Predicate.isUndefined(replyTo) || Predicate.isUndefined(seen)) {
     return Effect.succeed(NONE);
   }
-  return Effect.map(storage.getThread(replyTo), (thread) => newerByOthers(thread, laterOf(replyTo, seen), author));
+  return Effect.map(liveThreadOf(storage, replyTo), (thread) => newerByOthers(thread, laterOf(replyTo, seen), author));
 }
 
 function movedMessage(count: number): string {

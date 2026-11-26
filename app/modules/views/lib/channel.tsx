@@ -46,11 +46,13 @@ export function ChannelView(props: ChannelProps): ReactNode {
   const description = useDescription(props.channel);
   const subscribed = useSubscriptions();
   const readPosition = useSyncExternalStore(props.newLine.subscribe, props.newLine.snapshot);
+  const draft = props.composer.channelDraft(props.channel);
+  const handleFiles = draft.attachments.attach;
   if (state.status === "failed" && state.code === "channel_not_found") {
     return <NotBuiltView description={TEXT.missing} title={TEXT.nothing} />;
   }
   return (
-    <Pane>
+    <Pane onFiles={handleFiles}>
       <PaneHeader description={description} title={`#${props.channel}`}>
         {subscribed.status === "loaded" && <SubscriptionToggle channel={props.channel} state={subscribed} />}
       </PaneHeader>
@@ -66,7 +68,7 @@ export function ChannelView(props: ChannelProps): ReactNode {
       />
       <MessageFooter
         channel={props.channel}
-        draft={props.composer.channelDraft(props.channel)}
+        draft={draft}
         keymap={props.keymap}
         scheduling={props.scheduling}
         state={state}

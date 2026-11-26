@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { people, post } from "./attention-posts.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
+import { viewOpened } from "./view-opened.ts";
 import { watched } from "./watched.ts";
 
 interface Reacted {
@@ -86,15 +87,20 @@ it("a reaction on your reply is For you, and doesn't count as a new reply in its
   ]);
 });
 
+async function reactedChannelOpened(reader: CookoutClient): Promise<void> {
+  const { live, stream } = watched(reader);
+  const { answered } = await viewOpened({ client: reader, hash: "#/inbox", live, waitingOn: ["inbox"] });
+  await stream;
+  fireEvent.click(await inPane().findByRole("link", { name: /reacted with/u }));
+  await screen.findByRole("feed", { name: "Messages" });
+  await answered("ack");
+}
+
 it("opening the channel of a reaction's message acks it, so it leaves the Inbox", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const { reader } = await reactedTo({ channel: "web-inbox-reacted-open" });
-  const { live, stream } = watched(reader);
-  openAt({ client: reader, hash: "#/inbox", live });
-  await stream;
-  fireEvent.click(await inPane().findByRole("link", { name: /reacted with/u }));
-  await screen.findByRole("feed", { name: "Messages" });
+  await reactedChannelOpened(reader);
   globalThis.location.hash = "#/inbox";
 
   await waitFor(() => {

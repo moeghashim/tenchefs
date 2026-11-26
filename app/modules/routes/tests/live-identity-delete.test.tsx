@@ -42,6 +42,11 @@ async function heardDeleted(boardStore: BoardStore, name: string): Promise<void>
   });
 }
 
+async function deletedAndHeard(boardStore: BoardStore, name: string): Promise<void> {
+  await adminClient().deleteIdentity(name);
+  await heardDeleted(boardStore, name);
+}
+
 async function deletedElsewhere(name: string): Promise<HTMLElement> {
   await adminClient().deleteIdentity(name);
   const notice = await screen.findByRole("status", { name: "" });
@@ -76,7 +81,7 @@ it("an identity deleted elsewhere closes its open profile page with a notice and
 
   await newIdentity({ kind: "agent", name: "web-live-gone-bot" });
   const close = await openLiveAs("web-live-gone-reader", "#/people/web-live-gone-bot");
-  await inPane().findByRole("link", { name: testAgentDisplayName("web-live-gone-bot") });
+  await inPane().findByRole("link", { name: `${testAgentDisplayName("web-live-gone-bot")}, Offline` });
   const notice = await deletedElsewhere("web-live-gone-bot");
 
   expect([notice.textContent, globalThis.location.hash]).toStrictEqual([
@@ -123,12 +128,32 @@ it("an identity deleted elsewhere shows no notice on a page not open on its prof
 
   await newIdentity({ kind: "agent", name: "web-live-gone-other-bot" });
   const { boardStore, close } = await openBoardAs("web-live-gone-other-reader", "#/people");
-  await inPane().findByRole("link", { name: testAgentDisplayName("web-live-gone-other-bot") });
+  await inPane().findByRole("link", { name: `${testAgentDisplayName("web-live-gone-other-bot")}, Offline` });
   await adminClient().deleteIdentity("web-live-gone-other-bot");
   await leftPeople("web-live-gone-other-bot");
   await heardDeleted(boardStore, "web-live-gone-other-bot");
 
   expect([screen.queryByText(/was deleted/u), globalThis.location.hash]).toStrictEqual([null, "#/people"]);
+
+  await close();
+});
+
+it("a profile opened again after its identity was deleted stays open when another identity is deleted", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  await newIdentity({ kind: "agent", name: "web-live-gone-again-bot" });
+  const { boardStore, close } = await openBoardAs("web-live-gone-again-reader", "#/people");
+  await deletedAndHeard(boardStore, "web-live-gone-again-bot");
+  globalThis.location.hash = "#/people/web-live-gone-again-bot";
+  await newIdentity({ kind: "agent", name: "web-live-gone-later-bot" });
+  await deletedAndHeard(boardStore, "web-live-gone-later-bot");
+
+  expect([screen.queryByText(/was deleted/u), globalThis.location.hash]).toStrictEqual([
+    null,
+    "#/people/web-live-gone-again-bot",
+  ]);
 
   await close();
 });

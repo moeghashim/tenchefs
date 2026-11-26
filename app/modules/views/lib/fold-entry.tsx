@@ -11,6 +11,7 @@ interface FoldEntryProps {
   readonly day: string | null;
   readonly expanded: ReadonlyMap<MessageId, number>;
   readonly channel: ChannelName;
+  readonly open: MessageId | null;
 }
 
 export function FoldEntry(props: FoldEntryProps): ReactNode {
@@ -20,7 +21,7 @@ export function FoldEntry(props: FoldEntryProps): ReactNode {
     store.channelPages.showClosed(channel, { count: shownAfterClick({ expanded, run: fold.run }), run: fold.run });
   }, [channel, expanded, fold, store]);
   return (
-    <ClosedFold day={props.day} onClick={handleUnfold}>
+    <ClosedFold current={props.open !== null && fold.run.includes(props.open)} day={props.day} onClick={handleUnfold}>
       {fold.label}
     </ClosedFold>
   );

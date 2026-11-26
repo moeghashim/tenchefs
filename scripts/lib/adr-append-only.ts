@@ -34,9 +34,21 @@ const ADDED = "+";
 const REMOVED = "-";
 const NOT_FOUND = -1;
 const AFTER_HEADER = 1;
+const SPACES = /\s+/gu;
+const PADDED_PIPE = / ?\| ?/gu;
+const TABLE_RULE = /^\|(?::?-+:?\|)+$/u;
+const DASHES = /-+/gu;
 
 function isDatedNote(line: string): boolean {
   return line.trim() === "" || DATED_NOTE.test(line);
+}
+
+function wordsOf(line: string): string {
+  const squeezed = line.replaceAll(SPACES, " ").trim().replaceAll(PADDED_PIPE, "|");
+  if (TABLE_RULE.test(squeezed)) {
+    return squeezed.replaceAll(DASHES, "-");
+  }
+  return squeezed;
 }
 
 function hunkLines(lines: readonly string[]): readonly string[] {
@@ -69,7 +81,9 @@ function editsOf({ deleted, file, lines, original }: Change): readonly string[] 
     return [];
   }
   const hunks = hunkLines(lines);
-  const addedLines = new Set(contentOf(hunks, ADDED));
+  const addedWords = new Set(contentOf(hunks, ADDED).map((line) => wordsOf(line)));
+  const removedWords = new Set(contentOf(hunks, REMOVED).map((line) => wordsOf(line)));
+  const addedLines = new Set(contentOf(hunks, ADDED).filter((line) => !removedWords.has(wordsOf(line))));
   const relinks = new Set(
     contentOf(hunks, REMOVED)
       .filter((line) => unlinked(line, deleted) !== line)
@@ -77,7 +91,10 @@ function editsOf({ deleted, file, lines, original }: Change): readonly string[] 
       .filter((line) => addedLines.has(line)),
   );
   const removed = contentOf(hunks, REMOVED).filter(
-    (line) => (original.has(line) || isDatedNote(line)) && !relinks.has(unlinked(line, deleted)),
+    (line) =>
+      (original.has(line) || isDatedNote(line)) &&
+      !relinks.has(unlinked(line, deleted)) &&
+      !addedWords.has(wordsOf(line)),
   );
   const added = [...addedLines].filter((line) => !original.has(line) && !isDatedNote(line) && !relinks.has(line));
   return [

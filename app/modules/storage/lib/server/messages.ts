@@ -41,20 +41,31 @@ type AppendMessageResult =
     }
   | { readonly status: "channel_not_found" }
   | { readonly status: "reply_to_not_found" }
-  | { readonly status: "reply_in_other_channel" };
+  | { readonly status: "reply_in_other_channel" }
+  | { readonly status: "thread_deleted" };
 
 type Placed = { readonly status: "top-level" } | { readonly status: "reply"; readonly parent: MessageId };
 
-type Placement = Placed | { readonly status: "reply_to_not_found" } | { readonly status: "reply_in_other_channel" };
+type Placement =
+  | Placed
+  | { readonly status: "reply_to_not_found" }
+  | { readonly status: "reply_in_other_channel" }
+  | { readonly status: "thread_deleted" };
 
 interface ChannelPageRequest {
   readonly before?: MessageId;
   readonly limit: number;
 }
 
+interface ReplyTarget {
+  readonly channel: ChannelName;
+  readonly thread: MessageId;
+  readonly threadDeleted: boolean;
+}
+
 interface FoundReplyTo {
   readonly channel: ChannelName;
-  readonly found: Message | undefined;
+  readonly found: ReplyTarget | undefined;
 }
 
 interface Placing {
@@ -84,6 +95,11 @@ interface ThreadStateChange {
   readonly parent: TopLevelMessage;
 }
 
+interface Deleting {
+  readonly deletedAt: IsoTime;
+  readonly deletedBy: IdentityName;
+}
+
 interface MessagesSection extends OpenThreadsSection, SearchSection, AttachmentsSection {
   readonly appendMessage: (message: NewMessage) => Fails<AppendMessageResult>;
   readonly listChannelMessages: (channel: ChannelName, page: ChannelPageRequest) => Fails<StoredPage | undefined>;
@@ -91,6 +107,8 @@ interface MessagesSection extends OpenThreadsSection, SearchSection, Attachments
   readonly latestMessageId: Effect.Effect<MessageId | undefined, StorageUnavailable>;
   readonly closeThread: (id: MessageId, closing: Closing) => Fails<ThreadStateChange | undefined>;
   readonly reopenThread: (id: MessageId, reopenedAt: IsoTime) => Fails<ThreadStateChange | undefined>;
+  readonly deleteMessage: (id: MessageId, deleting: Deleting) => Fails<Message | undefined>;
+  readonly findReplyTarget: (id: MessageId) => Fails<ReplyTarget | undefined>;
 }
 
 const NO_REPLIES = 0;
@@ -110,10 +128,13 @@ function placeIn({ channel, found }: FoundReplyTo): Placement {
   if (Predicate.isUndefined(found)) {
     return { status: "reply_to_not_found" };
   }
+  if (found.threadDeleted) {
+    return { status: "thread_deleted" };
+  }
   if (found.channel !== channel) {
     return { status: "reply_in_other_channel" };
   }
-  return { parent: threadIdOf(found), status: "reply" };
+  return { parent: found.thread, status: "reply" };
 }
 
 function isPlaced(placement: Placement): placement is Placed {
@@ -185,10 +206,12 @@ function counted({ parent, replies }: Counting): TopLevelMessage {
 export {
   type AppendMessageResult,
   type ChannelPageRequest,
+  type Deleting,
   type Mentioning,
   type MessagesSection,
   type NewMessage,
   type Placement,
+  type ReplyTarget,
   type StoredPage,
   type StoredThread,
   type ThreadStateChange,

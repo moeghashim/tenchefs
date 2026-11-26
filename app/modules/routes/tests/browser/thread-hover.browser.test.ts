@@ -2,7 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
 import { inThread } from "./regions.ts";
-import { logIn } from "./login.ts";
+import { logInToChannels } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
@@ -20,7 +20,7 @@ async function openThread({ channel, page }: Opened): Promise<void> {
   const { message: parent } = await poster.client.createMessage({ channel, text: "Deploy?" });
   await poster.client.createMessage({ channel, replyTo: parent.id, text: "Noon works" });
   await reader.client.createMessage({ channel, replyTo: parent.id, text: "Or one" });
-  await logIn({ page, token: reader.token });
+  await logInToChannels({ page, token: reader.token });
   await page.goto(`/#/channels/${channel}/threads/${String(parent.id)}`);
 }
 

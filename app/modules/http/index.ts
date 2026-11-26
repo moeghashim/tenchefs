@@ -69,6 +69,7 @@ export const errorCodes = [
   "attachment_unnamed",
   "message_empty",
   "thread_moved",
+  "thread_deleted",
   "attachment_not_found",
   ...scheduledMessageErrorCodes,
   "not_found",

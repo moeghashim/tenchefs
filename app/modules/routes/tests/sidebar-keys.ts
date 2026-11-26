@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import type { CookoutClient } from "../../sdk/index.ts";
 import { expect } from "vitest";
+import { holdsCallsOpen } from "../../testing/web.ts";
 import { inSidebar } from "./regions.ts";
 import { subscribedReader } from "./inbox-reader.ts";
 
@@ -106,26 +107,31 @@ async function forever<Value>(): Promise<Value> {
 }
 
 function loadingSubscriptions(reader: Readonly<CookoutClient>): CookoutClient {
+  holdsCallsOpen("listSubscribedChannels");
   return { ...reader, listSubscribedChannels: forever };
 }
 
 interface Hanging {
   readonly client: CookoutClient;
   readonly asked: () => number;
+  readonly reached: Promise<boolean>;
 }
 
 function hangingSubscribe(reader: Readonly<CookoutClient>): Hanging {
   let asked = 0;
+  const reached = Promise.withResolvers<boolean>();
   return {
     asked: () => asked,
     client: {
       ...reader,
       subscribe: async () => {
         asked += ONCE;
+        reached.resolve(true);
         const never = await forever<Awaited<ReturnType<CookoutClient["subscribe"]>>>();
         return never;
       },
     },
+    reached: reached.promise,
   };
 }
 

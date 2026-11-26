@@ -113,12 +113,60 @@ function pasteInto({ files, form }: Handing): boolean {
 
 function pasteText(form: string): boolean {
   return fireEvent.paste(within(formNamed(form)).getByRole("textbox"), {
-    clipboardData: { files: [], types: ["text/plain"] },
+    clipboardData: { files: [], items: [{ getAsFile: (): null => null, kind: "string" }], types: ["text/plain"] },
   });
+}
+
+function pasteItemsInto({ files, form }: Handing): boolean {
+  const items = filesOf(files).map((file) => ({ getAsFile: (): File => file, kind: "file" }));
+  return fireEvent.paste(within(formNamed(form)).getByRole("textbox"), {
+    clipboardData: { files: [], items: [{ getAsFile: (): null => null, kind: "string" }, ...items], types: ["Files"] },
+  });
+}
+
+interface Carrying {
+  readonly region: string;
+  readonly files: readonly FileSpec[];
+}
+
+interface Carried {
+  readonly dataTransfer: { readonly files: readonly File[]; readonly types: readonly string[] };
+}
+
+function carried(files: readonly FileSpec[]): Carried {
+  return { dataTransfer: { files: filesOf(files), types: ["Files"] } };
+}
+
+function regionNamed(name: string): HTMLElement {
+  return screen.getByRole("region", { name });
+}
+
+function dragInto({ files, region }: Carrying): void {
+  fireEvent.dragEnter(regionNamed(region), carried(files));
+}
+
+function dragOutOf({ files, region }: Carrying): void {
+  fireEvent.dragLeave(regionNamed(region), carried(files));
 }
 
 function dropOn({ files, form }: Handing): void {
   fireEvent.drop(formNamed(form), { dataTransfer: { files: filesOf(files), types: ["Files"] } });
+}
+
+function dropInto({ files, region }: Carrying): void {
+  fireEvent.drop(regionNamed(region), carried(files));
+}
+
+function dropOnPage(files: readonly FileSpec[]): boolean {
+  return fireEvent.drop(document.body, carried(files));
+}
+
+function dragNothingOverPage(): boolean {
+  return fireEvent.dragOver(document.body, { dataTransfer: null });
+}
+
+function litZones(): number {
+  return document.querySelectorAll(`[data-dropping="true"]`).length;
 }
 
 function dragOnto({ files, form }: Handing): boolean {
@@ -170,6 +218,13 @@ function namesIn(messages: readonly Message[]): readonly (readonly [string, read
 }
 
 export {
+  dragInto,
+  dragOutOf,
+  dropInto,
+  dropOnPage,
+  dragNothingOverPage,
+  litZones,
+  pasteItemsInto,
   dragOnto,
   dragTextOnto,
   dropOn,

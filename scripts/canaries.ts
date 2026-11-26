@@ -1,4 +1,3 @@
-import { changesetMissing, packageShips } from "./lib/changesets.ts";
 import { fail, oxlint, tool, unwrap } from "./lib/tools.ts";
 import { field, list, parseJson, text } from "./lib/json.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -186,25 +185,6 @@ function migrationsCaught(): ReadonlySet<string> {
   );
 }
 
-const CHANGESET_CANARY = `${ROOT}/changesets/no-changeset.txt`;
-const CHANGESET_CODE = "ship in @ai-hero/cookout (app/modules/sdk/index.ts)";
-
-const changesetCanaries: readonly Canary[] = [{ check: "hygiene", code: CHANGESET_CODE, file: CHANGESET_CANARY }];
-
-async function changesetsCaught(): Promise<ReadonlySet<string>> {
-  const changes = readFileSync(CHANGESET_CANARY, "utf8")
-    .split("\n")
-    .filter((line) => line !== "")
-    .map((line) => {
-      const [status = "", file = ""] = line.split("\t");
-      return { file, status };
-    });
-  const reasons = changesetMissing({ changes, ships: await packageShips() });
-  return new Set(
-    reasons.filter((reason) => reason.includes(CHANGESET_CODE)).map(() => key(CHANGESET_CODE, CHANGESET_CANARY)),
-  );
-}
-
 const caughtByLint = lintCaught();
 const escaped = [
   ...missing(lintCanaries, caughtByLint),
@@ -213,7 +193,6 @@ const escaped = [
   ...missing(validatorCanaries, validatorsCaught()),
   ...missing(adrCanaries, adrsCaught()),
   ...missing(migrationCanaries, migrationsCaught()),
-  ...missing(changesetCanaries, await changesetsCaught()),
 ];
 const overreached = lintPasses.filter((canary) => caughtByLint.has(key(canary.code, canary.file)));
 for (const canary of escaped) {

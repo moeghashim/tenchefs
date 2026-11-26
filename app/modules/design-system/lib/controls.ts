@@ -25,7 +25,6 @@ export { PromptForm } from "./prompt-form.tsx";
 export { Suggestions } from "./suggestions.tsx";
 export { SendButton } from "./send-button.tsx";
 export { AttachButton } from "./attach-button.tsx";
-export { FileDrop } from "./file-drop.tsx";
 export { PendingItem } from "./pending-item.tsx";
 export { PendingList } from "./pending-list.tsx";
 export { SubmitButton } from "./submit-button.tsx";

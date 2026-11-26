@@ -4,7 +4,7 @@ import { CommandFailed, refused } from "./output.ts";
 import type { ConnectedEvent, MessageId } from "../../../sdk/index.ts";
 import type { Heard, WatchedEvent } from "./watch-connection.ts";
 import { agentSessionExpired, agentSessionRevoked } from "../../../agent-sessions/index.ts";
-import { isWatched, whileUnavailable } from "./watch-connection.ts";
+import { isWatched, sayWatching, whileUnavailable } from "./watch-connection.ts";
 import { note, printLine } from "./watch-lines.ts";
 import type { Format } from "./watch-lines.ts";
 import { callClient } from "./adapters/sdk.ts";
@@ -96,7 +96,7 @@ function startUpLine({
           const stops = yield* Effect.forEach(
             Option.toArray(toCount),
             (latest) =>
-              Effect.flatMap(unreadUpTo(opened, latest), (unread) =>
+              Effect.flatMap(Effect.tap(unreadUpTo(opened, latest), sayWatching(opened)), (unread) =>
                 Effect.as(sayUnread(format, unread), stopsAtStartUp(stop, unread)),
               ),
             { concurrency: 1 },

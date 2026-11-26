@@ -135,7 +135,7 @@ To run a `cookout` binary built from your clone, `pnpm build && npm link`, and `
 
 ## Deployed
 
-The cookout runs on Fly.io as `$COOKOUT_APP` = `cookout` (Matt's personal org, region `lhr`), at https://cookout.fly.dev. Every push to `main` deploys it from CI ([deploy.yml](.github/workflows/deploy.yml)) once `pnpm e2e:docker` passes. Recipes: [docs/verification.md](docs/verification.md#deploy-it-to-fly).
+The cookout runs on Fly.io as `$COOKOUT_APP` = `cookout` (Matt's personal org, region `lhr`), at https://cookout.fly.dev. The Release workflow deploys it from CI ([release.yml](.github/workflows/release.yml), calling [deploy.yml](.github/workflows/deploy.yml)) once its gate passes on the newest v1 commit whose Check run is green. Recipes: [docs/verification.md](docs/verification.md#deploy-it-to-fly).
 
 The example handler (`packages/handler-example`) runs beside it as `$COOKOUT_HANDLER_APP` = `cookout-handler-example` (same org and region), at https://cookout-handler-example.fly.dev. The deployed cookout's Webhook command `example` calls it, and it replies in the call's thread. CI's checks call it in channels they create and delete, so it needs no channel of its own on the board. The same workflow deploys it after the cookout. Recipes: [docs/verification.md](docs/verification.md#deploy-the-example-handler-to-fly).
 

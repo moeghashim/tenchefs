@@ -64,7 +64,7 @@ it("while the notices load, Earlier lists no notices", { timeout: 5000 }, async 
 
   const channel = "web-inbox-notices-loading";
   const unmount = await openedLoading({ channel, loading: noticesLoading, read: false });
-  await screen.findByText("Ship it?");
+  await screen.findAllByText("Ship it?");
 
   await expect(screen.findByText("Nothing read yet.")).resolves.toBeDefined();
 

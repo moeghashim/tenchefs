@@ -55,6 +55,28 @@ it("typing / suggests the registered commands with their descriptions, narrowed 
   close();
 });
 
+const MANY = 12;
+const TWO_DIGITS = 2;
+const MANY_COMMANDS = Array.from({ length: MANY }, (_value, at) => `web-many-${String(at).padStart(TWO_DIGITS, "0")}`);
+
+it("every command matching what was typed is suggested, in order, not only the first few", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  await adminClient().createChannel({ name: "web-command-many" });
+  await Promise.all(
+    MANY_COMMANDS.map(async (name) => {
+      await addCommand({ name });
+    }),
+  );
+  const close = await openChannel({ channel: "web-command-many" });
+
+  await expect(suggestedFor("/web-many-")).resolves.toStrictEqual(MANY_COMMANDS.map((name) => `/${name}`));
+
+  close();
+});
+
 it("picking a command shows a labelled field for each property of its schema", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 

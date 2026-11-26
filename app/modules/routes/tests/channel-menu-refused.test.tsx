@@ -7,6 +7,7 @@ import { alertsShown } from "./alerts.ts";
 import { chose } from "./menus.ts";
 import { openAt } from "./render.tsx";
 import { subscribedReader } from "./inbox-reader.ts";
+import { viewOpened } from "./view-opened.ts";
 
 async function channelLink(channel: string): Promise<HTMLElement> {
   const link = await inSidebar().findByRole("link", { name: new RegExp(`^#${channel}(?!-)`, "u") });
@@ -85,7 +86,7 @@ it("a subscription change the server refuses from a channel's menu says why in t
 
   const channel = "web-channel-menu-refused";
   const { reader } = await subscribedReader(channel);
-  const close = openAt({ client: reader, hash: "#/inbox" });
+  const { close } = await viewOpened({ client: reader, hash: "#/inbox", waitingOn: ["listSubscribedChannels"] });
   await channelLink(channel);
   await adminClient().deleteChannel(channel);
   await chooseFor(channel, "Unsubscribe");

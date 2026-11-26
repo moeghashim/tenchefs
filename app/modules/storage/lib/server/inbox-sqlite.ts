@@ -70,12 +70,14 @@ const MARKER = `coalesce(CASE WHEN messages.reply_to IS NULL
       WHERE t.identity_name = ?1 AND t.thread_id = messages.reply_to) END, 0)`;
 
 const REASONS = `SELECT m.id AS id, 'followed-thread' AS reason
-    FROM follows AS f JOIN messages AS m ON m.reply_to = f.thread_id WHERE f.identity_name = ?1
+    FROM follows AS f JOIN messages AS m ON m.reply_to = f.thread_id
+    WHERE f.identity_name = ?1 AND m.deleted_at IS NULL
   UNION ALL SELECT m.id, 'mention'
-    FROM message_mentions AS mm JOIN messages AS m ON m.id = mm.message_id WHERE mm.identity_name = ?1
+    FROM message_mentions AS mm JOIN messages AS m ON m.id = mm.message_id
+    WHERE mm.identity_name = ?1 AND m.deleted_at IS NULL
   UNION ALL SELECT m.id, 'subscribed-channel'
     FROM subscriptions AS s JOIN messages AS m ON m.channel = s.channel AND m.reply_to IS NULL
-    WHERE s.identity_name = ?1`;
+    WHERE s.identity_name = ?1 AND m.deleted_at IS NULL`;
 
 const SHOWN = `(messages.author_name <> ?1
     OR (reasons.reason = 'mention' AND messages.scheduled_message_id IS NOT NULL))`;
@@ -89,7 +91,7 @@ function inboxSql(columns: string, ids: "messages.id > ?2" | "messages.id = ?2")
 
 const REACTED = `SELECT DISTINCT r.message_id AS id, 'reaction' AS reason
     FROM reactions AS r JOIN messages AS m ON m.id = r.message_id
-    WHERE m.author_name = ?1 AND r.identity_name <> ?1`;
+    WHERE m.author_name = ?1 AND r.identity_name <> ?1 AND m.deleted_at IS NULL`;
 
 function seenReactionsSql(db: SqlDatabase): string {
   return `NOT EXISTS (SELECT 1 FROM reactions AS u

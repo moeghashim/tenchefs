@@ -1,10 +1,10 @@
 import { Array as Arr, Context, Effect, Layer, Option, Queue, Ref } from "effect";
-import type { TriggerCall, TriggerCallerService } from "../../../triggers/server.ts";
+import type { TriggerAnswer, TriggerCall, TriggerCallerService } from "../../../triggers/server.ts";
 import { TriggerCaller } from "../../../triggers/server.ts";
 import type { TriggerToken } from "../../../triggers/index.ts";
 import { isTriggerToken } from "../../../triggers/index.ts";
 
-type ScriptedAnswer = { readonly status: number } | { readonly error: string } | "no answer";
+type ScriptedAnswer = { readonly status: number; readonly message?: string } | { readonly error: string } | "no answer";
 
 interface ScriptedTriggersService {
   readonly answerNext: (answers: readonly ScriptedAnswer[]) => Effect.Effect<void>;
@@ -19,12 +19,12 @@ class ScriptedTriggers extends Context.Service<ScriptedTriggers, ScriptedTrigger
 const OK: ScriptedAnswer = { status: 200 };
 const ONE = 1;
 
-function answered(answer: ScriptedAnswer): Effect.Effect<number, string> {
+function answered(answer: ScriptedAnswer): Effect.Effect<TriggerAnswer, string> {
   if (answer === "no answer") {
     return Effect.never;
   }
   if ("status" in answer) {
-    return Effect.succeed(answer.status);
+    return Effect.succeed({ message: answer.message ?? "", status: answer.status });
   }
   return Effect.fail(answer.error);
 }
