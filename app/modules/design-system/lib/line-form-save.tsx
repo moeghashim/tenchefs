@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useKeptFocus } from "./use-kept-focus.ts";
 
 interface LineFormSaveParts {
   readonly saving: boolean;
@@ -19,6 +20,7 @@ function classOf(below: boolean): string {
 const SAVING = "Saving…";
 
 export function LineFormSave(parts: LineFormSaveParts): ReactNode {
+  useKeptFocus(parts.saving);
   return (
     <button className={classOf(parts.below)} disabled={parts.saving} type="submit">
       {parts.saving && SAVING}

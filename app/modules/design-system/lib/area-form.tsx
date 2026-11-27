@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useId, useRef } from "react";
+import { AreaSave } from "./area-save.tsx";
 
 interface AreaFormParts {
   readonly label: string;
@@ -13,8 +14,6 @@ interface AreaFormParts {
 }
 
 const ROWS = 4;
-const SAVE = "Save";
-const SAVING = "Saving…";
 
 function savesOn(event: KeyboardEvent<HTMLTextAreaElement>): boolean {
   return event.key === "Enter" && (event.ctrlKey || event.metaKey);
@@ -57,14 +56,7 @@ export function AreaForm(parts: AreaFormParts): ReactNode {
       />
       <span className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground tabular-nums">{`${String(parts.value.length)}/${String(parts.limit)}`}</span>
-        <button
-          className="h-8 rounded-md border bg-foreground px-3 text-xs font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-          disabled={parts.saving}
-          type="submit"
-        >
-          {parts.saving && SAVING}
-          {!parts.saving && SAVE}
-        </button>
+        <AreaSave saving={parts.saving} />
       </span>
       {parts.children}
     </form>

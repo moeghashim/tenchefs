@@ -3,12 +3,12 @@ import { ConnectedEventSchema, PresenceEventSchema } from "./wire.ts";
 import { Effect, Schema, Stream } from "effect";
 import { PresenceRegistry, holdLiveConnection } from "../../../presence/server.ts";
 import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
+import { asksAsRunner, asksForAllChannels } from "./all-channels.ts";
 import { refusalSseEvent, sseEvent } from "./source.ts";
 import type { AgentSessions } from "../../../agent-sessions/server.ts";
 import { Messages } from "../../../messages/server.ts";
 import { OfflineAlerts } from "../../../inbox/server.ts";
 import type { Presence } from "../../../presence/index.ts";
-import { asksForAllChannels } from "./all-channels.ts";
 import { presenceName } from "../../../presence/index.ts";
 import { sentAgentSessionEnded } from "../../../agent-sessions/server.ts";
 
@@ -17,9 +17,10 @@ const presenceEvent = sseEvent(PresenceEventSchema);
 
 type LiveConnectionNeeds = Messages | PresenceRegistry | Storage | AgentSessions;
 
-function connected({ authorization, caller }: StreamRequest): Connected<LiveConnectionNeeds> {
+function connected(stream: StreamRequest): Connected<LiveConnectionNeeds> {
+  const { authorization, caller } = stream;
   return Effect.gen(function* readLatestOnRun() {
-    const held = yield* holdLiveConnection({ authorization, caller });
+    const held = yield* holdLiveConnection({ authorization, caller, runner: asksAsRunner(stream) });
     const messages = yield* Messages;
     const request = yield* Effect.context<AgentSessions>();
     const sessionEnded = Effect.flatMap(Effect.provideContext(sentAgentSessionEnded, request), held.refused);

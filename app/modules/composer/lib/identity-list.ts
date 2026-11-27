@@ -21,7 +21,7 @@ interface IdentityList {
 function createIdentityList(boardStore: IdentityStore): IdentityList {
   const refreshes = new Set<() => void>();
   let seen: readonly Identity[] | null = null;
-  let watchingCommands = false;
+  let watchingWebhookCommands = false;
 
   function identities(): readonly Identity[] {
     return identityList(boardStore.snapshot());
@@ -50,9 +50,9 @@ function createIdentityList(boardStore: IdentityStore): IdentityList {
     posters: (channel) => channelPosters({ channel, store: boardStore }),
     refresh,
     show: () => {
-      if (!watchingCommands) {
-        watchingCommands = true;
-        boardStore.subscribeShowing("commands")(refresh);
+      if (!watchingWebhookCommands) {
+        watchingWebhookCommands = true;
+        boardStore.subscribeShowing("webhookCommands")(refresh);
       }
       return boardStore.subscribeShowing("identities")(() => {
         checked();

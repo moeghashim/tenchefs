@@ -3,9 +3,6 @@ import { CliError, Command, Flag } from "effect/cli";
 import { Console, Effect, Schema } from "effect";
 import { cookoutToken, cookoutUrl } from "../../../config/server.ts";
 import type { NodeServices } from "@effect/platform-node/NodeServices";
-import { devCookout } from "./cookout.ts";
-import { fakeRoutine } from "./routine.ts";
-import { seedBoard } from "./board.ts";
 
 const PRETTY = 2;
 const FREE_PORT = 0;
@@ -32,9 +29,17 @@ const probeFlag = Flag.Boolean("probe").pipe(
   Flag.withDescription("Put the browser tests' probe (the probe module) on the web UI's pages."),
 );
 
-const startCommand = Command.make("start", { port: portFlag, probe: probeFlag }, ({ port, probe }) =>
+const webFlag = Flag.Directory("web", { mustExist: true }).pipe(
+  Flag.optional,
+  Flag.withDescription(
+    "Serve this built web UI (vite build's output) from the cookout itself, as serve does, instead of the Vite dev server.",
+  ),
+);
+
+const startCommand = Command.make("start", { port: portFlag, probe: probeFlag, web: webFlag }, ({ port, probe, web }) =>
   Effect.gen(function* start() {
-    const dev = yield* devCookout({ port, probe });
+    const { devCookout } = yield* Effect.promise(() => import("./cookout.ts"));
+    const dev = yield* devCookout({ port, probe, web });
     yield* printLine({ ...dev, message: "The dev cookout is running. Ctrl-C stops it and deletes its database." });
     return yield* Effect.never;
   }).pipe(Effect.scoped),
@@ -42,6 +47,7 @@ const startCommand = Command.make("start", { port: portFlag, probe: probeFlag },
 
 const routineCommand = Command.make("fake-routine", {}, () =>
   Effect.gen(function* startRoutine() {
+    const { fakeRoutine } = yield* Effect.promise(() => import("./routine.ts"));
     const routine = yield* fakeRoutine;
     yield* printLine({ ...routine, message: "The fake routine answers every fire with sessionUrl. Ctrl-C stops it." });
     return yield* Effect.never;
@@ -62,6 +68,7 @@ function connection(): Effect.Effect<BoardConnection, SeedFailure> {
 const seedCommand = Command.make("seed", {}, () =>
   Effect.gen(function* seed() {
     const server = yield* connection();
+    const { seedBoard } = yield* Effect.promise(() => import("./board.ts"));
     const board = yield* seedBoard(server);
     const printed = yield* Effect.orDie(toPretty(board));
     yield* Console.log(printed);

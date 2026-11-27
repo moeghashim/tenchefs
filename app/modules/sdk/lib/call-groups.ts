@@ -32,5 +32,5 @@ export type CallGroups = LoginCalls &
   SearchCalls &
   ScheduledMessageCalls &
   TriggerCalls &
-  Pick<EventCalls, "presence">;
+  Pick<EventCalls, "presence" | "startWakeRun" | "endWakeRun" | "failWakeRun">;
 export type { IdentityDeletionCalls };

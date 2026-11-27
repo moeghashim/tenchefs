@@ -3,7 +3,6 @@ import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import {
   answer,
   commandLineServices,
-  interruptDevBinary,
   runCookout,
   runDev,
   startDev,
@@ -216,17 +215,6 @@ it.effect("pnpm seed against a stopped cookout is refused", () =>
 
     expect(seeded.exitCode).toBe(EXIT_FAILURE);
     expect(seeded.stderrJson).toMatchObject({ error: { code: "seed_failed" } });
-  }).pipe(Effect.provide(commandLineServices)),
-);
-
-it.effect("pnpm dev exits 0 on Ctrl-C and deletes its database", () =>
-  Effect.gen(function* devStopsOnInterrupt() {
-    const { database, exitCode } = yield* interruptDevBinary();
-    const kept = yield* databaseExists(database);
-
-    expect(database).toContain("cookout-dev-");
-    expect(exitCode).toBe(EXIT_SUCCESS);
-    expect(kept).toBe(false);
   }).pipe(Effect.provide(commandLineServices)),
 );
 

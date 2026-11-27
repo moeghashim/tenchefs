@@ -1,5 +1,5 @@
 import type { Channel, CookoutClient } from "../../sdk/index.ts";
-import { channelList, commandList, createBoardStore, subscribedChannels } from "../index.ts";
+import { channelList, createBoardStore, subscribedChannels, webhookCommandList } from "../index.ts";
 import { expect, it, onTestFinished, vi } from "vitest";
 import type { BoardStore } from "../index.ts";
 import type { HandLive } from "../../testing/web.ts";
@@ -24,7 +24,7 @@ function refusedClient(): CookoutClient {
 function opened(client: CookoutClient = adminClient()): Opened {
   const hand = handLive();
   const store = createBoardStore({ client, live: createLive(hand.adapter), url: webTestCookout().url });
-  for (const shown of ["channels", "commands", "subscriptions"] as const) {
+  for (const shown of ["channels", "webhookCommands", "subscriptions"] as const) {
     onTestFinished(store.subscribeShowing(shown)(vi.fn<() => void>()));
   }
   return { hand, store };
@@ -46,12 +46,12 @@ function subscribedNames(store: BoardStore): readonly string[] {
   return state.channels;
 }
 
-function commandNames(store: BoardStore): readonly string[] {
-  const state = commandList(store.snapshot());
+function webhookCommandNames(store: BoardStore): readonly string[] {
+  const state = webhookCommandList(store.snapshot());
   if (state.status !== "loaded") {
     return [];
   }
-  return state.commands.map((command) => command.name);
+  return state.webhookCommands.map((command) => command.name);
 }
 
 function changeOf(store: BoardStore): { readonly channel: string; readonly status: string } | null {
@@ -76,7 +76,7 @@ async function createdByBob(name: string): Promise<Channel> {
 
 async function readsAll(store: BoardStore, channel: string): Promise<void> {
   await vi.waitFor(() => {
-    expect([channelNames(store), subscribedNames(store), commandList(store.snapshot()).status]).toStrictEqual([
+    expect([channelNames(store), subscribedNames(store), webhookCommandList(store.snapshot()).status]).toStrictEqual([
       expect.arrayContaining([channel]),
       expect.arrayContaining([channel]),
       "loaded",
@@ -117,7 +117,7 @@ it("a channel event adds the channel once, and the same event again keeps the se
   expect(channelList(store.snapshot())).toBe(after);
 });
 
-it("a command event adds the command once, and the same event again keeps the selector's object", {
+it("a `command` event adds the Webhook command once, and the same event again keeps the selector's object", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
@@ -131,14 +131,14 @@ it("a command event adds the command once, and the same event again keeps the se
     url: "http://127.0.0.1:9/",
   });
   hand.send({ command, type: "command" });
-  const after = commandList(store.snapshot());
+  const after = webhookCommandList(store.snapshot());
   hand.send({ command, type: "command" });
 
-  expect(commandNames(store).filter((name) => name === command.name)).toStrictEqual([command.name]);
-  expect(commandList(store.snapshot())).toBe(after);
+  expect(webhookCommandNames(store).filter((name) => name === command.name)).toStrictEqual([command.name]);
+  expect(webhookCommandList(store.snapshot())).toBe(after);
 });
 
-it("a command or a subscription changed while the link was down shows once the link is back", {
+it("a Webhook command or a subscription changed while the link was down shows once the link is back", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
@@ -153,7 +153,7 @@ it("a command or a subscription changed while the link was down shows once the l
   hand.report("up");
 
   await vi.waitFor(() => {
-    expect([commandNames(store), subscribedNames(store)]).toStrictEqual([
+    expect([webhookCommandNames(store), subscribedNames(store)]).toStrictEqual([
       expect.arrayContaining(["store-gap-deploy"]),
       expect.arrayContaining([bobs.name]),
     ]);
@@ -197,7 +197,9 @@ it("a channel list the server refuses shows the refusal", { timeout: 5000 }, asy
   const { store } = opened(refusedClient());
 
   await vi.waitFor(() => {
-    expect([channelList, commandList, subscribedChannels].map((select) => select(store.snapshot()))).toStrictEqual([
+    expect(
+      [channelList, webhookCommandList, subscribedChannels].map((select) => select(store.snapshot())),
+    ).toStrictEqual([
       expect.objectContaining({ code: "token_unknown", status: "failed" }),
       expect.objectContaining({ code: "token_unknown", status: "failed" }),
       expect.objectContaining({ code: "token_unknown", status: "failed" }),

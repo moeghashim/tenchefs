@@ -4,7 +4,6 @@ import {
   calledTrigger,
   channelList,
   channelPage,
-  commandList,
   earlierOf,
   identityList,
   inboxOf,
@@ -12,6 +11,7 @@ import {
   reactionsOf,
   subscribedChannels,
   threadOf,
+  webhookCommandList,
 } from "../index.ts";
 import type { BoardState } from "../index.ts";
 
@@ -98,14 +98,14 @@ function channelsIn(state: BoardState, board: Board): unknown {
   );
 }
 
-function commandsIn(state: BoardState, board: Board): unknown {
-  const commands = commandList(state);
+function webhookCommandsIn(state: BoardState, board: Board): unknown {
+  const commands = webhookCommandList(state);
   if (commands.status !== "loaded") {
     return commands.status;
   }
   return ours(
     board,
-    commands.commands.map(({ name }) => name),
+    commands.webhookCommands.map(({ name }) => name),
   );
 }
 
@@ -137,7 +137,6 @@ function boardIn({ board, state }: OnBoard): Seen {
   return {
     agentSessions: sessionsIn(state, board),
     channels: channelsIn(state, board),
-    commands: commandsIn(state, board),
     earlier: earlierIn({ channel: board.channel, state }),
     forYou: forYouIn({ channel: board.channel, state }),
     identities: identityList(state).filter(({ name }) => name.startsWith(board.channel)),
@@ -147,6 +146,7 @@ function boardIn({ board, state }: OnBoard): Seen {
     subscriptions: subscriptionsIn(state, board),
     thread: threadIn(state, board),
     trigger: calledTrigger(board.agentName)(state),
+    webhookCommands: webhookCommandsIn(state, board),
   };
 }
 

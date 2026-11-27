@@ -9,7 +9,8 @@
  * actions do there (several views may each bind their own actions of one scope, such as `everywhere`) and, optionally, the element the scope covers (without one it covers
  * the page while bound). On each key not already handled (nor mid-composition, nor
  * without a key, as autofill sends), the listener walks
- * `SCOPES` from the innermost (the search box) out to `everywhere`, takes the
+ * `SCOPES` from the innermost (the image viewer, then the search box) out to `everywhere` (the thread panel's title
+ * field, whose Escape cancels it, comes before the thread panel: Proposed, #823), takes the
  * bound scopes that cover the focused element, most recently bound first, and
  * runs the first action whose chord matches and that says it acted, which
  * stops the browser's own handling. Off a text field every row fires. In a
@@ -38,9 +39,11 @@
  * focus, if still on the page; the open thread panel's selected message, else its newest; the main list's selected
  * message or Inbox row, else its newest; the sidebar's link for the current page. When the focused element goes
  * (removed or hidden, not blurred on purpose), focus moves to its neighbour of the same kind in its list (the next,
- * else the previous), else to each landing place: a message or row as it was just before the element went, if still
- * on the page, else as it is now, and the sidebar's link for the page now. It waits for the app's own focus moves first, and stands aside while
- * `listen`'s `landing` (the landing store) is landing.
+ * else the previous), else, when it was in a dialog, to what had focus before the dialog opened or that one's
+ * neighbour, else to each landing place: a message or row as it was just before the element went, if still on the
+ * page, else as it is now, and the sidebar's link for the page now. A focused button that turns disabled keeps its
+ * place: focus goes back to it once it is enabled again, or to its neighbour if it goes meanwhile. It waits for the
+ * app's own focus moves first, and stands aside while `listen`'s `landing` (the landing store) is landing.
  */
 import type { Action, ActionOf, Key, Scope } from "./lib/keys.ts";
 import type { FocusKeeper, Landing } from "./lib/focus-keeper.ts";

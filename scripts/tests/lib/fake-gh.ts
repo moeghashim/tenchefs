@@ -1,12 +1,10 @@
-import type { Landing, PullRequest } from "../../lib/merge-pull-request.ts";
-import type { Step, Stopped } from "../../lib/merge-steps.ts";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { DateTime } from "effect";
 import { GH_2_102_JSON_FIELDS } from "./gh-json-fields.ts";
+import type { Step } from "../../lib/merge-steps.ts";
 import { ciGreen } from "../../lib/ci-gate.ts";
 import { onTestFinished } from "vitest";
 import path from "node:path";
-import { pullRequestOf } from "../../lib/merge-pull-request.ts";
 import { tmpdir } from "node:os";
 
 const URL = "https://github.com/o/r/actions/runs/42";
@@ -71,15 +69,9 @@ interface Gated {
   readonly step: Step;
 }
 
-interface Opened {
-  readonly logs: readonly string[];
-  readonly pr: PullRequest | Stopped;
-}
-
 interface Fake {
   readonly calls: () => readonly string[];
-  readonly gate: (args: readonly string[], base?: readonly string[], appear?: number) => Gated;
-  readonly pullRequest: (landing: Landing) => Opened;
+  readonly gate: (args: readonly string[], appear?: number) => Gated;
 }
 
 interface Responses {
@@ -137,39 +129,21 @@ function stateDir(responses: Responses, workflow = ""): string {
   return dir;
 }
 
-function openIn(dir: string, landing: Landing): Opened {
-  const logs: string[] = [];
-  const pr = pullRequestOf({
-    landing,
-    options: {
-      cwd: dir,
-      gh: ["node", path.join(dir, "gh.mjs")],
-      log: (line) => {
-        logs.push(line);
-      },
-    },
-  });
-  return { logs, pr };
-}
-
 interface FakeOptions extends Responses {
   readonly event?: string;
-  readonly rerunRed?: boolean;
-  readonly vouchedBy?: string;
   readonly workflow?: string;
 }
 
-function fake({ event = "push", rerunRed = false, vouchedBy = "", workflow = "", ...responses }: FakeOptions): Fake {
+function fake({ event = "push", workflow = "", ...responses }: FakeOptions): Fake {
   const dir = stateDir(responses, workflow);
   return {
     calls: (): readonly string[] => readFileSync(path.join(dir, "calls.log"), "utf8").trim().split("\n"),
-    gate: (args, base = [], appear = NO_WAITS): Gated => {
+    gate: (args, appear = NO_WAITS): Gated => {
       const logs: string[] = [];
       const sleeps: string[] = [];
       const step = ciGreen({
         appear,
         args,
-        base,
         cwd: dir,
         event,
         gh: ["node", path.join(dir, "gh.mjs")],
@@ -177,16 +151,13 @@ function fake({ event = "push", rerunRed = false, vouchedBy = "", workflow = "",
           logs.push(line);
         },
         polls: POLLS,
-        rerunRed,
         sleep: () => {
           sleeps.push("slept");
         },
         subject: "v1",
-        vouchedBy,
       });
       return { logs, sleeps: sleeps.length, step };
     },
-    pullRequest: (landing): Opened => openIn(dir, landing),
   };
 }
 

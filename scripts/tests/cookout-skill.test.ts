@@ -26,3 +26,23 @@ it("the skill's session URL swaps the cloud session ID's cse_ prefix for session
 
   expect(expanded).toBe("https://claude.ai/code/session_01AbCdEf");
 });
+
+const GUIDE = readFileSync(new URL("../../docs/agents.md", import.meta.url), "utf8");
+const DOCS = { guide: GUIDE, skill: SKILL };
+
+function outputLine(doc: string): string {
+  return Option.getOrThrow(Arr.findFirst(Str.split(doc, "\n"), Str.includes("Every verb prints")));
+}
+
+it.each(["skill", "guide"] as const)(
+  "the %s says cookout watch prints text lines unless given --json",
+  { timeout: 1000 },
+  (which) => {
+    expect.hasAssertions();
+
+    const line = outputLine(DOCS[which]);
+
+    expect(line).toContain("`cookout watch` prints text lines");
+    expect(line).toContain("unless given `--json`");
+  },
+);

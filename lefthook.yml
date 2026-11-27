@@ -5,6 +5,8 @@ pre-commit:
   jobs:
     - name: refuse partially staged files
       run: scripts/refuse-partially-staged.sh
+    # The lint job formats as it fixes, so it judges the text that is committed: max-lines and local/max-file-tokens
+    # count the formatter's lines too, as lint:changed does on the committed file (#572).
     - name: lint
       glob: "*.{js,ts,cjs,mjs,jsx,tsx}"
       run: node scripts/lint-ratchet.ts --fix {staged_files}

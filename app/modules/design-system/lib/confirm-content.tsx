@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useReturnFocus } from "./use-return-focus.ts";
 
 export function ConfirmContent(parts: ConfirmContentParts): ReactNode {
-  const focus = useReturnFocus();
+  const focus = useReturnFocus({ onFocused: parts.onCloseFocused, returnTo: parts.returnTo });
   const handleOpenAutoFocus = focus.onOpen;
   const handleCloseAutoFocus = focus.onClose;
   const handleConfirm = parts.onConfirm;

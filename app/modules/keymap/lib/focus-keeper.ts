@@ -1,3 +1,5 @@
+import { isOnPage, placesAfter, placesNow } from "./focus-places.ts";
+
 const LANDING_KEYS: ReadonlySet<string> = new Set([
   " ",
   "ArrowDown",
@@ -9,26 +11,15 @@ const LANDING_KEYS: ReadonlySet<string> = new Set([
   "j",
   "k",
 ]);
-const PANEL = 'main aside[aria-label="Thread"]';
-const PANEL_MESSAGES = `${PANEL} article`;
-const PANEL_SELECTED = `${PANEL} article[aria-current="true"]`;
-const FEED_MESSAGES = 'main [role="feed"] article';
-const FEED_SELECTED = 'main [role="feed"] article[aria-current="true"]';
 const ROW = "a[data-feed-row]";
-const ROWS = `main ${ROW}`;
-const SELECTED_ROW = `main ${ROW}[aria-current="page"]`;
-const SIDEBAR_LINK = 'nav[aria-label="Sidebar"] a[href][aria-current="page"]';
-const ASIDE = "aside";
-const LIST = 'aside, nav, main, form, dialog, [role="dialog"]';
+const LIST = 'aside, nav, main, form, dialog, [role="dialog"], [role="alertdialog"]';
+const DIALOG = 'dialog, [role="dialog"], [role="alertdialog"]';
 const FOCUSABLE = "a[href], button:enabled, input:enabled, select:enabled, textarea:enabled, [tabindex]";
-const WATCHED = { childList: true, subtree: true } as const;
+const DISABLED = "disabled";
+const WATCHED = { attributeFilter: [DISABLED], childList: true, subtree: true };
 const AFTER_THE_APP = 0;
-const NONE = 0;
 const NEXT = 1;
-const NEWEST = -1;
 const FIRST = 0;
-
-type Hunt = () => Element | null;
 
 interface Held {
   readonly element: unknown;
@@ -45,14 +36,32 @@ interface FocusKeeper {
   readonly stop: () => void;
 }
 
+interface Cell<Value> {
+  readonly get: () => Value;
+  readonly set: (value: Value) => void;
+}
+
+interface Disabled {
+  readonly blurred: (lost: Held) => void;
+  readonly changed: (keeper: Keeper) => void;
+  readonly focused: () => void;
+}
+
+interface Keeper {
+  readonly beneath: Cell<Held | null>;
+  readonly disabled: Disabled;
+  readonly held: Cell<Held | null>;
+  readonly landing: Landing;
+}
+
 interface Handlers {
   readonly changed: () => void;
   readonly focused: (event: unknown) => void;
   readonly blurred: (event: unknown) => void;
 }
 
-function isOnPage(element: unknown): element is HTMLElement {
-  return element instanceof HTMLElement && element.isConnected && element.getClientRects().length > NONE;
+function isDisabled(element: unknown): boolean {
+  return element instanceof HTMLElement && element.matches(":disabled");
 }
 
 function isOnNothing(target: unknown): boolean {
@@ -69,42 +78,6 @@ function focusedOn(element: unknown): boolean {
   }
   element.focus();
   return globalThis.document.activeElement === element;
-}
-
-function outsidePanel(selector: string): readonly Element[] {
-  const found: Element[] = [];
-  for (const each of globalThis.document.querySelectorAll(selector)) {
-    if (each.closest(ASIDE) === null) {
-      found.push(each);
-    }
-  }
-  return found;
-}
-
-function panelMessage(): Element | null {
-  const { document } = globalThis;
-  return document.querySelector(PANEL_SELECTED) ?? [...document.querySelectorAll(PANEL_MESSAGES)].at(NEWEST) ?? null;
-}
-
-function mainMessage(): Element | null {
-  return (
-    outsidePanel(FEED_SELECTED).at(FIRST) ??
-    outsidePanel(FEED_MESSAGES).at(NEWEST) ??
-    outsidePanel(SELECTED_ROW).at(FIRST) ??
-    outsidePanel(ROWS).at(FIRST) ??
-    null
-  );
-}
-
-function sidebarLink(): Element | null {
-  return globalThis.document.querySelector(SIDEBAR_LINK);
-}
-
-const PLACES: readonly Hunt[] = [panelMessage, mainMessage, sidebarLink];
-const KEPT_PLACES: ReadonlySet<Hunt> = new Set([panelMessage, mainMessage]);
-
-function placesNow(): readonly unknown[] {
-  return PLACES.map((hunt) => hunt());
 }
 
 function listOf(element: unknown): Element {
@@ -141,19 +114,30 @@ function heldOf(element: unknown): Held {
   return { element, peers: peersOf(element), places: placesNow() };
 }
 
-function placesAfter(lost: Held): readonly unknown[] {
-  return PLACES.map((hunt, rank) => {
-    const was = lost.places[rank];
-    if (KEPT_PLACES.has(hunt) && isOnPage(was)) {
-      return was;
-    }
-    return hunt();
-  });
-}
-
 function neighboursOf({ element, peers }: Held): readonly unknown[] {
   const at = peers.indexOf(element);
   return [...peers.slice(at + NEXT), ...peers.slice(FIRST, Math.max(at, FIRST)).toReversed()];
+}
+
+function inDialog(element: unknown): boolean {
+  return element instanceof Element && element.closest(DIALOG) !== null;
+}
+
+function beneathAfter(beneath: Held | null, was: Held | null, now: Held): Held | null {
+  if (!inDialog(now.element)) {
+    return null;
+  }
+  if (was !== null && !inDialog(was.element)) {
+    return was;
+  }
+  return beneath;
+}
+
+function under(beneath: Held | null): readonly unknown[] {
+  if (beneath === null) {
+    return [];
+  }
+  return [beneath.element, ...neighboursOf(beneath)];
 }
 
 function isPlain(event: Readonly<Pick<KeyboardEvent, "altKey" | "ctrlKey" | "metaKey" | "shiftKey">>): boolean {
@@ -181,50 +165,115 @@ function listening(handlers: Handlers): () => void {
   };
 }
 
-function createFocusKeeper(landing: Landing): FocusKeeper {
-  let last: unknown = null;
-  let held: Held | null = null;
-  function recover(lost: Held): void {
-    if (held === lost && isLost() && !landing.isLanding()) {
-      held = null;
-      [...neighboursOf(lost), ...placesAfter(lost)].some((place) => focusedOn(place));
-    }
-  }
-  function goneFrom(lost: Held): void {
-    if (held === lost && !isOnPage(lost.element)) {
-      globalThis.setTimeout(recover, AFTER_THE_APP, lost);
-    }
-  }
-  const handlers: Handlers = {
-    blurred: (event) => {
-      const was = held;
-      if (was !== null && isLostFrom(event, was.element)) {
-        queueMicrotask(() => {
-          if (!isOnPage(was.element)) {
-            goneFrom(was);
-          } else if (held === was) {
-            held = null;
-          }
-        });
-      }
-    },
-    changed: () => {
-      if (held !== null && held.element === globalThis.document.activeElement) {
-        held = heldOf(held.element);
-      } else if (held !== null) {
-        goneFrom(held);
-      }
-    },
-    focused: (event) => {
-      if (event instanceof FocusEvent && event.target instanceof HTMLElement) {
-        last = event.target;
-        held = heldOf(event.target);
-      }
+function cellOf<Value>(value: Value): Cell<Value> {
+  let now = value;
+  return {
+    get: () => now,
+    set: (next) => {
+      now = next;
     },
   };
-  const stop = listening(handlers);
+}
+
+function recover(keeper: Keeper, lost: Held): void {
+  if (keeper.held.get() === lost && isLost() && !keeper.landing.isLanding()) {
+    keeper.held.set(null);
+    [...neighboursOf(lost), ...under(keeper.beneath.get()), ...placesAfter(lost.places)].some((place) =>
+      focusedOn(place),
+    );
+  }
+}
+
+function goneFrom(keeper: Keeper, lost: Held): void {
+  if (keeper.held.get() === lost && !isOnPage(lost.element)) {
+    globalThis.setTimeout(recover, AFTER_THE_APP, keeper, lost);
+  }
+}
+
+function disabledWatch(): Disabled {
+  const disabled = cellOf<Held | null>(null);
+  function enabledAgain(keeper: Keeper, lost: Held): void {
+    if (!isOnPage(lost.element)) {
+      disabled.set(null);
+      keeper.held.set(lost);
+      goneFrom(keeper, lost);
+    } else if (!isDisabled(lost.element)) {
+      disabled.set(null);
+      focusedOn(lost.element);
+    }
+  }
   return {
-    landsOn: (event) => isLandingKey(event) && [last, ...placesNow()].some((place) => focusedOn(place)),
+    blurred: (lost) => {
+      if (isDisabled(lost.element)) {
+        disabled.set(lost);
+      }
+    },
+    changed: (keeper) => {
+      const lost = disabled.get();
+      if (lost !== null) {
+        enabledAgain(keeper, lost);
+      }
+    },
+    focused: () => {
+      disabled.set(null);
+    },
+  };
+}
+
+function blurredOf(keeper: Keeper): Handlers["blurred"] {
+  return (event) => {
+    const was = keeper.held.get();
+    if (was !== null && isLostFrom(event, was.element)) {
+      queueMicrotask(() => {
+        if (!isOnPage(was.element)) {
+          goneFrom(keeper, was);
+        } else if (keeper.held.get() === was) {
+          keeper.held.set(null);
+          keeper.disabled.blurred(was);
+        }
+      });
+    }
+  };
+}
+
+function changedOf(keeper: Keeper): Handlers["changed"] {
+  return () => {
+    keeper.disabled.changed(keeper);
+    const held = keeper.held.get();
+    if (held === null) {
+      return;
+    }
+    if (held.element === globalThis.document.activeElement) {
+      keeper.held.set(heldOf(held.element));
+    } else {
+      goneFrom(keeper, held);
+    }
+  };
+}
+
+function focusedOf(keeper: Keeper, last: Cell<unknown>): Handlers["focused"] {
+  return (event) => {
+    keeper.disabled.focused();
+    if (event instanceof FocusEvent && event.target instanceof HTMLElement) {
+      last.set(event.target);
+      const now = heldOf(event.target);
+      keeper.beneath.set(beneathAfter(keeper.beneath.get(), keeper.held.get(), now));
+      keeper.held.set(now);
+    }
+  };
+}
+
+function createFocusKeeper(landing: Landing): FocusKeeper {
+  const last = cellOf<unknown>(null);
+  const keeper: Keeper = {
+    beneath: cellOf<Held | null>(null),
+    disabled: disabledWatch(),
+    held: cellOf<Held | null>(null),
+    landing,
+  };
+  const stop = listening({ blurred: blurredOf(keeper), changed: changedOf(keeper), focused: focusedOf(keeper, last) });
+  return {
+    landsOn: (event) => isLandingKey(event) && [last.get(), ...placesNow()].some((place) => focusedOn(place)),
     stop,
   };
 }

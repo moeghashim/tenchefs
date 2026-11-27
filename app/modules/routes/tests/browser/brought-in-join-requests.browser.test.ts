@@ -1,4 +1,4 @@
-import type { ClockFixtures, OwnCookout } from "./clock.ts";
+import type { ClockFixtures, ClockOptions, OwnCookout } from "./clock.ts";
 import { test as base, expect } from "@playwright/test";
 import { createTestAgent, testClient } from "../../../testing/index.ts";
 import type { Person } from "./people.ts";
@@ -8,7 +8,7 @@ import { logInWithStream } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
-const test = base.extend(probeFixtures).extend<ClockFixtures>(clockFixtures);
+const test = base.extend(probeFixtures).extend<ClockFixtures & ClockOptions>(clockFixtures);
 
 const NONE = 0;
 const MINUTES_PER_DAY = 1440;

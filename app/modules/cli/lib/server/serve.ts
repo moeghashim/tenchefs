@@ -15,7 +15,7 @@ import { BoardUrl, boardUrlLayer, domainLayers, openRoutes, routes, triggerCalle
 import { Command, Flag } from "effect/cli";
 import { CommandFailed, printLine, refused } from "./output.ts";
 import type { IdentityName, Token } from "../../../identities/index.ts";
-import type { ServeStorage, ServedStorage } from "./serve-stores.ts";
+import type { ServeLayers, ServedStorage } from "./serve-stores.ts";
 import {
   adminName,
   adminNameRule,
@@ -35,10 +35,7 @@ import type { Serving } from "../../../http/server.ts";
 import { adminTokenSet } from "../../../identities/server.ts";
 import { requireTokenWithinLimit } from "./gate.ts";
 
-export type ServeLayers = {
-  readonly storage: ServeStorage;
-  readonly webFolder?: string;
-};
+export type { ServeLayers } from "./serve-stores.ts";
 
 const boardUrlServed = Layer.effectDiscard(
   Effect.gen(function* tellBoardUrlTheServedAddress() {

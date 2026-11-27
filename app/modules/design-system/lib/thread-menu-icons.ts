@@ -7,6 +7,7 @@ import { RotateIcon } from "./rotate-icon.tsx";
 export const THREAD_MENU_ICONS = {
   close: CheckCircleIcon,
   "copy-link": CopyIcon,
+  "copy-text": CopyIcon,
   delete: DeleteIcon,
   "open-thread": ChatIcon,
   reopen: RotateIcon,

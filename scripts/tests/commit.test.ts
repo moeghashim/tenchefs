@@ -125,7 +125,7 @@ function stage(work: string, ...files: readonly string[]): void {
   git(work, "add", ...files);
 }
 
-function mergeTicketTwo(other: string): void {
+function landTicketTwo(other: string): void {
   git(other, "checkout", "--quiet", "-b", "ticket-2");
   change(other, "a.txt", "Ticket 2 first");
   change(other, "b.txt", "Ticket 2 second");
@@ -148,7 +148,7 @@ it("a commit warns, naming the commits and files, when origin/v1 has new commits
   expect(run.status).toBe(PASSED);
   expect(run.stderr).toBe(
     [
-      "warning: origin/v1 has 1 new commit touching files this branch changes; read it before you go on (merge-ticket will take it in):",
+      "warning: origin/v1 has 1 new commit touching files this branch changes; read it before you go on (landing will merge it in):",
       `  ${short(other, "HEAD~1")} Rework a on v1: a.txt`,
       "",
     ].join("\n"),
@@ -186,13 +186,13 @@ it("a ticket merged into origin/v1 shows as its one merge commit, beside v1's ow
   expect.hasAssertions();
 
   const { work, other } = branchCutFromV1();
-  mergeTicketTwo(other);
+  landTicketTwo(other);
   landOnV1(other, ["a.txt", "Rework a on v1"]);
   stage(work, "a.txt", "b.txt");
 
   expect(commit(work, "--quiet", "-m", "branch work").stderr).toBe(
     [
-      "warning: origin/v1 has 2 new commits touching files this branch changes; read them before you go on (merge-ticket will take them in):",
+      "warning: origin/v1 has 2 new commits touching files this branch changes; read them before you go on (landing will merge them in):",
       `  ${short(other, "HEAD~1")} Merge ticket-2: a.txt, b.txt`,
       `  ${short(other, "HEAD")} Rework a on v1: a.txt`,
       "",

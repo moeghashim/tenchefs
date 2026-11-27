@@ -85,6 +85,7 @@ interface MessagesOn {
 type ThreadChangeCalls =
   | "closeThread"
   | "reopenThread"
+  | "setThreadTitle"
   | "threadChanged"
   | "listOpenThreads"
   | "deleteMessage"
@@ -170,6 +171,7 @@ export interface MessagesService {
   readonly unreact: (caller: Identity, id: MessageId, reaction: string) => Fails<ReactionsResponse>;
   readonly closeThread: (caller: Identity, id: MessageId) => Fails<TopLevelMessageResponse>;
   readonly reopenThread: (id: MessageId) => Fails<TopLevelMessageResponse>;
+  readonly setThreadTitle: (caller: Identity, id: MessageId, title: string) => Fails<TopLevelMessageResponse>;
   readonly threadChanged: Effect.Effect<PubSub.Subscription<TopLevelMessage>, never, Scope.Scope>;
   readonly deleteMessage: (caller: Identity, id: MessageId) => Fails<{ readonly message: Message }>;
   readonly deleted: Effect.Effect<

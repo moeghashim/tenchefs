@@ -92,4 +92,13 @@ function calledThreadId({ stdoutJson }: BinResult): Effect.Effect<MessageId> {
   );
 }
 
-export { type BinNeeds, type BinResult, type BinRun, calledThreadId, freshStateFolder, postedMessageId, runBin };
+export {
+  type BinNeeds,
+  type BinResult,
+  type BinRun,
+  calledThreadId,
+  freshStateFolder,
+  jsonOf,
+  postedMessageId,
+  runBin,
+};

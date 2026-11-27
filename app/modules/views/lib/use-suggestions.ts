@@ -1,8 +1,9 @@
-import type { Command, Identity } from "../../sdk/index.ts";
+import type { Command, Draft } from "../../composer/index.ts";
 import { useCallback, useMemo } from "react";
-import type { Draft } from "../../composer/index.ts";
+import type { Identity } from "../../sdk/index.ts";
 import type { MentionOption } from "./mention-option.ts";
 import type { Presences } from "../../board/index.ts";
+import type { WebhookCommand } from "../../webhook-commands/index.ts";
 import { mentionOptionOf } from "./mention-option.ts";
 import { usePresences } from "./use-presence.ts";
 
@@ -15,6 +16,7 @@ interface SuggestionsOf {
   readonly draft: Draft;
   readonly suggestions: readonly Identity[];
   readonly commands: readonly Command[];
+  readonly webhookCommands: readonly WebhookCommand[];
 }
 
 interface Shown {
@@ -28,15 +30,28 @@ interface Handlers {
   readonly command: (option: string) => void;
 }
 
-function shownFor({ commands, suggestions }: SuggestionsOf, handlers: Handlers, presences: Presences): Shown {
-  if (commands.length > NONE) {
-    const options = commands.map((command) => ({
-      detail: command.description ?? null,
-      identity: null,
-      option: `/${command.name}`,
-      presence: null,
-      spoken: `/${command.name}`,
-    }));
+interface Named {
+  readonly name: string;
+  readonly description?: string;
+}
+
+function slashOption(named: Named): MentionOption {
+  return {
+    detail: named.description ?? null,
+    identity: null,
+    option: `/${named.name}`,
+    presence: null,
+    spoken: `/${named.name}`,
+  };
+}
+
+function shownFor(
+  { commands, webhookCommands, suggestions }: SuggestionsOf,
+  handlers: Handlers,
+  presences: Presences,
+): Shown {
+  if (commands.length + webhookCommands.length > NONE) {
+    const options = [...commands, ...webhookCommands].map((named) => slashOption(named));
     return { label: COMMANDS, onChoose: handlers.command, options };
   }
   const options = suggestions.map((identity) => mentionOptionOf({ identity, presences }));
@@ -44,7 +59,7 @@ function shownFor({ commands, suggestions }: SuggestionsOf, handlers: Handlers, 
 }
 
 function useSuggestions(of: SuggestionsOf): Shown {
-  const { commands, draft, suggestions } = of;
+  const { commands, draft, suggestions, webhookCommands } = of;
   const mention = useCallback(
     (option: string) => {
       draft.choose(option.slice(SIGN));
@@ -53,14 +68,19 @@ function useSuggestions(of: SuggestionsOf): Shown {
   );
   const command = useCallback(
     (option: string) => {
-      draft.pick(option.slice(SIGN));
+      const name = option.slice(SIGN);
+      if (commands.some((listed) => listed.name === name)) {
+        draft.pickCommand(name);
+        return;
+      }
+      draft.pickWebhookCommand(name);
     },
-    [draft],
+    [commands, draft],
   );
   const presences = usePresences();
   return useMemo(
-    () => shownFor({ commands, draft, suggestions }, { command, mention }, presences),
-    [command, commands, draft, mention, presences, suggestions],
+    () => shownFor({ commands, draft, suggestions, webhookCommands }, { command, mention }, presences),
+    [command, commands, draft, mention, presences, suggestions, webhookCommands],
   );
 }
 

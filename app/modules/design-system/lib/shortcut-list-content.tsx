@@ -6,7 +6,7 @@ import type { ShortcutListContentParts } from "./shortcut-list-parts.ts";
 import { useReturnFocus } from "./use-return-focus.ts";
 
 export function ShortcutListContent(parts: ShortcutListContentParts): ReactNode {
-  const focus = useReturnFocus();
+  const focus = useReturnFocus({ returnTo: null });
   const handleOpenAutoFocus = focus.onOpen;
   const handleCloseAutoFocus = focus.onClose;
   return (

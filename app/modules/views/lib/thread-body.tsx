@@ -3,9 +3,9 @@ import type { MessageMenu, Selection } from "../../unread/index.ts";
 import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import { CardBody } from "../../design-system/layout.tsx";
 import type { MessageId } from "../../sdk/index.ts";
-import { ParentEntry } from "./parent-entry.tsx";
 import type { ReactNode } from "react";
 import type { Reply } from "./use-message-menu.ts";
+import { StandaloneEntry } from "./standalone-entry.tsx";
 import { THREAD_PANEL } from "./thread-panel.ts";
 import { ThreadReplies } from "./thread-replies.tsx";
 
@@ -37,9 +37,8 @@ export function ThreadBody(props: ThreadBodyProps): ReactNode {
   }
   return (
     <>
-      <ParentEntry
+      <StandaloneEntry
         closing={props.closing}
-        deleted={state.deleted}
         label={TEXT.parent}
         me={props.me}
         menu={props.menu}

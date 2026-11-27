@@ -241,17 +241,16 @@ export const stateDirectory = Config.String("COOKOUT_STATE_DIR").pipe(Config.wit
 export const xdgStateHome = Config.String("XDG_STATE_HOME").pipe(Config.withDefault(""));
 
 /**
- * `HOME`: the CLI keeps its state in `~/.local/state/cookout` when neither of
- * the above is set. With none of the three, the CLI keeps no agent session token and `join`
- * is refused with `state_folder_missing`.
+ * `HOME`: the CLI keeps its state in `~/.local/state/cookout` when neither of the above is set. With none of the
+ * three, the CLI keeps no agent session token and `join` is refused with `state_folder_missing`.
  */
 export const home = Config.String("HOME").pipe(Config.withDefault(""));
 
-/**
- * `XDG_CONFIG_HOME`: the CLI keeps the Login from `cookout login` in `cookout/credentials` under it, or under
- * `~/.config` when it is unset. Empty counts as unset.
- */
+/** `XDG_CONFIG_HOME`: the CLI keeps the Login in `cookout/credentials` under it, or under `~/.config` when unset. */
 export const xdgConfigHome = Config.String("XDG_CONFIG_HOME").pipe(Config.withDefault(""));
+
+/** `PATH`: `cookout runner register` keeps it, so a wake run finds the programs the registering session found. */
+export const pathVariable = Config.String("PATH").pipe(Config.withDefault(""));
 
 /** `COOKOUT_URL`: the server every CLI verb but `serve` talks to. Empty counts as unset. */
 export const cookoutUrl = Config.String("COOKOUT_URL").pipe(Config.withDefault(""));

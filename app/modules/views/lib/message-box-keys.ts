@@ -10,10 +10,11 @@ const PANEL = "aside";
 const OPEN_LINK = 'nav[aria-label="Sidebar"] a[href][aria-current="page"]';
 const ROW = "main a[data-feed-row]";
 const SELECTED_ROW = `${ROW}[aria-current="page"]`;
+const ATTACH = 'form button[aria-label="Attach files"]';
 
 interface MessageBoxKeys {
   readonly remember: (target: unknown, relatedTarget: unknown) => void;
-  readonly actions: Readonly<Record<"leaveTextBox" | "newestMessage" | "toLeftColumn", Act>>;
+  readonly actions: Readonly<Record<"attachFiles" | "leaveTextBox" | "newestMessage" | "toLeftColumn", Act>>;
 }
 
 function boxOf(target: unknown): HTMLTextAreaElement | null {
@@ -78,6 +79,19 @@ function toLeftColumn({ target }: KeyboardEvent): boolean {
   return leftOf(boxAtFirstCharacter(target));
 }
 
+function attachFiles({ target }: KeyboardEvent): boolean {
+  const box = boxOf(target);
+  if (box === null) {
+    return false;
+  }
+  for (const attach of globalThis.document.querySelectorAll<HTMLButtonElement>(ATTACH)) {
+    if (attach.form === box.form) {
+      attach.click();
+    }
+  }
+  return true;
+}
+
 function placeOf(element: unknown): unknown {
   if (!(element instanceof HTMLElement)) {
     return null;
@@ -89,6 +103,7 @@ function createMessageBoxKeys(): MessageBoxKeys {
   const before = new WeakMap<HTMLElement, HTMLElement>();
   return {
     actions: {
+      attachFiles,
       leaveTextBox: ({ target }) => {
         const box = boxOf(target);
         if (box === null) {

@@ -99,19 +99,3 @@ it("reads each job's limit from the repo's own Check workflow", { timeout: 10_00
     `v1's latest Check run was cancelled: tests 3/3 was cut off at its time limit of 5 minutes; coverage was cut off at its time limit of 5 minutes. A rerun would hit the same limit, so it was not rerun.\n${URL}`,
   );
 });
-
-it("does not rerun a cut-off job even when a red run's failed jobs would be rerun", { timeout: 10_000 }, () => {
-  expect.hasAssertions();
-
-  const gh = fake({
-    list: [RUN],
-    rerunRed: true,
-    view: [view({ jobs: [done("lint"), cancelledAfter("browser 2/3", AT_LIMIT)], status: COMPLETED })],
-    workflow: WORKFLOW,
-  });
-
-  const { step } = gh.gate(["--branch", "merge-ticket-7", "--commit", "abc"]);
-
-  expect(step).toMatchObject({ cutOff: true, jobs: ["browser 2/3"] });
-  expect(gh.calls().filter((call) => call.startsWith("run rerun"))).toStrictEqual([]);
-});

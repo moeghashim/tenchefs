@@ -90,8 +90,8 @@ it("right-clicking an unread Activity row opens its actions menu, every item wit
   fireEvent.contextMenu(await rowLink(thread.address));
 
   await expect(menuItems(MENU)).resolves.toStrictEqual([
-    ["Mark read", true],
-    ["Open in channel", true],
+    ["Mark reade", true],
+    ["Open in channelo", true],
   ]);
 
   close();
@@ -107,8 +107,8 @@ it("a For you row's More actions button opens the same menu", { timeout: 5000 },
   pressed(() => button);
 
   await expect(menuItems("More actions")).resolves.toStrictEqual([
-    ["Mark read", true],
-    ["Open in channel", true],
+    ["Mark reade", true],
+    ["Open in channelo", true],
   ]);
 
   close();
@@ -186,8 +186,8 @@ it("the selected row, once read, offers Mark unread, which brings it back and ke
 
   expect([items, await opened.unreadAfter(READ_AFTER)]).toStrictEqual([
     [
-      ["Mark unread", true],
-      ["Open in channel", true],
+      ["Mark unreadu or Alt+Enter", true],
+      ["Open in channelo", true],
     ],
     TWO,
   ]);

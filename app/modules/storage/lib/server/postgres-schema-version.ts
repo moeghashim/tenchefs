@@ -27,4 +27,10 @@ function currentVersion(db: PostgresDatabase): Effect.Effect<number, StorageUnav
   });
 }
 
-export { currentVersion };
+function tooNew({ current, latest }: { readonly current: number; readonly latest: number }): StorageUnavailable {
+  return StorageUnavailable.make({
+    message: `The database is at schema version ${current}, newer than this cookout (${latest}). Upgrade cookout.`,
+  });
+}
+
+export { currentVersion, tooNew };

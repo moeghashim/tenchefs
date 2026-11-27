@@ -85,7 +85,7 @@ interface CiShard {
 }
 
 function ciUnitShard(sharding: CiShard): Plan {
-  return unitShardPlan({ ...sharding, files: unitTestFiles(sharding.cwd) });
+  return unitShardPlan({ ...sharding, ...unitTestFiles(sharding.cwd) });
 }
 
 export type { UnitTests };

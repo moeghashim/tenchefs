@@ -15,6 +15,7 @@ const TEXT = {
   closeThread: "Close thread",
   closed: "Thread closed",
   copied: "Link copied",
+  copiedText: "Text copied",
   markedUnread: "Marked unread",
   reopen: "Reopen",
   reopenThread: "Reopen thread",
@@ -24,6 +25,7 @@ const TEXT = {
 interface MenuParts {
   readonly onMarkUnread: () => void;
   readonly onCopyLink: () => void;
+  readonly onCopyText: () => void;
   readonly reactions: readonly ReactionChoice[];
   readonly thread: ThreadChoice | null;
   readonly onDelete: (() => void) | null;
@@ -115,6 +117,14 @@ function copyLinkOf(message: Message, announce: Announce): () => void {
   return copyingLink({ announce, link: () => linkOf(message) });
 }
 
+function copyTextOf(message: Message, announce: Announce): () => void {
+  const copy = createCopier();
+  return () => {
+    copy(message.text);
+    announce(TEXT.copiedText);
+  };
+}
+
 interface DeleteOf {
   readonly deletes: MessageDeletes;
   readonly me: string;
@@ -138,6 +148,7 @@ function useMessageMenu({ closing, me, menu, message, threadParent }: MenuOf): M
   return useMemo(
     () => ({
       onCopyLink: copyLinkOf(message, announce),
+      onCopyText: copyTextOf(message, announce),
       onDelete: deleteOf({ deletes, me, message }),
       onMarkUnread: () => {
         menu.markUnread(messageId);

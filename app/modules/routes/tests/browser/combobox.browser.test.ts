@@ -27,7 +27,7 @@ async function activeOption(box: Locator): Promise<string | null> {
   return box.page().locator(`[id="${id}"]`).textContent();
 }
 
-async function twoCommands(base: string): Promise<string> {
+async function twoWebhookCommands(base: string): Promise<string> {
   const prefix = unique(base);
   const admin = adminClient();
   await Promise.all(
@@ -122,8 +122,8 @@ test("Escape closes the mention list and keeps the text, with focus still in the
   await expect(box).toBeFocused();
 });
 
-test("typing / lists commands with the same roles, and the arrows move the active option", async ({ page }) => {
-  const prefix = await twoCommands("browser-combobox");
+test("typing / lists Webhook commands with the same roles, and the arrows move the active option", async ({ page }) => {
+  const prefix = await twoWebhookCommands("browser-combobox");
   const box = await messageBoxIn(page, unique("browser-combobox-command"));
   await box.pressSequentially("/");
 
@@ -155,8 +155,8 @@ test("typing / lists commands with the same roles, and the arrows move the activ
     .toBe(`/${prefix}-second`);
 });
 
-test("Escape closes the command list keeping the text, and Tab picks a command", async ({ page }) => {
-  const prefix = await twoCommands("browser-combo-keys");
+test("Escape closes the Webhook command list keeping the text, and Tab picks a Webhook command", async ({ page }) => {
+  const prefix = await twoWebhookCommands("browser-combo-keys");
   const box = await messageBoxIn(page, unique("browser-combobox-command-keys"));
   await box.pressSequentially(`/${prefix}-`);
 

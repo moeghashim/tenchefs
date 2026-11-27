@@ -24,6 +24,7 @@ import {
   messagesPath,
   reactionPath,
   threadPath,
+  titlePath,
 } from "../../messages/index.ts";
 import {
   isDeletedMessageResponse,
@@ -53,6 +54,21 @@ function closedCall(server: ClientConnection, method: "PUT" | "DELETE") {
   return async (messageId: MessageId): Promise<TopLevelMessageResponse> => {
     const params = { id: String(messageId) };
     const answer = await send(server, { isExpected: isTopLevelMessageResponse, method, params, path: closedPath });
+    return answer;
+  };
+}
+
+function titleCall(server: ClientConnection) {
+  return async (messageId: MessageId, title: string): Promise<TopLevelMessageResponse> => {
+    const params = { id: String(messageId) };
+    const body = { title };
+    const answer = await send(server, {
+      body,
+      isExpected: isTopLevelMessageResponse,
+      method: "PUT",
+      params,
+      path: titlePath,
+    });
     return answer;
   };
 }
@@ -132,6 +148,7 @@ function messageCalls(server: ClientConnection): MessageCalls {
       });
       return page;
     },
+    setThreadTitle: titleCall(server),
     unreact: reactionCall(server, "DELETE"),
   };
 }

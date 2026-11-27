@@ -6,6 +6,7 @@ import type { Keymap } from "../../keymap/index.ts";
 import type { ThreadMessagesState } from "../../board/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { isThreadDeleted } from "./thread-deleted.ts";
+import { threadHeading } from "./thread-heading.ts";
 
 const TEXT = { markRead: "Mark read", markUnread: "Mark unread", readName: "Mark conversation read" } as const;
 
@@ -57,6 +58,19 @@ function countOf(state: ThreadMessagesState): number {
   return state.replies.length;
 }
 
+interface Headed {
+  readonly selected: InboxThreadSelection;
+  readonly state: ThreadMessagesState;
+}
+
+function titleOf({ selected, state }: Headed): string | null {
+  return threadHeading({ channel: selected.channel, state }).title;
+}
+
+function detailOf({ selected, state }: Headed): string {
+  return threadHeading({ channel: selected.channel, state }).detail;
+}
+
 type ConversationShape = "missing" | "deleted" | "shown";
 
 function shapeOf(state: ThreadMessagesState): ConversationShape {
@@ -69,4 +83,4 @@ function shapeOf(state: ThreadMessagesState): ConversationShape {
   return "shown";
 }
 
-export { type ConversationProps, INBOX_HREF, actionsOf, countOf, openLinkOf, shapeOf };
+export { type ConversationProps, INBOX_HREF, actionsOf, countOf, detailOf, openLinkOf, shapeOf, titleOf };

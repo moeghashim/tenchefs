@@ -25,7 +25,7 @@ export function CallRefusal(props: CallRefusalProps): ReactNode {
   const problems = call.problems.filter((problem) => fieldNamed({ fields, problem }) === null);
   return (
     <Alert>
-      {`Couldn't call /${call.command} (${call.code}): ${call.message}`}
+      {`Couldn't call /${call.webhookCommand} (${call.code}): ${call.message}`}
       {problems.length > NONE && (
         <ItemList label={TEXT.problems}>
           {problems.map((problem) => (

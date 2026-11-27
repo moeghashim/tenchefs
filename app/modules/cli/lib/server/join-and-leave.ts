@@ -1,9 +1,11 @@
 import type { AgentSessionResponse, JoinRequest, LeaveResponse } from "../../../agent-sessions/index.ts";
 import type { AgentSessionState, AgentSessionStateFile, AgentSessionStateNeeds } from "./agent-session-state.ts";
+import { Array as Arr, Console, Effect, Function, Option } from "effect";
 import type { CallFailure, ClientWithAgentSessionState, CredentialSource, JoinPlace } from "./adapters/sdk.ts";
-import { Console, Effect, Function, Option } from "effect";
+import type { Registration, Wake } from "./registrations.ts";
 import { answered, refused } from "./output.ts";
 import { callClient, joinPlace, withClient, withJoinClient } from "./adapters/sdk.ts";
+import { forgetRegistration, register, wakeOf } from "./registrations.ts";
 import { joinByBrowser, joinByCode } from "./agent-join.ts";
 import type { CommandFailed } from "./output.ts";
 import type { IdentityName } from "../../../identities/index.ts";
@@ -17,9 +19,16 @@ interface JoinFlags {
   readonly sessionUrl: Option.Option<string>;
 }
 
+interface WakeAsk {
+  readonly asked: boolean;
+  readonly command: readonly string[];
+  readonly timeoutMinutes: Option.Option<number>;
+}
+
 interface JoinOptions extends Omit<JoinFlags, "as"> {
   readonly as: Option.Option<IdentityName>;
   readonly code: Option.Option<string>;
+  readonly wake: WakeAsk;
 }
 
 interface Issued {
@@ -33,6 +42,7 @@ interface Joining {
 }
 
 interface JoinAnswer extends Omit<AgentSessionResponse, "agentSessionToken"> {
+  readonly registration?: Registration;
   readonly source: CredentialSource;
 }
 
@@ -162,9 +172,32 @@ function issueAndKeep(
   });
 }
 
+const wakeUsage: CallFailure = {
+  code: "usage",
+  message:
+    "Give a wake command (and --timeout) only with --wake, after --: cookout join --as <name> --wake -- " +
+    "<wake command…>. --print-env keeps nothing to register.",
+};
+
+function nothingAsked({ asked, command, timeoutMinutes }: WakeAsk): boolean {
+  return !asked && Arr.isReadonlyArrayEmpty(command) && Option.isNone(timeoutMinutes);
+}
+
+function wakeCommandOf(ask: WakeAsk): Effect.Effect<Option.Option<Wake>, CallFailure> {
+  const { asked, command, timeoutMinutes } = ask;
+  if (nothingAsked(ask)) {
+    return Effect.succeedNone;
+  }
+  if (asked && Arr.isReadonlyArrayNonEmpty(command)) {
+    return Effect.asSome(wakeOf({ timeoutMinutes, words: command }));
+  }
+  return Effect.fail(wakeUsage);
+}
+
 function joinIn(
   { file, place, url }: JoinPlace,
   joining: Joining,
+  wake: Option.Option<Wake>,
 ): Effect.Effect<JoinAnswer, CallFailure, AgentSessionStateNeeds> {
   const { harness = "" } = place;
   if (harness === "") {
@@ -173,7 +206,15 @@ function joinIn(
   if (Option.isNone(file)) {
     return Effect.fail(noSessionId(harness, joining.command));
   }
-  return issueAndKeep(joining, { file: file.value, url });
+  const joined = issueAndKeep(joining, { file: file.value, url });
+  return Option.match(wake, {
+    onNone: () => joined,
+    onSome: (words) =>
+      Effect.zipWith(joined, register({ file: file.value, place, wake: words }), (answer, registration) => ({
+        ...answer,
+        registration,
+      })),
+  });
 }
 
 function byCode(code: string, { idleExpiry, sessionUrl }: Pick<JoinFlags, "idleExpiry" | "sessionUrl">): Joining {
@@ -206,6 +247,9 @@ function joiningOf({ as, code, ...flags }: JoinOptions): Effect.Effect<Joining, 
 
 function leaveAndForget(opened: ClientWithAgentSessionState): Effect.Effect<LeaveResponse, CallFailure> {
   return Effect.gen(function* leaveAgentSession() {
+    if (Option.isSome(opened.joined)) {
+      yield* forgetRegistration(opened.joined.value.file);
+    }
     const left = yield* callClient((client) => client.leave())(opened);
     if (Option.isSome(opened.joined)) {
       yield* opened.joined.value.file.remove;
@@ -215,7 +259,12 @@ function leaveAndForget(opened: ClientWithAgentSessionState): Effect.Effect<Leav
 }
 
 function join(options: JoinOptions): Effect.Effect<JoinAnswer, CallFailure, AgentSessionStateNeeds> {
-  return Effect.flatMap(joiningOf(options), (joining) => Effect.flatMap(joinPlace, (place) => joinIn(place, joining)));
+  return Effect.gen(function* joinAndRegister() {
+    const wake = yield* wakeCommandOf(options.wake);
+    const joining = yield* joiningOf(options);
+    const place = yield* joinPlace;
+    return yield* joinIn(place, joining, wake);
+  });
 }
 
 function joinForEnvironment(options: JoinOptions): Effect.Effect<Issued, CallFailure, AgentSessionStateNeeds> {
@@ -231,7 +280,11 @@ function joinCommandRun({
   ...options
 }: JoinOptions & { readonly printEnv: boolean }): Effect.Effect<void, CommandFailed, AgentSessionStateNeeds> {
   if (printEnv) {
-    return Effect.matchEffect(joinForEnvironment(options), { onFailure: refused, onSuccess: printExport });
+    const forEnvironment = Effect.andThen(
+      Effect.filterOrFail(wakeCommandOf(options.wake), Option.isNone, () => wakeUsage),
+      joinForEnvironment(options),
+    );
+    return Effect.matchEffect(forEnvironment, { onFailure: refused, onSuccess: printExport });
   }
   return answered(join(options));
 }

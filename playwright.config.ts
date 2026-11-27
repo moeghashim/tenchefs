@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import type { ClockOptions } from "./app/modules/routes/tests/browser/clock.ts";
 import type { ProbeOptions } from "./app/modules/routes/tests/browser/probe.ts";
 import type { RelayOptions } from "./app/modules/routes/tests/browser/relay.ts";
 import type { SlowOptions } from "./app/modules/routes/tests/browser/slow.ts";
@@ -26,9 +27,10 @@ const chromium = {
   probe: process.env["COOKOUT_BROWSER_PROBE"] === "1",
   relayUrl: process.env["COOKOUT_RELAY_URL"] ?? "",
   slowMs: Number(process.env["COOKOUT_BROWSER_SLOW_MS"] ?? "0"),
+  webFolder: process.env["COOKOUT_WEB_FOLDER"] ?? "",
 };
 
-export default defineConfig<ProbeOptions & RelayOptions & SlowOptions>({
+export default defineConfig<ClockOptions & ProbeOptions & RelayOptions & SlowOptions>({
   expect: { timeout: 10_000 },
   forbidOnly: true,
   fullyParallel: true,

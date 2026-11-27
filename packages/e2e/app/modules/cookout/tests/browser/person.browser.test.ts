@@ -58,7 +58,12 @@ async function leaveForTheInbox(page: Page): Promise<void> {
 
 async function replyMentioning(page: Page, cookout: BrowserRun, { agent, channel }: Board): Promise<void> {
   await openQuestion(page, channelRow(page, channel));
-  await page.getByRole("textbox", { exact: true, name: "Reply" }).pressSequentially(`Over to @${cookout.prefix}-ag`);
+  const reply = page.getByRole("textbox", { exact: true, name: "Reply" });
+
+  await expect(reply).toHaveValue(`@${agent.name} `);
+
+  await reply.fill("");
+  await reply.pressSequentially(`Over to @${cookout.prefix}-ag`);
   const suggestions = page.getByRole("listbox", { name: "Mention suggestions" });
 
   await expect(suggestions.getByRole("option")).toHaveText([`@${agent.name}`]);

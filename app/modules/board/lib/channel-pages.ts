@@ -1,7 +1,7 @@
 import type { ChannelName, CookoutEvent, MessageId } from "../../sdk/index.ts";
 import type { Held, Queues } from "./messages-held.ts";
 import type { PageOps, PagesClient } from "./page-reads.ts";
-import type { CallRequest } from "./command-call.ts";
+import type { CallRequest } from "./webhook-command-call.ts";
 import type { MessagesHeld } from "./messages-table.ts";
 import type { PostRequest } from "./page-calls.ts";
 import { pageCalls } from "./page-calls.ts";

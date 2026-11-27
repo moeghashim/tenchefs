@@ -1,4 +1,4 @@
-import { BRANCH, git, repo, repos } from "./lib/merge-repos.ts";
+import { BRANCH, git, repo, repos } from "./lib/lint-config-repos.ts";
 import { LOOSENINGS, TIGHTENINGS, withRules } from "./lib/lint-config-cases.ts";
 import { expect, it } from "vitest";
 import { lintConfigCheck } from "../lib/lint-config-guard.ts";

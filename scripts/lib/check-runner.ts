@@ -2,6 +2,7 @@ import type { FileTiming, ReportFile } from "./slowest-files.ts";
 import { TIMINGS_DIR, readTimings, saveFullList, slowestNames, slowestSummary } from "./slowest-files.ts";
 import { holdMachineLock, waitingLine } from "./machine-lock.ts";
 import type { Holder } from "./machine-lock.ts";
+import { failureSummary } from "./failure-summary.ts";
 import { firstError } from "./first-error.ts";
 import { once } from "node:events";
 import { rmSync } from "node:fs";
@@ -230,6 +231,15 @@ function reportSkipped({ ciOnly, inCi, job }: Checks): void {
   }
 }
 
+function verdictOf(final: readonly Outcome[], options: Checks): number {
+  reportSkipped(options);
+  const failed = final.filter((outcome) => !passed(outcome));
+  for (const line of failureSummary(failed.map(({ check, output }) => ({ name: check.name, output })))) {
+    console.log(line);
+  }
+  return exitCodeOf(failed.map((outcome) => outcome.check.name));
+}
+
 async function runJob(options: Checks): Promise<number> {
   const { checks, inCi, job } = options;
   const selected = checks.filter((check) => job === "" || check.job === job);
@@ -241,8 +251,7 @@ async function runJob(options: Checks): Promise<number> {
   for (const outcome of final) {
     report(outcome, inCi);
   }
-  reportSkipped(options);
-  return exitCodeOf(final.filter((outcome) => !passed(outcome)).map((outcome) => outcome.check.name));
+  return verdictOf(final, options);
 }
 
 async function runChecks(options: Checks): Promise<number> {

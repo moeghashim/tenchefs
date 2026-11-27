@@ -1,5 +1,7 @@
 # v1 moves only by fast-forward from a green merge-ticket-N
 
+Superseded on 2026-11-25 by [ADR 0127](0127-a-worker-lands-its-own-pull-request-after-its-pull-request-check-is-green.md): a worker merges v1 into its branch and merges its own pull request, and merge-ticket is gone.
+
 2026-11-25 (mattpocock/cookout#567). Supersedes [ADR 0099](0099-v1-lands-through-github-s-merge-queue.md). Matt approved landing by fast-forward push again on the board on 2026-11-25 (msg 4631).
 
 ## Context

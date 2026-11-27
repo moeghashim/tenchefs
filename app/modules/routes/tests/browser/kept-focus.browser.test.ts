@@ -67,7 +67,7 @@ test("removing an attachment focuses the next one's Remove, and the message box 
   await expect(form.getByRole("textbox", MESSAGE_BOX)).toBeFocused();
 });
 
-async function channelWithCommand(channel: string, command: string): Promise<void> {
+async function channelWithWebhookCommand(channel: string, command: string): Promise<void> {
   const admin = adminClient();
   await admin.createChannel({ name: channel });
   await createTestAgent({ by: admin, name: command, owner: "admin" });
@@ -80,10 +80,10 @@ async function openAsCaller(page: Page, channel: string): Promise<void> {
   await page.goto(`/#/channels/${channel}`);
 }
 
-async function commandPrompt(page: Page): Promise<Locator> {
+async function webhookCommandPrompt(page: Page): Promise<Locator> {
   const channel = unique("browser-kept-call");
   const command = unique("browser-kept-roll");
-  await channelWithCommand(channel, command);
+  await channelWithWebhookCommand(channel, command);
   await openAsCaller(page, channel);
   await postForm(page).getByRole("textbox", MESSAGE_BOX).pressSequentially(`/${command}`);
 
@@ -97,8 +97,8 @@ async function commandPrompt(page: Page): Promise<Locator> {
   return prompt;
 }
 
-test("calling a command from its form lands focus back on the message box", async ({ page }) => {
-  const prompt = await commandPrompt(page);
+test("calling a Webhook command from its form lands focus back on the message box", async ({ page }) => {
+  const prompt = await webhookCommandPrompt(page);
   await prompt.getByRole("textbox", { exact: true, name: "version" }).fill("1.0.0");
   await prompt.getByRole("textbox", { exact: true, name: "version" }).press("Enter");
 
@@ -106,8 +106,8 @@ test("calling a command from its form lands focus back on the message box", asyn
   await expect(postForm(page).getByRole("textbox", MESSAGE_BOX)).toBeFocused();
 });
 
-test("the command form's Cancel lands focus back on the message box", async ({ page }) => {
-  const prompt = await commandPrompt(page);
+test("the Webhook command form's Cancel lands focus back on the message box", async ({ page }) => {
+  const prompt = await webhookCommandPrompt(page);
 
   await pressedOn(prompt.getByRole("button", { exact: true, name: "Cancel" }));
 
@@ -115,15 +115,17 @@ test("the command form's Cancel lands focus back on the message box", async ({ p
   await expect(postForm(page).getByRole("textbox", MESSAGE_BOX)).toBeFocused();
 });
 
-test("the schedule dialog's Cancel lands focus back on Post later", async ({ page }) => {
+test("the schedule dialog's Cancel lands focus back in the message box, its /schedule text kept", async ({ page }) => {
   await openChannel(page, unique("browser-kept-schedule"));
-  await pressedOn(postForm(page).getByRole("button", { exact: true, name: "Post later" }));
-  await page.getByRole("menuitem", { exact: true, name: "Schedule…" }).press("Enter");
+  const box = postForm(page).getByRole("textbox", MESSAGE_BOX);
+  await box.fill("/schedule Standup");
+  await box.press("Enter");
 
   await pressedOn(scheduleDialog(page).getByRole("button", { exact: true, name: "Cancel" }));
 
   await expect(scheduleDialog(page)).toBeHidden();
-  await expect(postForm(page).getByRole("button", { exact: true, name: "Post later" })).toBeFocused();
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("/schedule Standup");
 });
 
 async function openThread(page: Page): Promise<string> {

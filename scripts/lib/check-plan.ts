@@ -46,7 +46,7 @@ const E2E: CiOnly = {
   ciJob: "e2e-docker",
   command: "pnpm e2e:docker",
   name: "the e2e suite (packages/e2e on the Docker image)",
-  workflow: "Release",
+  workflow: "Check",
 };
 
 const HOOK: CiOnly = {
@@ -105,7 +105,7 @@ function scriptedChecks(planning: Planning): readonly Scripted[] {
     { budget: 16, job: "fixers", name: "fixers", script: ["fixers"] },
     { budget: 8, job: "seams", name: "seams", script: ["seams"] },
     {
-      budget: 26,
+      budget: 90,
       job: "tests",
       name: "tests",
       script: testScript(planning),

@@ -27,12 +27,19 @@ function personKeysOf(keymap: Keymap): PersonKeysSource {
 
 function messageShortcutsOf(keymap: Keymap): MessageShortcuts {
   return {
+    attach: keymap.shortcutOf("attachFiles"),
     copyLink: keymap.shortcutOf("copyMessageLink"),
+    copyText: keymap.shortcutOf("copyMessageText"),
     delete: keymap.shortcutOf("deleteMessage"),
     markUnread: keymap.shortcutOf("markUnread"),
+    nextImage: keymap.shortcutOf("nextImage"),
     openThread: keymap.shortcutOf("openThread"),
+    previousImage: keymap.shortcutOf("previousImage"),
     reply: keymap.shortcutOf("replyToMessage"),
+    schedule: keymap.shortcutOf("scheduleMessage"),
     thread: keymap.shortcutOf("toggleThreadClosed"),
+    thumbsDown: keymap.shortcutOf("toggleThumbsDown"),
+    thumbsUp: keymap.shortcutOf("toggleThumbsUp"),
     unfold: keymap.shortcutOf("unfoldMessage"),
   };
 }

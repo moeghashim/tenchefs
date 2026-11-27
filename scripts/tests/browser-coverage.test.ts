@@ -1,3 +1,4 @@
+import { PANEL, PANEL_LINES, builtScript, webProject } from "./lib/web-project.ts";
 import { coverageMapFrom, coverageMapOf, testCoverageFrom, testsReaching } from "../lib/browser-coverage.ts";
 import { expect, it } from "vitest";
 import type { CoverageMap } from "../lib/browser-coverage.ts";
@@ -5,6 +6,7 @@ import type { Outcome } from "../lib/tools.ts";
 import type { Span } from "../lib/page-coverage.ts";
 import { pageCoverage } from "../lib/page-coverage.ts";
 import { transformWithOxc } from "vite";
+import { webBuild } from "../lib/web-build.ts";
 
 type ScriptCoverage = Parameters<typeof pageCoverage> extends readonly [readonly (infer Script)[]] ? Script : never;
 
@@ -25,6 +27,7 @@ const LINES = [
 ];
 const SOURCE = LINES.join("\n");
 const NEXT = 1;
+const NEVER = 0;
 
 function lineOf(code: string, after = NEXT): number {
   return LINES.indexOf(code, after - NEXT) + NEXT;
@@ -98,6 +101,39 @@ it("records each function of a served app file a page loaded, and which of them 
   const page = pageCoverage([await servedView({ hidden: 0, shown: 2 }), CLIENT]);
 
   expect(page).toStrictEqual({ ok: true, value: { [VIEW]: { called: [SHOWN], functions: [SHOWN, HIDDEN] } } });
+});
+
+function panelSpan(name: string): Span {
+  const header = PANEL_LINES.indexOf(`export function ${name}() {`);
+  return [header + NEXT, PANEL_LINES.indexOf("}", header) + NEXT];
+}
+
+async function servedBundle(): Promise<ScriptCoverage> {
+  const web = await webBuild({ probe: false, root: webProject() });
+  const { name, text: source } = builtScript(web.folder);
+  return {
+    functions: [
+      { functionName: "", ranges: [{ count: NEXT, endOffset: source.length, startOffset: 0 }] },
+      functionRange(source, "shown", NEXT),
+      functionRange(source, "hidden", NEVER),
+    ],
+    source,
+    url: `http://127.0.0.1:4173/assets/${name}`,
+  };
+}
+
+it("records each function of the built web UI's bundle against its own source file's lines", {
+  timeout: 20_000,
+}, async () => {
+  expect.hasAssertions();
+
+  const page = pageCoverage([await servedBundle()]);
+  const [shown, hidden] = [panelSpan("shown"), panelSpan("hidden")];
+
+  expect(page).toStrictEqual({
+    ok: true,
+    value: { [PANEL]: { called: [shown], functions: [shown, hidden] }, "app/web.ts": { called: [], functions: [] } },
+  });
 });
 
 it("can't record a served app file that has no source map", { timeout: 1000 }, () => {

@@ -19,7 +19,7 @@ const copiedDatabase = Effect.gen(function* copyFixture() {
 }).pipe(Effect.orDie);
 
 it.effect(
-  "a database at schema version 24, with a message and a reply, takes every later migration and keeps its rows",
+  "a database at schema version 24, with a message and a reply, takes every later migration, keeps its rows and starts untitled",
   () =>
     Effect.gen(function* upgradeDeployed() {
       const path = yield* copiedDatabase;
@@ -36,5 +36,7 @@ it.effect(
         parent: { ...closing, replyCount: 1, text: "before the upgrade" },
       });
       expect(replies).toStrictEqual(Option.some(["a reply"]));
+      expect(closed).not.toHaveProperty("parent.title");
+      expect(closed).not.toHaveProperty("parent.titleSetBy");
     }).pipe(Effect.provide(NodeServices.layer)),
 );

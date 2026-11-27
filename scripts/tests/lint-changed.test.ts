@@ -130,6 +130,22 @@ it("passes a clean file as the hook does", { timeout: 60_000 }, async () => {
   expect(lastLine(changed.stdout)).toBe("RESULT: PASS");
 });
 
+it("fails a file the formatter grows past the line limit in the hook as in lint:changed", {
+  timeout: 60_000,
+}, async () => {
+  expect.hasAssertions();
+
+  const words = Array.from({ length: 400 }, () => '"a"').join(",");
+  const file = fixture(`export const words = [${words}];\n`);
+  const hook = await node("scripts/lint-ratchet.ts", "--fix", file);
+  const changed = await node("scripts/lint-changed.ts", file);
+  const tooLong = `${file}:402 eslint(max-lines) File has too many lines (402).`;
+
+  expect([hook.status, changed.status]).toStrictEqual([FAILED, FAILED]);
+  expect(hook.output).toContain(tooLong);
+  expect(changed.output).toContain(tooLong);
+});
+
 function rootKnipScript(): string | undefined {
   const manifest = parseJson(readFileSync("package.json", "utf8"));
   return textOf(field(field(manifest, "scripts"), "knip"));

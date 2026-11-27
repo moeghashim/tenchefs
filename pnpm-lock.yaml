@@ -66,6 +66,12 @@ importers:
       '@swc/core':
         specifier: ^1.16.22
         version: 1.16.22
+      '@tailwindcss/node':
+        specifier: ^4.3.5
+        version: 4.3.5
+      '@tailwindcss/oxide':
+        specifier: ^4.3.5
+        version: 4.3.5
       '@tailwindcss/vite':
         specifier: ^4.3.5
         version: 4.3.5(vite@8.3.8(@types/node@22.20.5)(jiti@2.7.0)(yaml@2.9.1))
@@ -99,6 +105,9 @@ importers:
       eslint-plugin-react-hooks:
         specifier: 7.1.1
         version: 7.1.1(eslint@10.15.0(jiti@2.7.0))
+      flatted:
+        specifier: 3.4.4
+        version: 3.4.4
       jsdom:
         specifier: ^31.0.1
         version: 31.0.1

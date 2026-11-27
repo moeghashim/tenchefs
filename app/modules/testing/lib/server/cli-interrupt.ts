@@ -1,6 +1,6 @@
 import { Array as Arr, Effect, Exit, Fiber } from "effect";
-import type { CliResult, CommandLineNeeds } from "./cli.ts";
-import { cliResult, exitCodeOf, verbLayers } from "./cli.ts";
+import type { CliResult, CommandLineNeeds } from "./command-line.ts";
+import { cliResult, exitCodeOf, verbLayers } from "./command-line.ts";
 import { exitCodeAfterFailure, runCookout } from "../../../cli/server.ts";
 import { TestConsole } from "effect/testing";
 

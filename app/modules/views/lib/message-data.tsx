@@ -14,7 +14,7 @@ interface MessageDataProps {
 }
 
 interface Call {
-  readonly command: string;
+  readonly webhookCommand: string;
   readonly value: JsonValue;
 }
 
@@ -24,14 +24,14 @@ function isJsonObject(value: JsonValue): value is Readonly<Record<string, JsonVa
 
 function callIn(data: JsonValue): Call | null {
   if (isJsonObject(data) && typeof data["command"] === "string") {
-    return { command: data["command"], value: data["data"] ?? null };
+    return { value: data["data"] ?? null, webhookCommand: data["command"] };
   }
   return null;
 }
 
 function callOf(message: Message): Call | null {
   const call = callIn(message.data ?? null);
-  if (call === null || message.text !== `/${call.command}`) {
+  if (call === null || message.text !== `/${call.webhookCommand}`) {
     return null;
   }
   return call;
@@ -43,7 +43,7 @@ export function MessageData(props: MessageDataProps): ReactNode {
   const call = callOf(message);
   const handleUnfold = props.fold.unfold;
   if (call !== null) {
-    return <CallChip command={message.text} label={`Call to /${call.command}`} value={call.value} />;
+    return <CallChip webhookCommand={message.text} label={`Call to /${call.webhookCommand}`} value={call.value} />;
   }
   return (
     <>

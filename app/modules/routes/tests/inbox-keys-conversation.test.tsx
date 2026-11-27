@@ -70,7 +70,7 @@ it("e reads the selected row at once, and u puts it back", { timeout: 8000 }, as
 
   expect([shortcutOf("Mark conversation read"), shortcutOf("Mark unread"), before, afterE, afterU]).toStrictEqual([
     "e",
-    "u",
+    "u Alt+Enter",
     ONE,
     NONE,
     ONE,
@@ -117,7 +117,7 @@ it("mark read, Mark unread and Open thread name their keys in aria-keyshortcuts 
 
   expect([read, unread, open]).toStrictEqual([
     ["e", "Mark read (e)"],
-    ["u", "Mark unread (u)"],
+    ["u Alt+Enter", "Mark unread (u or Alt+Enter)"],
     ["o", "Open thread (o)"],
   ]);
 

@@ -1,5 +1,5 @@
 import { CookoutError, isServerErrorCode } from "./errors.ts";
-import type { CookoutEvent, LiveConnectionId, PresenceResponse } from "../../events/index.ts";
+import type { CookoutEvent, LiveConnectionId, PresenceResponse, WakeRunResponse } from "../../events/index.ts";
 import type { ServerSentEvent, ServerSentFrame } from "../../http/client.ts";
 import { allChannelsQuery, eventsPath, liveConnectionPath, refusalEvent } from "../../events/index.ts";
 import { getJson, openEvents, send } from "./request.ts";
@@ -32,10 +32,12 @@ import {
   isSubscriptionEvent,
   isThreadEvent,
   isTriggerEvent,
+  isWakeRunResponse,
 } from "./generated/validators.js";
+import { presencePath, runnerQuery, wakeRunFailurePath, wakeRunPath } from "../../presence/index.ts";
 import type { ClientConnection } from "./request.ts";
 import type { MessageId } from "../../messages/index.ts";
-import { presencePath } from "../../presence/index.ts";
+import type { WakeRunFailure } from "../../presence/index.ts";
 
 type EventType = CookoutEvent["type"];
 
@@ -64,6 +66,7 @@ function connectionSeen(): ConnectionSeen {
 
 interface WatchOptions {
   readonly allChannels?: boolean;
+  readonly runner?: boolean;
   readonly lastEventId?: MessageId;
   readonly onHeartbeat?: () => void;
   readonly onConnected?: (latestMessageId: MessageId | null) => void;
@@ -208,25 +211,44 @@ async function saidCleanClose(server: ClientConnection, connection: LiveConnecti
   return said;
 }
 
-function queryFor(allChannels: boolean): Readonly<Record<string, string>> {
-  if (allChannels) {
-    return allChannelsQuery;
-  }
-  return {};
+function queryFor({ allChannels = false, runner = false }: WatchOptions): Readonly<Record<string, string>> {
+  return { ...(allChannels && allChannelsQuery), ...(runner && runnerQuery) };
+}
+
+async function sayWakeRun(server: ClientConnection, method: "PUT" | "DELETE"): Promise<WakeRunResponse> {
+  const said = await send(server, { isExpected: isWakeRunResponse, method, path: wakeRunPath });
+  return said;
 }
 
 function eventCalls(server: ClientConnection): EventCalls {
   return {
+    endWakeRun: async () => {
+      const said = await sayWakeRun(server, "DELETE");
+      return said;
+    },
+    failWakeRun: async (failure) => {
+      const said = await send(server, {
+        body: failure,
+        isExpected: isWakeRunResponse,
+        method: "POST",
+        path: wakeRunFailurePath,
+      });
+      return said;
+    },
     presence: async () => {
       const everyone = await getJson(server, presencePath, isPresenceResponse);
       return everyone;
+    },
+    startWakeRun: async () => {
+      const said = await sayWakeRun(server, "PUT");
+      return said;
     },
     watch: async (options = NO_OPTIONS) => {
       const { close, events } = await openEvents({
         connection: server,
         headers: resumeHeaders(options),
         path: eventsPath,
-        query: queryFor(options.allChannels ?? false),
+        query: queryFor(options),
       });
       const seen = connectionSeen();
       return {
@@ -244,6 +266,9 @@ function eventCalls(server: ClientConnection): EventCalls {
 interface EventCalls {
   readonly watch: (options?: WatchOptions) => Promise<EventStream>;
   readonly presence: () => Promise<PresenceResponse>;
+  readonly startWakeRun: () => Promise<WakeRunResponse>;
+  readonly endWakeRun: () => Promise<WakeRunResponse>;
+  readonly failWakeRun: (failure: WakeRunFailure) => Promise<WakeRunResponse>;
 }
 
 export { type EventCalls, type EventStream, type WatchOptions, eventCalls, eventOf };

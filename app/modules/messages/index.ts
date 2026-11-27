@@ -71,19 +71,17 @@ export interface MessageFields extends WithAttachments {
 export interface TopLevelMessage extends MessageFields {
   readonly kind: "top-level";
   readonly replyCount: number;
-  /** The newest reply in its thread, or `null` if it has none. */
+  /** The newest reply in its thread and when it was posted, both `null` if it has none. */
   readonly latestReplyId: MessageId | null;
-  /** When the newest reply in its thread was posted, or `null` if it has none. */
   readonly latestReplyAt: IsoTime | null;
-  /**
-   * The authors of its thread's replies, once each by name, the latest replier first: at most `shownRepliers`.
-   * Each is the author as stored on their latest reply, so a deleted replier still shows.
-   */
+  /** Its repliers once each, latest first, at most `shownRepliers`: each as on their latest reply, so deleted ones show. */
   readonly repliers: readonly Author[];
-  /** When its thread was closed. Present only while the thread is closed; `closedBy` is present with it. */
+  /** Only while closed: when and by whom. Only while titled: its Thread title (one line, 1–100), who last set it, when. */
   readonly closedAt?: IsoTime;
-  /** Who closed its thread. Present only while the thread is closed; `closedAt` is present with it. */
   readonly closedBy?: IdentityName;
+  readonly title?: string;
+  readonly titleSetBy?: IdentityName;
+  readonly titleSetAt?: IsoTime;
 }
 
 /** Who closed a thread and when, as its top-level message carries it while the thread is closed. */
@@ -286,8 +284,9 @@ export interface TopLevelMessageResponse {
   readonly message: TopLevelMessage;
 }
 
-/** `PUT` closes and `DELETE` reopens the thread holding the message. */
+/** `PUT` closes and `DELETE` reopens the thread holding the message; `PUT` on `titlePath` sets or clears its title. */
 export const closedPath = "/v1/messages/:id/closed";
+export const titlePath = "/v1/messages/:id/title";
 
 /** Open threads, stalest first by `lastActivityAt` (latest message or later reopen); `cursor` is null on the last page. */
 export interface ListOpenThreadsResponse {

@@ -162,7 +162,7 @@ it("a message mentioning the logged-in human is highlighted, and other mentions 
   close();
 });
 
-it("a command call without data shows the command and null", { timeout: 5000 }, async () => {
+it("a Webhook command call without data shows the Webhook command and null", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const channel = "web-call-no-data";

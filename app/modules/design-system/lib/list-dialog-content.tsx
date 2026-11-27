@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { useReturnFocus } from "./use-return-focus.ts";
 
 export function ListDialogContent(parts: ListDialogContentParts): ReactNode {
-  const focus = useReturnFocus();
+  const focus = useReturnFocus({ returnTo: null });
   const handleOpenAutoFocus = focus.onOpen;
   const handleCloseAutoFocus = focus.onClose;
   return (

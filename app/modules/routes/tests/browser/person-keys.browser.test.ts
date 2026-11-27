@@ -226,3 +226,16 @@ test("→ in the theme choice chooses Light", async ({ page }) => {
   await expect(themes.getByRole("radio", { exact: true, name: "Light" })).toBeChecked();
   await expect(themes.getByRole("radio", { exact: true, name: "Light" })).toBeFocused();
 });
+
+test("End focuses the People list's last person and Home its first", async ({ page }) => {
+  const { first, second } = await peopleShown(page, unique("browser-people-ends"));
+  const people = page.getByRole("list", { exact: true, name: "Identities" });
+  await people.getByRole("link", { exact: true, name: `${first}, Online` }).focus();
+  await page.keyboard.press("End");
+
+  await expect(people.getByRole("link", { exact: true, name: `${second}, Offline` })).toBeFocused();
+
+  await page.keyboard.press("Home");
+
+  await expect(people.getByRole("link", { exact: true, name: `${first}, Online` })).toBeFocused();
+});

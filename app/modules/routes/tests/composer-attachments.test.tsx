@@ -164,7 +164,7 @@ it("the Attach files button is a named button that opens the file picker, whose 
 
   expect([button.tagName, button.title, opened.mock.calls.length, pickerIn(CHANNEL_FORM).multiple]).toStrictEqual([
     "BUTTON",
-    "Attach files",
+    "Attach files (Ctrl+Shift+U)",
     ONCE,
     true,
   ]);

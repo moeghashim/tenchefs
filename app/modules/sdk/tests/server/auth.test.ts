@@ -81,13 +81,13 @@ it.effect("a server on a store that already has identities makes no new admin", 
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("restarting with the admin token again revokes a token rotated since", () =>
-  Effect.gen(function* restartRevokesRotated() {
+it.effect("restarting with the same admin token keeps a token rotated since, and the setting's stays revoked", () =>
+  Effect.gen(function* restartKeepsRotated() {
     const cookout = yield* TestCookout;
     const rotated = yield* answer(() => cookout.client.rotateToken("admin"));
     const second = yield* cookout.startSecondServer;
-    const whoami = yield* answer(createCookoutClient({ env: {}, token: cookout.adminToken, url: second.url }).whoami);
-    const old = yield* refusal(createCookoutClient({ env: {}, token: rotated.token, url: second.url }).whoami);
+    const whoami = yield* answer(createCookoutClient({ env: {}, token: rotated.token, url: second.url }).whoami);
+    const old = yield* refusal(createCookoutClient({ env: {}, token: cookout.adminToken, url: second.url }).whoami);
 
     expect(whoami.identity).toMatchObject({ admin: true, name: "admin" });
     expect(old).toMatchObject({ code: "token_revoked", status: UNAUTHORIZED });

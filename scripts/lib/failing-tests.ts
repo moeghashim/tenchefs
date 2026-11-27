@@ -108,4 +108,4 @@ function failingTestsBlock(log: string): string {
   return `\nFailing tests:${described.join("")}`;
 }
 
-export { failingTestsBlock };
+export { failingTests, failingTestsBlock };

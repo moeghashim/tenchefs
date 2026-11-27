@@ -1,5 +1,7 @@
 # COOKOUT_ADMIN_NAME names the identity the admin token belongs to
 
+Superseded in part on 2026-11-26 by [ADR 0130](0130-boot-applies-the-admin-token-only-when-the-setting-changes.md): boot does this only when the setting changes.
+
 2026-11-23 (mattpocock/cookout#107). Matt asked the same day that the admin can choose their own name.
 
 ## Context

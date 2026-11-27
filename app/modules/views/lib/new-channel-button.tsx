@@ -13,5 +13,14 @@ export function NewChannelButton(props: NewChannelButtonProps): ReactNode {
   const { creation } = props;
   const state = useSyncExternalStore(creation.subscribe, creation.snapshot);
   const handleOpen = creation.open;
-  return <HeadingButton expanded={state.open} focused={state.cancelled} label={TEXT.create} onClick={handleOpen} />;
+  const handleFocused = creation.settle;
+  return (
+    <HeadingButton
+      expanded={state.open}
+      focused={state.cancelled}
+      label={TEXT.create}
+      onClick={handleOpen}
+      onFocused={handleFocused}
+    />
+  );
 }

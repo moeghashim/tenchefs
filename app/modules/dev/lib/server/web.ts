@@ -1,27 +1,15 @@
 import { Array as Arr, Effect, FileSystem } from "effect";
-import type { Plugin, ProxyOptions } from "vite";
+import type { ProxyOptions } from "vite";
 import type { Scope } from "effect";
 import { contentSecurityPolicy } from "../../../http/server.ts";
 import { createServer } from "vite";
+import { probePlugins } from "../../../probe/server.ts";
 
 const LOCAL = "127.0.0.1";
 const FREE_PORT = 0;
 
 function cookoutProxy(cookoutUrl: string): ProxyOptions {
   return { changeOrigin: true, headers: { origin: cookoutUrl }, target: cookoutUrl };
-}
-
-const PROBE_SCRIPT = {
-  attrs: { src: "/app/modules/probe/web.ts", type: "module" },
-  injectTo: "body-prepend",
-  tag: "script",
-} as const;
-
-function probePlugins(probe: boolean): Plugin[] {
-  if (!probe) {
-    return [];
-  }
-  return [{ name: "cookout-browser-probe", transformIndexHtml: () => [PROBE_SCRIPT] }];
 }
 
 interface ViteDevServer {

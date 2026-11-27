@@ -44,7 +44,6 @@ export function Sidebar(parts: SidebarParts): ReactNode {
       className={`${widthStyle(rail)} shrink-0 flex-col border-r bg-card ${openStyle(parts.open)}`}
       style={widthOf(rail, parts.edge.width)}
     >
-      {!rail && <PanelEdge edge={parts.edge} />}
       <div className={`flex h-14 shrink-0 items-center ${headerStyle(rail)}`}>
         {!rail && (
           <a
@@ -58,6 +57,7 @@ export function Sidebar(parts: SidebarParts): ReactNode {
         <CollapseButton collapsed={rail} onClick={handleToggle} />
       </div>
       {!rail && parts.children}
+      {!rail && <PanelEdge edge={parts.edge} />}
     </nav>
   );
 }

@@ -41,6 +41,7 @@ export function ScheduleDeleteConfirm(props: ScheduleDeleteConfirmProps): ReactN
       onConfirm={handleConfirm}
       open
       pending={state.change.status === "changing"}
+      returnTo={null}
       title={TEXT.title}
     />
   );

@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline";
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import { webBuild } from "./lib/web-build.ts";
 
 const PRESENCE_GRACE_SECONDS = "2";
 
@@ -38,15 +39,18 @@ async function startLine(lines: AsyncIterable<string>): Promise<DevCookout> {
   throw new Error("app/dev.ts start stopped before printing its start line");
 }
 
-function probeArguments(): string[] {
-  if (process.env["COOKOUT_BROWSER_PROBE"] === "1") {
-    return ["--probe"];
+async function builtWebFolder(): Promise<string> {
+  const probe = process.env["COOKOUT_BROWSER_PROBE"] === "1";
+  const web = await webBuild({ probe, root: process.cwd() });
+  if (web.built) {
+    console.error(`browser-test-server: built the web UI into ${web.folder}`);
   }
-  return [];
+  return web.folder;
 }
 
 async function setup(): Promise<() => Promise<void>> {
-  const dev = spawn(process.execPath, ["app/dev.ts", "start", ...probeArguments()], {
+  const web = await builtWebFolder();
+  const dev = spawn(process.execPath, ["app/dev.ts", "start", "--web", web], {
     env: { ...process.env, COOKOUT_PRESENCE_GRACE_SECONDS: PRESENCE_GRACE_SECONDS },
     stdio: ["ignore", "pipe", "ignore"],
   });
@@ -55,6 +59,7 @@ async function setup(): Promise<() => Promise<void>> {
   process.env["COOKOUT_URL"] = cookout.webUrl;
   process.env["COOKOUT_ALLOW_HUMAN"] = "1";
   process.env["COOKOUT_RELAY_URL"] = cookout.relayUrl;
+  process.env["COOKOUT_WEB_FOLDER"] = web;
   return async () => {
     dev.kill("SIGINT");
     await once(dev, "exit");

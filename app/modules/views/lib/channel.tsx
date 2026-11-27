@@ -60,6 +60,7 @@ export function ChannelView(props: ChannelProps): ReactNode {
       <ChannelFeed
         closing={store.calls}
         channel={props.channel}
+        composer={props.composer}
         me={props.me}
         open={props.open}
         state={state}

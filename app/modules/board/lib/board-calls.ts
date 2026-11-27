@@ -20,14 +20,17 @@ import type {
   ScheduledMessage,
   ScheduledMessageId,
 } from "../../scheduled-messages/index.ts";
+import type { SetTitle, TitlingClient } from "./thread-titling.ts";
 import type { SearchAnswer } from "../../search/web.ts";
 import { createMessageAcks } from "./message-acks.ts";
 import { createMessageDeleting } from "./message-deleting.ts";
 import { createThreadClosing } from "./thread-closing.ts";
 import { refusedAs } from "./subscriptions-slice.ts";
+import { titleRefusal } from "./thread-titling.ts";
 
 type CallsClient = ClosingClient &
   DeletingClient &
+  TitlingClient &
   SubscriptionsClient &
   Pick<
     CookoutClient,
@@ -50,6 +53,7 @@ interface BoardCalls {
   readonly close: (messageId: MessageId) => void;
   readonly reopen: (messageId: MessageId) => void;
   readonly closingRefusal: () => ClosingRefusal | null;
+  readonly setTitle: SetTitle;
   readonly askDelete: (message: Message) => void;
   readonly cancelDelete: () => void;
   readonly deleteMessage: (messageId: MessageId, answered: Answered) => void;
@@ -146,6 +150,20 @@ function scheduleCalls({ client, heard }: CallsOptions): ScheduleCalls {
   };
 }
 
+function titleCalls(options: CallsOptions): Pick<BoardCalls, "setTitle"> {
+  return {
+    setTitle: async (messageId, title) => {
+      try {
+        const { message } = await options.client.setThreadTitle(messageId, title);
+        options.heard({ parent: message, type: "thread" });
+        return null;
+      } catch (error: unknown) {
+        return titleRefusal(error);
+      }
+    },
+  };
+}
+
 function createBoardCalls(options: CallsOptions): BoardCalls {
   const { client, heard } = options;
   const closing = createThreadClosing({
@@ -164,6 +182,7 @@ function createBoardCalls(options: CallsOptions): BoardCalls {
   });
   return {
     ...scheduleCalls(options),
+    ...titleCalls(options),
     ack: createMessageAcks(client),
     askDelete: deleting.askDelete,
     cancelDelete: deleting.cancelDelete,

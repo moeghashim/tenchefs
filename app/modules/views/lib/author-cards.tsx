@@ -1,9 +1,10 @@
-import { MessageKeys, PersonKeysArea } from "../../design-system/messages.tsx";
-import { messageShortcutsOf, personKeysOf } from "./person-keys.ts";
 import { AuthorFaces } from "./author-faces.tsx";
 import type { BoardStore } from "../../board/index.ts";
 import type { Keymap } from "../../keymap/index.ts";
+import { MessageKeysArea } from "./message-keys-area.tsx";
+import { PersonKeysArea } from "../../design-system/messages.tsx";
 import type { ReactNode } from "react";
+import { personKeysOf } from "./person-keys.ts";
 import { useMemo } from "react";
 
 interface AuthorCardsProps {
@@ -15,11 +16,10 @@ interface AuthorCardsProps {
 export function AuthorCards(props: AuthorCardsProps): ReactNode {
   const { keymap } = props;
   const keys = useMemo(() => personKeysOf(keymap), [keymap]);
-  const shortcuts = useMemo(() => messageShortcutsOf(keymap), [keymap]);
   return (
     <AuthorFaces boardStore={props.boardStore}>
       <PersonKeysArea keys={keys}>
-        <MessageKeys value={shortcuts}>{props.children}</MessageKeys>
+        <MessageKeysArea keymap={keymap}>{props.children}</MessageKeysArea>
       </PersonKeysArea>
     </AuthorFaces>
   );

@@ -8,6 +8,7 @@ import {
 } from "./feature-migrations.ts";
 import { DEACTIVATED_QUIET_AGENTS_MIGRATION, DEACTIVATION_OFFERS_MIGRATION } from "./deactivation-offers-sqlite.ts";
 import { Effect, FileSystem, Schema } from "effect";
+import { ADMIN_SETTING_MIGRATION } from "./admin-setting.ts";
 import { NUDGES_MIGRATION } from "./nudges-sqlite.ts";
 import { OFFLINE_ALERTS_MIGRATION } from "./offline-alerts.ts";
 import { REACTIONS_MIGRATION } from "./reactions-sqlite.ts";
@@ -238,6 +239,11 @@ const migrations: readonly string[] = [
   TRIGGER_SKIPPED_MIGRATION,
   `ALTER TABLE messages ADD COLUMN deleted_at TEXT;
    ALTER TABLE messages ADD COLUMN deleted_by TEXT;`,
+  ADMIN_SETTING_MIGRATION,
+  "CREATE TABLE avatars_to_remove (id TEXT PRIMARY KEY) STRICT;",
+  `ALTER TABLE messages ADD COLUMN title TEXT;
+   ALTER TABLE messages ADD COLUMN title_set_by TEXT;
+   ALTER TABLE messages ADD COLUMN title_set_at TEXT;`,
 ];
 
 const UserVersionRow = Schema.Struct({ user_version: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)) });

@@ -1,4 +1,4 @@
-import { INBOX_HREF, actionsOf, openLinkOf, shapeOf } from "./conversation-parts.ts";
+import { INBOX_HREF, actionsOf, detailOf, openLinkOf, shapeOf, titleOf } from "./conversation-parts.ts";
 import { ConversationGone } from "./conversation-gone.tsx";
 import { ConversationMessages } from "./conversation-messages.tsx";
 import { ConversationPanel } from "../../design-system/layout.tsx";
@@ -36,11 +36,12 @@ export function ConversationView(props: ConversationProps): ReactNode {
       actions={actionsOf({ keymap: props.keymap, reader })}
       backHref={INBOX_HREF}
       backLabel={TEXT.back}
-      detail={`#${channel}`}
+      detail={detailOf({ selected: props.selected, state })}
       edge={props.edge}
       label={TEXT.conversation}
       message={draft.replyTo}
       onFiles={handleFiles}
+      title={titleOf({ selected: props.selected, state })}
       open={openLinkOf({ keymap: props.keymap, label: TEXT.open, to: { channel, name: "thread", thread } })}
     >
       <ReadNote reader={reader} />

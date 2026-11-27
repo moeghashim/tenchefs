@@ -27,6 +27,11 @@ type WatchedEvent =
 
 type Heard = WatchedEvent | ConnectedEvent;
 
+interface ListenAs {
+  readonly opened: ClientWithAgentSessionState;
+  readonly runner: boolean;
+}
+
 const SERVER_ERROR = 500;
 const NO_STATUS = 0;
 const heartbeat: readonly Heard[] = [];
@@ -111,7 +116,7 @@ function droppedWhenFailed(
 }
 
 function connect(
-  opened: ClientWithAgentSessionState,
+  { opened, runner }: ListenAs,
   lastSeen: Option.Option<MessageId>,
 ): Effect.Effect<Stream.Stream<readonly Heard[], CallFailure>, CallFailure, Scope.Scope> {
   return Effect.gen(function* openConnection() {
@@ -122,7 +127,7 @@ function connect(
     function onConnected(latestMessageId: MessageId | null): void {
       Queue.offerUnsafe(signals, [{ latestMessageId, type: "connected" }]);
     }
-    const options = { ...resumeFrom(lastSeen), onConnected, onHeartbeat };
+    const options = { ...resumeFrom(lastSeen), onConnected, onHeartbeat, runner };
     const watching = callClient((client) => client.watch(options))(opened);
     const dropped = yield* Ref.make(false);
     const events = yield* Effect.acquireRelease(Effect.interruptible(watching), closedOnExit(Ref.get(dropped)));
@@ -174,10 +179,16 @@ function whileUnavailable<Value, Needs>(
   return Effect.retry(call, reconnectBackoff);
 }
 
-function start(
-  opened: ClientWithAgentSessionState,
-): Effect.Effect<Stream.Stream<readonly Heard[], CallFailure>, CallFailure, Scope.Scope> {
-  return whileUnavailable(connect(opened, Option.none()));
+interface Starting {
+  readonly from: Option.Option<MessageId>;
+  readonly listening: ListenAs;
+}
+
+function start({
+  from,
+  listening,
+}: Starting): Effect.Effect<Stream.Stream<readonly Heard[], CallFailure>, CallFailure, Scope.Scope> {
+  return whileUnavailable(connect(listening, from));
 }
 
 function sayWatching(opened: ClientWithAgentSessionState): Effect.Effect<void> {
@@ -218,16 +229,15 @@ function withPrinted(
   return (before) => [Arr.some(keys, (key) => !before.has(key)), new Set([...before, ...keys])];
 }
 
-interface Resuming {
-  readonly opened: ClientWithAgentSessionState;
+interface Resuming extends Starting {
   readonly first: Stream.Stream<readonly Heard[], CallFailure>;
 }
 
-function source({ first, opened }: Resuming): Stream.Stream<Heard, CallFailure> {
+function source({ first, from, listening }: Resuming): Stream.Stream<Heard, CallFailure> {
   return Stream.unwrap(
     Effect.gen(function* resumable() {
       const unused = yield* Ref.make(Option.some(first));
-      const lastSeen = yield* Ref.make(Option.none<MessageId>());
+      const lastSeen = yield* Ref.make(from);
       const printed = yield* Ref.make<ReadonlySet<string>>(new Set());
       function isUnprinted(event: Heard): Effect.Effect<boolean> {
         const keys = reactionKeysOf(event);
@@ -239,7 +249,7 @@ function source({ first, opened }: Resuming): Stream.Stream<Heard, CallFailure> 
       const next = Effect.flatMap(
         Ref.getAndSet(unused, Option.none()),
         Option.match({
-          onNone: () => Effect.flatMap(Ref.get(lastSeen), (seen) => connect(opened, seen)),
+          onNone: () => Effect.flatMap(Ref.get(lastSeen), (seen) => connect(listening, seen)),
           onSome: Effect.succeed,
         }),
       );
@@ -253,4 +263,4 @@ function source({ first, opened }: Resuming): Stream.Stream<Heard, CallFailure> 
   );
 }
 
-export { type Heard, type WatchedEvent, isWatched, sayWatching, source, start, whileUnavailable };
+export { type Heard, type WatchedEvent, isWatched, lastSeenAfter, sayWatching, source, start, whileUnavailable };

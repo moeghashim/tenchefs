@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import type { UnreadCounts } from "../../unread/index.ts";
 import { hasUnread } from "./unread-counts.ts";
 import { hrefOf } from "../../paths/index.ts";
+import { memo } from "react";
+import { sameProps } from "./same-props.ts";
 import { useChannelMenu } from "./use-channel-menu.ts";
 
 interface ChannelRowProps {
@@ -15,7 +17,7 @@ interface ChannelRowProps {
   readonly counts: UnreadCounts;
 }
 
-export function ChannelRow(props: ChannelRowProps): ReactNode {
+function ChannelRowView(props: ChannelRowProps): ReactNode {
   const { channel, counts } = props;
   const menu = useChannelMenu({ ...props.actions, channel, counts });
   return (
@@ -31,3 +33,5 @@ export function ChannelRow(props: ChannelRowProps): ReactNode {
     </NavLink>
   );
 }
+
+export const ChannelRow = memo(ChannelRowView, sameProps("counts"));

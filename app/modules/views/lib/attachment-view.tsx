@@ -4,6 +4,7 @@ import type { Attachment } from "../../sdk/index.ts";
 import type { ReactNode } from "react";
 
 interface AttachmentViewProps {
+  readonly at: number;
   readonly attachment: Attachment;
   readonly linked: boolean;
 }
@@ -25,6 +26,6 @@ export function AttachmentView(props: AttachmentViewProps): ReactNode {
     return <AttachmentImage name={attachment.name} size={imageBoxOf(attachment)} small src={assetUrl(attachment)} />;
   }
   return (
-    <ImageThumbnail detail={detail} name={attachment.name} size={imageBoxOf(attachment)} src={assetUrl(attachment)} />
+    <ImageThumbnail at={props.at} name={attachment.name} size={imageBoxOf(attachment)} src={assetUrl(attachment)} />
   );
 }

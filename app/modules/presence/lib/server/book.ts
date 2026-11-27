@@ -19,6 +19,7 @@ interface End {
 interface Connection {
   readonly detail: LiveConnectionDetail;
   readonly sentWith: SentWith;
+  readonly runner: "not a runner" | "asleep" | "waking";
 }
 
 interface Grace {
@@ -40,6 +41,7 @@ interface Reach {
 interface BookState {
   readonly held: ReadonlyMap<IdentityName, Held>;
   readonly reach: ReadonlyMap<IdentityName, Reach>;
+  readonly failedRuns: ReadonlyMap<IdentityName, TriggerResult>;
   readonly lastSeen: ReadonlyMap<IdentityName, IsoTime>;
   readonly ends: ReadonlyMap<IdentityName, End>;
   readonly onBootGrace: ReadonlySet<IdentityName>;
@@ -147,6 +149,7 @@ function openBook(kept: readonly StoredPresence[]): BookState {
     closingCleanly: new Set(),
     connectionsOpened: NONE,
     ends: new Map(ends),
+    failedRuns: new Map(),
     held: new Map(),
     lastSeen: new Map(Arr.map(kept, ({ identity, lastSeenAt }) => [identity, lastSeenAt] as const)),
     onBootGrace: new Set(Arr.map(wereOnline, ({ identity }) => identity)),
@@ -256,11 +259,9 @@ function forget(at: At): BookState {
   lastSeen.delete(at.identity);
   const reach = new Map(at.state.reach);
   reach.delete(at.identity);
-  return { ...at.state, ends: withoutEnd(at), held, lastSeen, onBootGrace: withoutBootGrace(at), reach };
-}
-
-function liveConnectionsIn(at: At): number {
-  return heldBy(at).connections.size;
+  const failedRuns = new Map(at.state.failedRuns);
+  failedRuns.delete(at.identity);
+  return { ...at.state, ends: withoutEnd(at), failedRuns, held, lastSeen, onBootGrace: withoutBootGrace(at), reach };
 }
 
 function heldAtStop(identity: IdentityName, state: BookState): readonly StoredPresence[] {
@@ -288,7 +289,6 @@ export {
   endIn,
   forget,
   heldBy,
-  liveConnectionsIn,
   onlineAtStop,
   openBook,
   presenceIn,

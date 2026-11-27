@@ -3,7 +3,7 @@ import type { Shortcut } from "./shortcut.ts";
 
 interface ReactionChoice {
   readonly symbol: string;
-  readonly key: string;
+  readonly keys: Shortcut;
   readonly inHoverBar: boolean;
   readonly onReact: () => void;
 }
@@ -18,6 +18,7 @@ interface ThreadChoice {
 interface MessageMenuParts {
   readonly onMarkUnread: () => void;
   readonly onCopyLink: () => void;
+  readonly onCopyText: () => void;
   readonly reactions: readonly ReactionChoice[];
   readonly thread: ThreadChoice | null;
   readonly onDelete: (() => void) | null;
@@ -33,11 +34,11 @@ interface MessageActionParts {
 interface MenuChoiceLabel {
   readonly label: string;
   readonly icon: MenuIcon;
-  readonly keys?: Shortcut;
+  readonly keys: Shortcut;
 }
 
 type MenuChoice =
-  | (MenuChoiceLabel & { readonly href: string; readonly onSelect: null })
+  | (MenuChoiceLabel & { readonly href: string; readonly onSelect: (() => void) | null })
   | (MenuChoiceLabel & {
       readonly href: null;
       readonly onSelect: () => void;
@@ -49,8 +50,6 @@ interface ActionMenuParts {
   readonly label: string;
   readonly buttonLabel?: string;
 }
-
-type MoreActionsLook = "box" | "hover";
 
 interface HoverActionsParts extends Omit<MessageActionParts, "threadHref"> {
   readonly choices: readonly MenuChoice[];
@@ -65,7 +64,6 @@ export type {
   MenuChoice,
   MessageActionParts,
   MessageMenuParts,
-  MoreActionsLook,
   ReactionChoice,
   ThreadChoice,
 };

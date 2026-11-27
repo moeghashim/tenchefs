@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { inDialog, inProfile } from "./regions.ts";
 import type { CookoutClient } from "../../sdk/index.ts";
-import { addCommand } from "./commands.ts";
+import { addWebhookCommand } from "./webhook-commands.ts";
 import { openAt } from "./render.tsx";
 import { profileOpened } from "./view-opened.ts";
 
@@ -29,10 +29,12 @@ async function withMessage(client: CookoutClient, channel: string): Promise<void
   await client.createMessage({ channel, text: "hello" });
 }
 
-it("a handler identity is labelled with its command on its People row and its profile", { timeout: 5000 }, async () => {
+it("a handler identity is labelled with its Webhook command on its People row and its profile", {
+  timeout: 5000,
+}, async () => {
   expect.hasAssertions();
 
-  await addCommand({ name: "web-handler-label" });
+  await addWebhookCommand({ name: "web-handler-label" });
   const close = openAt({ client: adminClient(), hash: "#/people/web-handler-label" });
 
   await expect(rowTexts("web-handler-label")).resolves.toStrictEqual([
@@ -44,12 +46,12 @@ it("a handler identity is labelled with its command on its People row and its pr
   close();
 });
 
-it("deactivating a handler identity warns that its command stops replying, and still goes ahead", {
+it("deactivating a handler identity warns that its Webhook command stops replying, and still goes ahead", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
 
-  await withMessage(await addCommand({ name: "web-handler-off" }), "web-handler-off");
+  await withMessage(await addWebhookCommand({ name: "web-handler-off" }), "web-handler-off");
   const { close } = await profileOpened({ client: adminClient(), name: "web-handler-off" });
   fireEvent.click(await inProfile().findEnabledButton("Deactivate"));
   await inDialog().findByText(
@@ -66,10 +68,10 @@ it("deactivating a handler identity warns that its command stops replying, and s
   close();
 });
 
-it("deleting a handler identity warns that its command goes with it", { timeout: 5000 }, async () => {
+it("deleting a handler identity warns that its Webhook command goes with it", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  await addCommand({ name: "web-handler-gone" });
+  await addWebhookCommand({ name: "web-handler-gone" });
   const { close } = await profileOpened({ client: adminClient(), name: "web-handler-gone" });
   fireEvent.click(await inProfile().findByRole("button", { name: "Delete" }));
 
@@ -82,7 +84,7 @@ it("deleting a handler identity warns that its command goes with it", { timeout:
   close();
 });
 
-it("deactivating an identity that handles no command gives no handler warning", { timeout: 5000 }, async () => {
+it("deactivating an identity that handles no Webhook command gives no handler warning", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const plain = await newIdentity({ kind: "agent", name: "web-handler-none" });

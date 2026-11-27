@@ -3,6 +3,7 @@ import type { MessageId, TopLevelMessage } from "../../sdk/index.ts";
 import type { StreamRow } from "./stream-rows.ts";
 import { foldClosed } from "./closed-folds.ts";
 import { streamRows } from "./stream-rows.ts";
+import { titleOf } from "./message-marks.ts";
 
 const FIRST = 0;
 const ONE = 1;
@@ -20,7 +21,7 @@ interface FeedOf {
 }
 
 function brokenAt(row: StreamRow, afterFold: ReadonlySet<MessageId>): StreamRow {
-  if (!afterFold.has(row.message.id)) {
+  if (!afterFold.has(row.message.id) && titleOf(row.message) === null) {
     return row;
   }
   return { ...row, grouped: false };

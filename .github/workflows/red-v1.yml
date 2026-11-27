@@ -1,0 +1,79 @@
+name: Red v1
+
+# What happens on a red v1 (#638, docs/adr/0128-a-red-v1-is-reverted-after-30-minutes.md). When
+# Check completes on v1, and every 5 minutes, scripts/red-v1.ts reads v1's Check runs and history
+# and decides (scripts/lib/red-v1.ts):
+#
+# - a red run's failed jobs are rerun once, and only a red rerun counts as red;
+# - on a red v1 it opens one fix-forward issue, titled `v1 is red: <failed jobs> since <short sha>`,
+#   and comments and closes it when v1 goes green;
+# - 30 minutes after the first red commit's red run completed, with no green Check run on v1 since
+#   and none still running on a newer commit, it reverts that commit on v1 (`-m 1` for a merge
+#   commit), pushes the revert, starts Check on v1 by workflow_dispatch (its own push starts no
+#   workflow), and comments on the issue and on the reverted pull request. A revert that conflicts
+#   pushes nothing and says so on the issue. It never reverts the same commit twice.
+#
+# A schedule registers only from a push that starts workflows (#744), and main moves by Release's
+# token, so the schedule may never fire. workflow_run is what this relies on: a run that waits for
+# the 30-minute mark sleeps until then and decides again, as Release waits out its gate spacing.
+on:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+    branches: [v1]
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only print what it would do
+        type: boolean
+        default: true
+      at:
+        description: For a dry run, read v1 as it stood at this ISO time, judging runs never rerun as if their rerun failed
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: red-v1
+  cancel-in-progress: false
+
+jobs:
+  red-v1:
+    runs-on: ubuntu-latest
+    # Up to 30 minutes of waiting for the 30-minute mark, then the decision again.
+    timeout-minutes: 40
+    permissions:
+      # To push the revert to v1.
+      contents: write
+      # To rerun a red run's failed jobs and start Check on v1.
+      actions: write
+      # To open, comment on and close the fix-forward issue.
+      issues: write
+      # To comment on the reverted pull request.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: red-v1
+      - name: Commit as github-actions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Decide and act
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+          AT: ${{ inputs.at }}
+        run: |
+          args=(--summary "$GITHUB_STEP_SUMMARY")
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ -n "$AT" ]; then args+=(--dry-run --at "$AT" --assume-reruns-fail); fi
+          node scripts/red-v1.ts "${args[@]}"

@@ -1,5 +1,5 @@
+import { focusEnd, moveFocus, roving, sidebar } from "./sidebar-roving.ts";
 import { markRead, markShownRead, openSchedules, stepTo, toggleSubscription } from "./channel-keys.ts";
-import { moveFocus, roving, sidebar } from "./sidebar-roving.ts";
 import { useBoardStore, useChannels } from "./use-board.ts";
 import { useContext, useEffect, useMemo } from "react";
 import type { ChannelKeys } from "./channel-keys.ts";
@@ -55,6 +55,8 @@ function useSidebarKeys(props: SidebarKeys): void {
       }),
       keymap.bind({
         actions: {
+          firstLink: focusEnd("first"),
+          lastLink: focusEnd("last"),
           nextLink: moveFocus("next"),
           previousLink: moveFocus("previous"),
         },

@@ -1,4 +1,4 @@
-import { DEPENDENCY_CRUISER, OPT_OUTS, OXLINT_CONFIG, oxlint } from "./merge-repos.ts";
+import { DEPENDENCY_CRUISER, OPT_OUTS, OXLINT_CONFIG, oxlint } from "./lint-config-repos.ts";
 
 const OXLINT = ".oxlintrc.json";
 const OPT_OUTS_FILE = "docs/lint-opt-outs.md";

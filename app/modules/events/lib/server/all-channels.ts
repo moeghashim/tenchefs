@@ -10,6 +10,7 @@ import { Effect, Record, Stream } from "effect";
 import { Messages, Reactions, ReadReceipts } from "../../../messages/server.ts";
 import { Channels } from "../../../channels/server.ts";
 import { allChannelsQuery } from "../../index.ts";
+import { runnerQuery } from "../../../presence/index.ts";
 import { sseEvent } from "./source.ts";
 
 const PATH_BASE = "http://cookout.invalid";
@@ -25,6 +26,11 @@ type AllChannelsNeeds = Messages | Channels | ReadReceipts | Reactions;
 function asksForAllChannels({ url }: StreamRequest): boolean {
   const search = new URL(url, PATH_BASE).searchParams;
   return Record.every(allChannelsQuery, (value, name) => search.get(name) === value);
+}
+
+function asksAsRunner({ url }: StreamRequest): boolean {
+  const search = new URL(url, PATH_BASE).searchParams;
+  return Record.every(runnerQuery, (value, name) => search.get(name) === value);
 }
 
 function allChannels(request: StreamRequest): Connected<Messages> {
@@ -90,4 +96,13 @@ function reactions(request: StreamRequest): Connected<Reactions> {
   });
 }
 
-export { type AllChannelsNeeds, allChannels, asksForAllChannels, channels, reactions, readReceipts, threads };
+export {
+  type AllChannelsNeeds,
+  allChannels,
+  asksAsRunner,
+  asksForAllChannels,
+  channels,
+  reactions,
+  readReceipts,
+  threads,
+};

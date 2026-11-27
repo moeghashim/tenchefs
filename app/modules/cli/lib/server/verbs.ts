@@ -1,5 +1,5 @@
 import { Argument, Command, Flag } from "effect/cli";
-import { approveJoinCommand, denyJoinCommand, joinCommand, leaveCommand } from "./join-command.ts";
+import { approveJoinCommand, denyJoinCommand, joinCommand, leaveCommand, runnerCommand } from "./join-command.ts";
 import { avatarCommand, identityCommand, keepCommand } from "./identity.ts";
 import {
   beforeFlag,
@@ -157,5 +157,7 @@ export const verbCommands = [
   unsubscribeCommand,
   scheduleCommand,
   webhookCommandVerb,
+  runnerCommand,
   helpCommand,
 ] as const;
+export { onRunnerHost } from "./join-command.ts";

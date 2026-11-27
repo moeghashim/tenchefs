@@ -69,7 +69,7 @@ export class TestCookout extends Context.Service<TestCookout, TestCookoutService
 export type TestCookoutOptions = {
   readonly storage?: StorageKind;
   readonly secrets?: "test" | "live";
-  readonly assets?: "failing-removes";
+  readonly assets?: "failing-removes" | "first-remove-fails";
   readonly maxIdleExpiry?: string;
   readonly publicUrl?: string;
   readonly adminName?: string;

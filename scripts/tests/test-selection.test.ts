@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { unitSkip, unitTestsFor } from "../lib/test-selection.ts";
 import { browserTestsFor } from "../lib/browser-selection.ts";
 
-const MODULE = "scripts/lib/merge-lint.ts";
+const MODULE = "scripts/lib/adr-numbers.ts";
 
 function selection(files: readonly string[]): readonly unknown[] {
   return [

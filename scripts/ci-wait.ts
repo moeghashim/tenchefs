@@ -33,7 +33,6 @@ function branchFilter(): readonly string[] {
 verdict.failingAt("waiting for the Check run");
 const step = waitForCi({
   args: [...branchFilter(), "--commit", sha],
-  base: [],
   log: (line) => {
     console.log(`${SCRIPT}: ${line}`);
   },

@@ -16,6 +16,8 @@ const EXIT_FAILURE = 1;
 const EXIT_SUCCESS = 0;
 const SHARED_FILE = 0o644;
 const OPEN_FOLDER = 0o755;
+const WINDOWS_FOLDER = 0o777;
+const WINDOWS_HOST = { cookout: [], osRelease: "", platform: "win32", uid: 0, wslConf: "" } as const;
 const unsafe = { exitCode: EXIT_FAILURE, stderrJson: { error: { code: "agent_session_state_unsafe" } } };
 const OWNER_ONLY = "600";
 const OCTAL = 8;
@@ -135,6 +137,28 @@ it.effect("a state folder others can open, or an agent-sessions folder that is a
 
     expect(results).toMatchObject([unsafe, unsafe]);
     expect(written).toStrictEqual([]);
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);
+
+it.effect("on Windows, which has no POSIX mode bits, join keeps its state in a folder whatever its mode", () =>
+  Effect.gen(function* windowsStateFolder() {
+    const fs = yield* FileSystem.FileSystem;
+    const cookout = yield* TestCookout;
+    const agent = yield* cookout.createIdentity("agent");
+    const folder = yield* freshStateFolder;
+    yield* Effect.orDie(fs.chmod(folder, WINDOWS_FOLDER));
+    const env = { ...SESSION, COOKOUT_STATE_DIR: folder, COOKOUT_URL: cookout.url };
+    const joined = yield* runCookout({
+      args: JOIN,
+      env: { ...env, COOKOUT_TOKEN: agent.token },
+      runnerHost: WINDOWS_HOST,
+    });
+    const whoami = yield* runCookout({ args: ["whoami"], env, runnerHost: WINDOWS_HOST });
+
+    expect([joined, whoami]).toMatchObject([
+      { exitCode: EXIT_SUCCESS },
+      { exitCode: EXIT_SUCCESS, stdoutJson: { identity: { name: "agent" } } },
+    ]);
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 

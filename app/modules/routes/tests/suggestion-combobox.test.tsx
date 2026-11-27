@@ -6,6 +6,7 @@ import { openAt } from "./render.tsx";
 import { watched } from "./watched.ts";
 
 const MENTIONS = { name: "Mention suggestions" };
+const COMMANDS = { name: "Command suggestions" };
 
 async function openChannel(channel: string): Promise<() => void> {
   await adminClient().createChannel({ name: channel });
@@ -104,14 +105,19 @@ async function crewIn(prefix: string): Promise<Crew> {
   return { ada: ada.client, reader: reader.client };
 }
 
-async function liveMentionListFor(prefix: string): Promise<Watching> {
+interface Typed {
+  readonly text: string;
+  readonly listbox: { readonly name: string };
+}
+
+async function liveListFor(prefix: string, typed: Typed): Promise<Watching> {
   const { ada, reader } = await crewIn(prefix);
   const { live, stream } = watched(reader);
   const unmount = openAt({ client: reader, hash: `#/channels/${prefix}`, live });
   await screen.findByText("Deployed");
   const events: EventStream = await stream;
-  type(`Ping @${prefix}-a`);
-  await screen.findByRole("listbox", MENTIONS);
+  type(typed.text);
+  await screen.findByRole("listbox", typed.listbox);
   return {
     ada,
     close: async () => {
@@ -119,6 +125,10 @@ async function liveMentionListFor(prefix: string): Promise<Watching> {
       await events.close();
     },
   };
+}
+
+function mentioning(prefix: string): Typed {
+  return { listbox: MENTIONS, text: `Ping @${prefix}-a` };
 }
 
 async function renamedLive(ada: CookoutClient, name: string): Promise<void> {
@@ -132,7 +142,7 @@ async function renamedLive(ada: CookoutClient, name: string): Promise<void> {
 it("an identity changing elsewhere keeps the arrowed-to option active", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const { ada, close } = await liveMentionListFor("web-combobox-live-arrowed");
+  const { ada, close } = await liveListFor("web-combobox-live-arrowed", mentioning("web-combobox-live-arrowed"));
   press("ArrowDown");
   await renamedLive(ada, "web-combobox-live-arrowed-ada");
 
@@ -149,11 +159,23 @@ it("an identity changing elsewhere keeps the arrowed-to option active", { timeou
 it("an identity changing elsewhere leaves a list closed with Escape closed", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  const { ada, close } = await liveMentionListFor("web-combobox-live-closed");
+  const { ada, close } = await liveListFor("web-combobox-live-closed", mentioning("web-combobox-live-closed"));
   press("Escape");
   await renamedLive(ada, "web-combobox-live-closed-ada");
 
   expect(screen.queryByRole("listbox", MENTIONS)).toBeNull();
+
+  await close();
+});
+
+it("an identity changing elsewhere keeps /schedule highlighted in the Command list", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { ada, close } = await liveListFor("web-combobox-live-command", { listbox: COMMANDS, text: "/" });
+  await renamedLive(ada, "web-combobox-live-command-ada");
+  const list = screen.getByRole("listbox", COMMANDS);
+
+  expect(within(list).getByRole("option", { selected: true }).textContent).toBe("/scheduleSchedule a message");
 
   await close();
 });

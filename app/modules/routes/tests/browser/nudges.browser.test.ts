@@ -1,4 +1,4 @@
-import type { ClockFixtures, OwnCookout } from "./clock.ts";
+import type { ClockFixtures, ClockOptions, OwnCookout } from "./clock.ts";
 import { test as base, expect } from "@playwright/test";
 import { inPane, inThread } from "./regions.ts";
 import type { Person } from "./people.ts";
@@ -8,7 +8,7 @@ import { logIn } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
-const test = base.extend(probeFixtures).extend<ClockFixtures>(clockFixtures);
+const test = base.extend(probeFixtures).extend<ClockFixtures & ClockOptions>(clockFixtures);
 
 const NUDGE = "Quiet for 3 days: close it, or follow up?";
 const QUIET_DAYS = 3;

@@ -1,12 +1,16 @@
 import type { Message, ReactionCount, ReactionName, Refusal } from "../../sdk/index.ts";
+import type { MessageShortcuts, ReactionChoice } from "../../design-system/messages.tsx";
 import { reactionNames, reactionSymbols } from "../../messages/index.ts";
 import { reactionRefusal, reactionsOf } from "../../board/index.ts";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { Announce } from "./announcer.ts";
-import type { ReactionChoice } from "../../design-system/messages.tsx";
+import { MessageKeys } from "../../design-system/messages.tsx";
 import { useBoardStore } from "./use-board.ts";
 
-const KEYS: Readonly<Record<ReactionName, string>> = { thumbs_down: "-", thumbs_up: "+" };
+const KEYS: Readonly<Record<ReactionName, keyof MessageShortcuts>> = {
+  thumbs_down: "thumbsDown",
+  thumbs_up: "thumbsUp",
+};
 
 const IN_HOVER_BAR: Readonly<Record<ReactionName, boolean>> = { thumbs_down: false, thumbs_up: true };
 
@@ -57,18 +61,19 @@ function useShownReactions({ me, message }: Reacting): Shown {
 function useReactionChoices({ announce, ...reacting }: Announcing): readonly ReactionChoice[] {
   const { reactions, toggle } = useShownReactions(reacting);
   const { me } = reacting;
+  const shortcuts = useContext(MessageKeys);
   return useMemo(
     () =>
       reactionNames.map((reaction) => ({
         inHoverBar: IN_HOVER_BAR[reaction],
-        key: KEYS[reaction],
+        keys: shortcuts[KEYS[reaction]],
         onReact: () => {
           announce(announcedOf({ me, reaction, reactions }));
           toggle(reaction);
         },
         symbol: reactionSymbols[reaction],
       })),
-    [announce, me, reactions, toggle],
+    [announce, me, reactions, shortcuts, toggle],
   );
 }
 

@@ -1,7 +1,7 @@
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import type { CliResult, WatchRun, Watched } from "./cli.ts";
-import { Deferred, Effect, Fiber, Option, Path, Schema, Stream, pipe } from "effect";
-import { cliResult, parseLine, watched } from "./cli.ts";
+import type { CliResult, WatchRun, Watched } from "./command-line.ts";
+import { Deferred, Effect, Fiber, Path, Stream } from "effect";
+import { cliResult, watched } from "./command-line.ts";
 import type { Scope } from "effect";
 
 interface BinaryRun {
@@ -9,16 +9,9 @@ interface BinaryRun {
   readonly env: Readonly<Record<string, string>>;
 }
 
-interface InterruptedDev {
-  readonly database: string;
-  readonly exitCode: number;
-}
-
 type Spawns = ChildProcessSpawner.ChildProcessSpawner | Path.Path | Scope.Scope;
 
 const MAIN = new URL("../../../../main.ts", import.meta.url);
-const DEV = new URL("../../../../dev.ts", import.meta.url);
-const isDevRunning = Schema.is(Schema.Struct({ database: Schema.String }));
 
 function collect<Failure>(stream: Stream.Stream<Uint8Array, Failure>): Effect.Effect<string, Failure> {
   return stream.pipe(Stream.decodeText(), Stream.mkString);
@@ -82,25 +75,4 @@ function watchCookoutBinary<During, Needs>({
   }).pipe(Effect.orDie);
 }
 
-function databaseIn(line: string): Option.Option<string> {
-  return pipe(
-    Option.liftPredicate(parseLine(line), isDevRunning),
-    Option.map(({ database }) => database),
-  );
-}
-
-function interruptDevBinary(): Effect.Effect<InterruptedDev, never, Spawns> {
-  return Effect.gen(function* spawnDev() {
-    const path = yield* Path.Path;
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const dev = yield* path.fromFileUrl(DEV);
-    const handle = yield* spawner.spawn(ChildProcess.make(process.execPath, [dev, "start"], { extendEnv: true }));
-    const lines = pipe(handle.stdout, Stream.decodeText(), Stream.splitLines, Stream.map(databaseIn));
-    const found = yield* Stream.runHead(Stream.filter(lines, Option.isSome));
-    yield* handle.kill({ killSignal: "SIGINT" });
-    const exitCode = yield* handle.exitCode;
-    return { database: Option.getOrElse(Option.flatten(found), () => ""), exitCode };
-  }).pipe(Effect.orDie);
-}
-
-export { type InterruptedDev, interruptDevBinary, runCookoutBinary, watchCookoutBinary };
+export { runCookoutBinary, watchCookoutBinary };

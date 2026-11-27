@@ -24,16 +24,18 @@ function printItems({
   format,
   stop,
 }: Watching): (opened: ClientWithAgentSessionState) => Effect.Effect<void, CallFailure> {
-  return (opened) =>
-    Effect.scoped(
-      Effect.flatMap(start(opened), (first: Stream.Stream<readonly Heard[], CallFailure>) =>
-        source({ first, opened }).pipe(
+  return (opened) => {
+    const starting = { from: Option.none(), listening: { opened, runner: false } };
+    return Effect.scoped(
+      Effect.flatMap(start(starting), (first: Stream.Stream<readonly Heard[], CallFailure>) =>
+        source({ ...starting, first }).pipe(
           startUpLine({ format, opened, stop }),
           untilStopped(stop),
           Stream.runForEach(printEach(format)),
         ),
       ),
     );
+  };
 }
 
 function watch(watching: Watching): Effect.Effect<void, CommandFailed, AgentSessionStateNeeds> {

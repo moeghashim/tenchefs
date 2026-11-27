@@ -4,10 +4,12 @@ import { browserTestFiles, browserTestsFor } from "./browser-selection.ts";
 import { changedLines, unchangedSince } from "./changed-lines.ts";
 import { fetchedCoverageMap, ghCli } from "./coverage-map-fetch.ts";
 import type { BrowserTests } from "./browser-selection.ts";
+import type { Download } from "./recorded-timings.ts";
 import type { Outcome } from "./tools.ts";
 
 interface ReachedShard {
   readonly cwd: string;
+  readonly download?: Download;
   readonly gh: Planning["gh"];
   readonly run: string;
   readonly shard: string;
@@ -65,7 +67,8 @@ function reachedLine(tests: BrowserTests): string {
   return `check: this change reaches ${String(tests.run.length)} of ${String(total)} browser test files.`;
 }
 
-function reachedShard({ cwd, gh, run, shard, tests }: ReachedShard): ReachedPlan {
+function reachedShard({ cwd, tests, ...fetching }: ReachedShard): ReachedPlan {
+  const { shard } = fetching;
   const line = reachedLine(tests);
   if (!tests.all && tests.run.length === NONE) {
     return {
@@ -75,7 +78,7 @@ function reachedShard({ cwd, gh, run, shard, tests }: ReachedShard): ReachedPlan
       nothing: "check: no browser test to run, so the browser check passes.",
     };
   }
-  const plan = reachedBrowserShardPlan({ files: reachedFiles(cwd, tests), gh, run, shard });
+  const plan = reachedBrowserShardPlan({ ...fetching, files: reachedFiles(cwd, tests) });
   if (plan.failure !== "") {
     return { args: [], failure: plan.failure, lines: [line], nothing: "" };
   }

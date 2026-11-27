@@ -1,4 +1,5 @@
 import type { IdentitySections, SectionsBesideIdentities } from "./identity-section-types.ts";
+import { memoryAdminSetting, sqlAdminSetting } from "./admin-setting.ts";
 import { memoryIdentities, sqlIdentities } from "./identities.ts";
 import { memoryOfflineAlerts, sqlOfflineAlerts } from "./offline-alerts.ts";
 import { memoryReach, sqlReach } from "./reach-sections.ts";
@@ -6,7 +7,6 @@ import { Effect } from "effect";
 import type { MemoryState } from "./memory-state.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { memoryLoginRequests } from "./login-requests-memory.ts";
-import { sqlIdentityDeletes } from "./identity-owners.ts";
 import { sqlLoginRequests } from "./login-requests-sqlite.ts";
 
 type MemoryIdentitySections = ReturnType<typeof memoryIdentities> & SectionsBesideIdentities;
@@ -22,6 +22,7 @@ function memoryIdentitySections(state: MemoryState): MemoryIdentitySections {
   const { dropOfflineAlerts, ...offlineAlerts } = memoryOfflineAlerts(state);
   return {
     ...identities,
+    ...memoryAdminSetting(identities),
     ...loginRequests,
     ...presence,
     ...offlineAlerts,
@@ -45,7 +46,7 @@ function memoryIdentitySections(state: MemoryState): MemoryIdentitySections {
 function sqlIdentitySections(db: SqlDatabase): IdentitySections {
   return {
     ...sqlIdentities(db),
-    ...sqlIdentityDeletes(db),
+    ...sqlAdminSetting(db),
     ...sqlLoginRequests(db),
     ...sqlReach(db),
     ...sqlOfflineAlerts(db),

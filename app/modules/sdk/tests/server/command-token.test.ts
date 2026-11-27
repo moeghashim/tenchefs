@@ -58,7 +58,7 @@ it.effect("the command token posts replies in its call's thread as the command's
 );
 
 it.effect(
-  "the command token gets 403 on another thread, another channel, a top-level message, a close or another route",
+  "the command token gets 403 on another thread, another channel, a top-level message, a close, a title or another route",
   () =>
     Effect.gen(function* outsideThread() {
       const cookout = yield* TestCookout;
@@ -77,6 +77,7 @@ it.effect(
           refusal(() => handler.listChannels()),
           refusal(() => handler.search({ query: "deploy" })),
           refusal(() => handler.closeThread(threadId)),
+          refusal(() => handler.setThreadTitle(threadId, "Deploy main")),
           refusal(() => handler.createMessage({ channel: "grill", close: true, replyTo: threadId, text: "done" })),
         ],
         { concurrency: 1 },
@@ -87,6 +88,7 @@ it.effect(
         Arr.replicate({ code: "outside_command_thread", status: FORBIDDEN }, refused.length),
       );
       expect(thread.replies).toStrictEqual([]);
+      expect(thread.parent).not.toHaveProperty("title");
     }).pipe(Effect.provide(testCookout())),
 );
 

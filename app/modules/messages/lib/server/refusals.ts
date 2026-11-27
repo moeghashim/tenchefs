@@ -70,6 +70,12 @@ const closeWithoutReplyTo: Refusal = {
   status: BAD_REQUEST,
 };
 
+const titleOnReply: Refusal = {
+  code: "invalid_request",
+  message: "Only a top-level message can have a title: send title without replyTo.",
+  status: BAD_REQUEST,
+};
+
 const seenWithoutReplyTo: Refusal = {
   code: "invalid_request",
   message: "seen says how far you have read a thread: send it with replyTo.",
@@ -100,4 +106,5 @@ export {
   seenWithoutReplyTo,
   threadDeleted,
   threadIdOf,
+  titleOnReply,
 };

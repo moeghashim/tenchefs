@@ -4,6 +4,7 @@ import { InboxFeed } from "./inbox-feed.tsx";
 import { InboxHeader } from "./inbox-header.tsx";
 import type { InboxRows } from "./use-inbox-rows.ts";
 import type { InboxSelection } from "../../paths/index.ts";
+import type { Keymap } from "../../keymap/index.ts";
 import { ListPane } from "../../design-system/layout.tsx";
 import { useBoardStore } from "./use-board.ts";
 import { useMemo } from "react";
@@ -12,6 +13,7 @@ const TITLE = "Inbox";
 
 interface InboxListProps {
   readonly unread: Unread;
+  readonly keymap: Keymap;
   readonly state: UnreadState;
   readonly rows: InboxRows;
   readonly me: string;
@@ -23,7 +25,8 @@ export function InboxList(props: InboxListProps): ReactNode {
   const { me, rows, selected, state: unread } = props;
   const { ack } = useBoardStore().calls;
   const { markUnread } = props.unread;
-  const actions = useMemo(() => ({ ack, markUnread }), [ack, markUnread]);
+  const { shortcutOf } = props.keymap;
+  const actions = useMemo(() => ({ ack, markUnread, shortcutOf }), [ack, markUnread, shortcutOf]);
   return (
     <ListPane hiddenWhenNarrow={selected !== null}>
       <InboxHeader state={unread} title={TITLE} unread={props.unread} />

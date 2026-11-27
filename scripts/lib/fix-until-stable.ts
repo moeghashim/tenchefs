@@ -8,6 +8,7 @@ import { reportOf } from "./tools.ts";
 interface FixRun {
   readonly check: readonly string[];
   readonly fix: readonly string[];
+  readonly format: readonly string[];
   readonly passesLeft: number;
   readonly paths: readonly string[];
   readonly suggest: readonly string[];
@@ -18,6 +19,14 @@ interface Scope {
   readonly ignored: readonly string[];
 }
 
+const BIOME = "node_modules/.bin/biome";
+const FORMAT = [
+  "format",
+  "--write",
+  "--no-errors-on-unmatched",
+  "--files-ignore-unknown=true",
+  "--vcs-use-ignore-file=false",
+];
 const FIX_CONFIG = ".oxlintrc.fix.json";
 const SUGGEST_CONFIG = "lint/suggest.oxlintrc.json";
 const SUGGESTED = new Set(["effecttsgo(deterministic-keys)"]);
@@ -57,8 +66,14 @@ function statusOf(closed: readonly unknown[]): number {
   return FAILED;
 }
 
-async function lint(args: readonly string[]): Promise<Outcome<readonly Diagnostic[]>> {
-  const child = spawn("node_modules/.bin/effect-tsgo", ["oxlint", "--type-aware", "-f", "json", ...args]);
+interface Spawned {
+  readonly status: number;
+  readonly stderr: string;
+  readonly stdout: string;
+}
+
+async function spawned(program: string, args: readonly string[]): Promise<Outcome<Spawned>> {
+  const child = spawn(program, args);
   const stdout: string[] = [];
   const stderr: string[] = [];
   child.stdout.on("data", (chunk: unknown) => {
@@ -69,10 +84,40 @@ async function lint(args: readonly string[]): Promise<Outcome<readonly Diagnosti
   });
   try {
     const closed: readonly unknown[] = await once(child, "close");
-    return reportOf({ status: statusOf(closed), stderr: stderr.join(""), stdout: stdout.join("") });
+    return { ok: true, value: { status: statusOf(closed), stderr: stderr.join(""), stdout: stdout.join("") } };
   } catch (error) {
-    return { ok: false, reason: `effect-tsgo could not run (${String(error)}). Run pnpm install.` };
+    return { ok: false, reason: `${program} could not run (${String(error)}). Run pnpm install.` };
   }
+}
+
+async function lint(args: readonly string[]): Promise<Outcome<readonly Diagnostic[]>> {
+  const ran = await spawned("node_modules/.bin/effect-tsgo", ["oxlint", "--type-aware", "-f", "json", ...args]);
+  if (!ran.ok) {
+    return ran;
+  }
+  return reportOf(ran.value);
+}
+
+async function formatted(files: readonly string[]): Promise<Outcome<string>> {
+  if (files.length === NONE) {
+    return { ok: true, value: "" };
+  }
+  const ran = await spawned(BIOME, [...FORMAT, ...files]);
+  if (!ran.ok) {
+    return ran;
+  }
+  if (ran.value.status === NONE) {
+    return { ok: true, value: ran.value.stdout };
+  }
+  return { ok: false, reason: `biome could not format the files:\n${ran.value.stdout}${ran.value.stderr}`.trim() };
+}
+
+async function fixedThenFormatted(run: FixRun): Promise<Outcome<unknown>> {
+  const fixed = await lint(["--fix", ...run.fix]);
+  if (!fixed.ok) {
+    return fixed;
+  }
+  return formatted(run.format);
 }
 
 function suggestedIn(checked: Outcome<readonly Diagnostic[]>): readonly string[] {
@@ -103,11 +148,12 @@ export function repoFixRun(scope: Scope): FixRun {
   const check = ["--disable-nested-config", ...scope.files];
   const suggest = ["--fix-suggestions", "-c", SUGGEST_CONFIG, "--disable-nested-config"];
   if (scope.files.length > NONE) {
-    return { check, fix: ["-c", FIX_CONFIG, ...check], passesLeft: MAX_FIX_PASSES, paths: scope.files, suggest };
+    const fix = ["-c", FIX_CONFIG, ...check];
+    return { check, fix, format: scope.files, passesLeft: MAX_FIX_PASSES, paths: scope.files, suggest };
   }
   const paths = wholeRepo(scope.ignored);
   const fix = ["-c", FIX_CONFIG, "--disable-nested-config", ...paths];
-  return { check, fix, passesLeft: MAX_FIX_PASSES, paths, suggest };
+  return { check, fix, format: paths, passesLeft: MAX_FIX_PASSES, paths, suggest };
 }
 
 export async function lintFixed(run: FixRun): Promise<Outcome<readonly Diagnostic[]>> {
@@ -115,7 +161,7 @@ export async function lintFixed(run: FixRun): Promise<Outcome<readonly Diagnosti
     return lint(run.check);
   }
   const before = snapshot(run.paths);
-  const [fixed, checked] = await Promise.all([lint(["--fix", ...run.fix]), lint(run.check)]);
+  const [fixed, checked] = await Promise.all([fixedThenFormatted(run), lint(run.check)]);
   const settled = await suggestAfterFix(run, fixed, checked);
   if (!settled.ok) {
     return settled;

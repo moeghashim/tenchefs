@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import type { Outcome } from "../lib/tools.ts";
+import type { Planning } from "../lib/timed-shards.ts";
 import { browserShardPlan } from "../lib/timed-shards.ts";
 import path from "node:path";
 import { unitShardPlan } from "../lib/unit-shards.ts";
@@ -11,8 +12,8 @@ const ASKED_AT = "2026-11-25T10:00:00Z";
 const EARLIER = "2026-11-25T09:00:00Z";
 const LATER = "2026-11-25T10:05:00Z";
 const MS = 1000;
-const LAST = -1;
-const NAME = 4;
+const FIRST_ID = 1;
+const TARGET = 1;
 
 interface ArtifactAt {
   readonly createdAt: string;
@@ -37,9 +38,10 @@ function reportOf(seconds: Seconds): string {
 
 function listing(artifacts: readonly ArtifactAt[]): string {
   return JSON.stringify({
-    artifacts: artifacts.map(({ createdAt, expired = false, name, run }) => ({
+    artifacts: artifacts.map(({ createdAt, expired = false, name, run }, index) => ({
       created_at: createdAt,
       expired,
+      id: index + FIRST_ID,
       name,
       workflow_run: { id: run },
     })),
@@ -69,12 +71,11 @@ function reportFor(name: string, seconds: Seconds): readonly [string, string] {
   return ["browser.json", reportOf(seconds)];
 }
 
-function download(args: readonly string[], reports: FakeCi["reports"]): Outcome<string> {
-  const dir = path.join(args.at(LAST) ?? "", ".timings");
-  const name = args[NAME] ?? "";
+function unpacked(into: string, reports: FakeCi["reports"]): Outcome<string> {
+  const name = path.basename(into);
   const [report, content] = reportFor(name, reports[name] ?? {});
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, report), content);
+  mkdirSync(path.join(into, ".timings"), { recursive: true });
+  writeFileSync(path.join(into, ".timings", report), content);
   return { ok: true, value: "" };
 }
 
@@ -103,13 +104,12 @@ function api(target: string, artifacts: FakeCi["artifacts"]): Outcome<string> {
   return { ok: true, value: listing(artifacts.filter((artifact) => listed(target, artifact))) };
 }
 
-function fakeGh({ artifacts, reports }: FakeCi): (args: readonly string[]) => Outcome<string> {
-  return (args) => {
-    const [verb, target = ""] = args;
-    if (verb === "run") {
-      return download(args, reports);
-    }
-    return api(target, artifacts);
+type Ci = Required<Pick<Planning, "download" | "gh">>;
+
+function fakeCi({ artifacts, reports }: FakeCi): Ci {
+  return {
+    download: (_artifact, dir) => unpacked(dir, reports),
+    gh: (args) => api(args[TARGET] ?? "", artifacts),
   };
 }
 
@@ -119,21 +119,18 @@ function offline(): Outcome<string> {
 
 const FILES = ["alpha", "bravo", "charlie", "delta", "echo"].map((name) => file(name));
 
-function recordedBy(reports: FakeCi["reports"]): (args: readonly string[]) => Outcome<string> {
+function recordedBy(reports: FakeCi["reports"]): Ci {
   const artifacts = Object.keys(reports).map((name) => ({ createdAt: EARLIER, name, run: 800 }));
-  return fakeGh({ artifacts, reports });
+  return fakeCi({ artifacts, reports });
 }
 
-function downloadFails(args: readonly string[]): Outcome<string> {
-  const [verb] = args;
-  if (verb === "run") {
-    return { ok: false, reason: "gh run download failed: HTTP 503" };
-  }
-  return recordedBy({ "test-timings-browser-1": { alpha: 50, bravo: 40 } })(args);
-}
+const downloadFails: Ci = {
+  download: () => ({ ok: false, reason: "gh api repos/{owner}/{repo}/actions/artifacts/7001/zip failed: HTTP 404" }),
+  gh: recordedBy({ "test-timings-browser-1": { alpha: 50, bravo: 40 } }).gh,
+};
 
 function planned(shard: string, reports: FakeCi["reports"], files: readonly string[] = FILES): readonly string[] {
-  return browserShardPlan({ files: { ok: true, value: files }, gh: recordedBy(reports), run: RUN, shard }).args;
+  return browserShardPlan({ ...recordedBy(reports), files: { ok: true, value: files }, run: RUN, shard }).args;
 }
 
 it("counts a file with no recorded time as the average file, and adds up a file's times across reports", {
@@ -161,13 +158,13 @@ it("splits by test count when no browser test file has a recorded time, or the s
   expect([
     browserShardPlan({
       files: { ok: true, value: FILES },
-      gh: recordedBy({ "test-timings-browser-1": { gone: 5 } }),
+      ...recordedBy({ "test-timings-browser-1": { gone: 5 } }),
       run: RUN,
       shard: "1/2",
     }).line,
     browserShardPlan({
       files: { ok: true, value: FILES },
-      gh: recordedBy({ "test-timings-browser-1": { alpha: 5 } }),
+      ...recordedBy({ "test-timings-browser-1": { alpha: 5 } }),
       run: RUN,
       shard: "3/2",
     }).line,
@@ -182,7 +179,7 @@ it("a CI shard runs the files its share of the time recorded before its run pick
 }, () => {
   expect.hasAssertions();
 
-  const gh = fakeGh({
+  const ci = fakeCi({
     artifacts: [
       { createdAt: LATER, name: "test-timings-browser-1", run: 899 },
       { createdAt: EARLIER, name: "test-timings-browser-1", run: 800 },
@@ -199,7 +196,7 @@ it("a CI shard runs the files its share of the time recorded before its run pick
   });
 
   expect(
-    ["1/2", "2/2"].map((shard) => browserShardPlan({ files: { ok: true, value: FILES }, gh, run: RUN, shard })),
+    ["1/2", "2/2"].map((shard) => browserShardPlan({ ...ci, files: { ok: true, value: FILES }, run: RUN, shard })),
   ).toStrictEqual([
     {
       args: ["--record-shard=1/2", file("alpha"), file("delta"), file("echo")],
@@ -220,12 +217,12 @@ it("a CI shard falls back to Playwright's split by test count when no run record
   expect.hasAssertions();
 
   const files = { ok: true, value: FILES } as const;
-  const none = fakeGh({ artifacts: [{ createdAt: LATER, name: "test-timings-browser-1", run: 899 }], reports: {} });
+  const none = fakeCi({ artifacts: [{ createdAt: LATER, name: "test-timings-browser-1", run: 899 }], reports: {} });
 
   expect([
-    browserShardPlan({ files, gh: none, run: RUN, shard: "1/3" }).line,
-    browserShardPlan({ files, gh: none, run: "", shard: "1/3" }).line,
-    browserShardPlan({ files: { ok: false, reason: "no listing" }, gh: none, run: RUN, shard: "2/3" }),
+    browserShardPlan({ files, ...none, run: RUN, shard: "1/3" }).line,
+    browserShardPlan({ files, ...none, run: "", shard: "1/3" }).line,
+    browserShardPlan({ files: { ok: false, reason: "no listing" }, ...none, run: RUN, shard: "2/3" }),
   ]).toStrictEqual([
     "browser shard 1/3: split by test count, since no Check run recorded browser timings before run 900",
     "browser shard 1/3: split by test count, since this isn't a GitHub Actions run",
@@ -241,10 +238,14 @@ it("a CI shard that can't read the recorded times fails rather than split on its
 
   expect([
     browserShardPlan({ files, gh: offline, run: RUN, shard: "1/3" }),
-    browserShardPlan({ files, gh: downloadFails, run: RUN, shard: "2/3" }),
+    browserShardPlan({ files, ...downloadFails, run: RUN, shard: "2/3" }),
   ]).toStrictEqual([
     { args: [], failure: `browser shard 1/3 ${unsplit}: gh api failed: offline`, line: "" },
-    { args: [], failure: `browser shard 2/3 ${unsplit}: gh run download failed: HTTP 503`, line: "" },
+    {
+      args: [],
+      failure: `browser shard 2/3 ${unsplit}: gh api repos/{owner}/{repo}/actions/artifacts/7001/zip failed: HTTP 404`,
+      line: "",
+    },
   ]);
 });
 
@@ -253,7 +254,7 @@ it("a CI unit-test shard runs, by absolute path, the files its share of the reco
 }, () => {
   expect.hasAssertions();
 
-  const gh = fakeGh({
+  const ci = fakeCi({
     artifacts: [
       { createdAt: EARLIER, name: "test-timings-tests-1", run: 800 },
       { createdAt: EARLIER, name: "test-timings-tests-2", run: 800 },
@@ -270,7 +271,7 @@ it("a CI unit-test shard runs, by absolute path, the files its share of the reco
     value: ["a/alpha", "a/bravo", "b/charlie", "b/delta"].map((name) => `${name}.test.ts`),
   } as const;
 
-  expect(["1/2", "2/2"].map((shard) => unitShardPlan({ cwd: CWD, files, gh, run: RUN, shard }))).toStrictEqual([
+  expect(["1/2", "2/2"].map((shard) => unitShardPlan({ ...ci, cwd: CWD, files, run: RUN, shard }))).toStrictEqual([
     {
       args: ["--outputFile.blob=.vitest/blob/blob-1-2.json", `${CWD}/a/alpha.test.ts`, `${CWD}/b/delta.test.ts`],
       failure: "",
@@ -289,9 +290,9 @@ it("a CI unit-test shard falls back to Vitest's split by file count when no run 
 }, () => {
   expect.hasAssertions();
 
-  const gh = fakeGh({ artifacts: [{ createdAt: EARLIER, name: "test-timings-browser-1", run: 800 }], reports: {} });
+  const ci = fakeCi({ artifacts: [{ createdAt: EARLIER, name: "test-timings-browser-1", run: 800 }], reports: {} });
 
-  expect(unitShardPlan({ cwd: CWD, files: { ok: true, value: FILES }, gh, run: RUN, shard: "4/6" })).toStrictEqual({
+  expect(unitShardPlan({ ...ci, cwd: CWD, files: { ok: true, value: FILES }, run: RUN, shard: "4/6" })).toStrictEqual({
     args: ["--shard=4/6"],
     failure: "",
     line: "unit shard 4/6: split by file count, since no Check run recorded unit timings before run 900",

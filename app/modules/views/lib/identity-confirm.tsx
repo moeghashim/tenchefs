@@ -5,9 +5,19 @@ import type { IdentityActions } from "../../composer/index.ts";
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 
+const AFTER_DELETE = "main h1";
+
+function returnToOf(confirming: string | null): string | null {
+  if (confirming === "delete") {
+    return AFTER_DELETE;
+  }
+  return null;
+}
+
 interface IdentityConfirmProps {
   readonly actions: IdentityActions;
   readonly identity: Identity;
+  readonly onCloseFocused?: (() => void) | undefined;
 }
 
 export function IdentityConfirm(props: IdentityConfirmProps): ReactNode {
@@ -16,6 +26,7 @@ export function IdentityConfirm(props: IdentityConfirmProps): ReactNode {
   const question = questionOf({ identity: props.identity, state });
   const handleConfirm = actions.confirm;
   const handleCancel = actions.cancel;
+  const handleCloseFocused = props.onCloseFocused;
   return (
     <ConfirmDialog
       body={question.body}
@@ -23,9 +34,11 @@ export function IdentityConfirm(props: IdentityConfirmProps): ReactNode {
       destructive={question.destructive}
       error={refusalOf(state)}
       onCancel={handleCancel}
+      onCloseFocused={handleCloseFocused}
       onConfirm={handleConfirm}
       open={state.confirming !== null}
       pending={state.action.status === "sending"}
+      returnTo={returnToOf(state.confirming)}
       title={question.title}
     />
   );

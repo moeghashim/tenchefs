@@ -18,7 +18,12 @@ export function DraftText(props: DraftTextProps): ReactNode {
   const { chooseHighlighted: handlePick, dismiss: handleClose, edit: handleEdit, highlight: handleMove } = draft;
   const handleFiles = draft.attachments.attach;
   const written = useSyncExternalStore(draft.subscribe, draft.snapshot);
-  const shown = useSuggestions({ commands: written.commands, draft, suggestions: written.suggestions });
+  const shown = useSuggestions({
+    commands: written.commands,
+    draft,
+    suggestions: written.suggestions,
+    webhookCommands: written.webhookCommands,
+  });
   const choosing = shown.options.length > NONE;
   const handleChoose = shown.onChoose;
   const list = useId();

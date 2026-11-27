@@ -66,17 +66,27 @@ const envExample = () => {
   ];
 };
 
+const ONCE = 1;
+
 function readmeSettings(): readonly string[] {
   if (!existsSync("README.md")) {
     return ["README.md is missing."];
   }
   const readme = readFileSync("README.md", "utf8");
-  return [...configReads()]
-    .filter((name) => !readme.includes(`\n- \`${name}\` (`))
-    .map(
-      (name) =>
+  return [...configReads()].flatMap((name) => {
+    const lines = readme.split("\n").filter((line) => line.startsWith(`- \`${name}\` (`)).length;
+    if (lines < ONCE) {
+      return [
         `config reads ${name}, but the README's Settings section has no line for it, such as "- \`${name}\` (default …): …".`,
-    );
+      ];
+    }
+    if (lines > ONCE) {
+      return [
+        `the README's Settings section has ${lines} lines for ${name}; keep one, so the list says each setting once.`,
+      ];
+    }
+    return [];
+  });
 }
 
 const wikiCitations = () =>
@@ -150,15 +160,15 @@ function headList(file: string): string {
   return readFileSync(file, "utf8");
 }
 
-function deployedList(tag: string, file: string): readonly string[] {
-  if (!git(["ls-tree", "--name-only", tag, "--", file]).includes(file)) {
+function listSince(ref: string, name: string, file: string): readonly string[] {
+  if (!git(["ls-tree", "--name-only", ref, "--", file]).includes(file)) {
     return [];
   }
-  const shown = spawnSync("git", ["show", `${tag}:${file}`], GIT_OUTPUT);
+  const shown = spawnSync("git", ["show", `${ref}:${file}`], GIT_OUTPUT);
   if (failed(shown)) {
-    return [`git show ${tag}:${file} failed: ${shown.stderr}`];
+    return [`git show ${ref}:${file} failed: ${shown.stderr}`];
   }
-  return migrationsInserted({ base: shown.stdout, baseName: tag, file, head: headList(file) });
+  return migrationsInserted({ base: shown.stdout, baseName: name, file, head: headList(file) });
 }
 
 function deployedMigrations(): readonly string[] {
@@ -168,7 +178,15 @@ function deployedMigrations(): readonly string[] {
       "found no deploy/* tag that HEAD contains, so can't check the migrations list against production's. Run git fetch --tags; the Deploy workflow tags each deployed commit deploy/<short-sha>.",
     ];
   }
-  return MIGRATION_LISTS.flatMap((file) => deployedList(tag, file));
+  return MIGRATION_LISTS.flatMap((file) => listSince(tag, tag, file));
+}
+
+function v1Migrations(): readonly string[] {
+  const base = comparedBase();
+  if (base === "") {
+    return [];
+  }
+  return MIGRATION_LISTS.flatMap((file) => listSince(base, "v1", file));
 }
 
 function workflowActions(): readonly string[] {
@@ -186,6 +204,7 @@ const failures = [
   ...appendOnlyAdrs(),
   ...adrsTakenOnV1(),
   ...deployedMigrations(),
+  ...v1Migrations(),
   ...workflowActions(),
 ];
 for (const failure of failures) {

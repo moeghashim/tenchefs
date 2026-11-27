@@ -19,16 +19,6 @@ interface MenuChoiceParts {
   readonly onChoose: (action: () => void) => void;
 }
 
-const NO_KEYS = "";
-
-function keysOf(choice: Choice): string {
-  const keys = choice.keys ?? null;
-  if (keys === null) {
-    return NO_KEYS;
-  }
-  return keys.keys;
-}
-
 export function MenuChoice(parts: MenuChoiceParts): ReactNode {
   const { choice, onChoose } = parts;
   const RadixItem = parts.item;
@@ -37,10 +27,15 @@ export function MenuChoice(parts: MenuChoiceParts): ReactNode {
       onChoose(choice.onSelect);
     }
   }, [choice, onChoose]);
+  const handleFollow = useCallback(() => {
+    if (choice.onSelect !== null) {
+      choice.onSelect();
+    }
+  }, [choice]);
   if (choice.href !== null) {
     return (
       <RadixItem asChild>
-        <a aria-keyshortcuts={keysOf(choice)} className={MENU_ITEM} href={choice.href}>
+        <a aria-keyshortcuts={choice.keys.keys} className={MENU_ITEM} href={choice.href} onClick={handleFollow}>
           {createElement(MenuChoiceText, { choice })}
         </a>
       </RadixItem>
@@ -48,7 +43,7 @@ export function MenuChoice(parts: MenuChoiceParts): ReactNode {
   }
   return (
     <RadixItem asChild disabled={choice.disabled ?? false} onSelect={handleSelect}>
-      <div aria-keyshortcuts={keysOf(choice)} className={MENU_ITEM}>
+      <div aria-keyshortcuts={choice.keys.keys} className={MENU_ITEM}>
         {createElement(MenuChoiceText, { choice })}
       </div>
     </RadixItem>

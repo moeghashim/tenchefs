@@ -10,14 +10,16 @@ import { unique } from "./names.ts";
 const test = base.extend(probeFixtures);
 
 interface Mentioning {
+  readonly author: string;
   readonly reviewers: string;
   readonly token: string;
 }
 
-async function threadIn(channel: string): Promise<void> {
+async function threadIn(channel: string): Promise<string> {
   const admin = adminClient();
   await admin.createChannel({ name: channel });
-  await admin.createMessage({ channel, text: "Who can review this?" });
+  const { message } = await admin.createMessage({ channel, text: "Who can review this?" });
+  return message.author.name;
 }
 
 async function openThread(page: Page, token: string, channel: string): Promise<void> {
@@ -34,14 +36,14 @@ async function mentionerAndReviewers(): Promise<Mentioning> {
   const { token } = await admin.createIdentity({ kind: "human", name: unique("browser-mentioner") });
   await createTestAgent({ by: admin, name: `${reviewers}-bot` });
   await admin.createIdentity({ kind: "human", name: `${reviewers}-ada` });
-  await threadIn(unique("browser-composer"));
-  return { reviewers, token };
+  const author = await threadIn(unique("browser-composer"));
+  return { author, reviewers, token };
 }
 
 test("typing @ and a prefix in the reply box suggests the matching identities, and choosing one inserts the mention", async ({
   page,
 }) => {
-  const { reviewers, token } = await mentionerAndReviewers();
+  const { author, reviewers, token } = await mentionerAndReviewers();
 
   await openThread(page, token, unique("browser-composer"));
   const box = page.getByRole("textbox", { exact: true, name: "Reply" });
@@ -61,6 +63,6 @@ test("typing @ and a prefix in the reply box suggests the matching identities, a
     .click();
   await page.keyboard.type("look?");
 
-  await expect(box).toHaveValue(`Could @${reviewers}-bot look?`);
+  await expect(box).toHaveValue(`@${author} Could @${reviewers}-bot look?`);
   await expect(suggestions).toBeHidden();
 });

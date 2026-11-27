@@ -168,4 +168,4 @@ export const OfflineAlertEventSchema = matchesWire<OfflineAlertEvent>()(
   Schema.Struct({ alert: OfflineAlertSchema, type: Schema.Literal("offline-alert") }),
 );
 
-export { PresenceResponseSchema } from "../../../presence/server.ts";
+export { PresenceResponseSchema, WakeRunResponseSchema } from "../../../presence/server.ts";

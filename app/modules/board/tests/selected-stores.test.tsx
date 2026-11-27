@@ -4,13 +4,13 @@ import {
   channelList,
   channelPage,
   closingRefusal,
-  commandList,
   deletedSchedules,
   messageBeforeOf,
   scheduleListOf,
   selectedStore,
   subscribedChannels,
   threadOf,
+  webhookCommandList,
 } from "../index.ts";
 import { expect, it, onTestFinished, vi } from "vitest";
 import type { BoardStore } from "../index.ts";
@@ -32,7 +32,7 @@ function storesOf(store: BoardStore, parent: TopLevelMessage): readonly External
     selectedStore({ snapshot: () => page(read()), subscribe: store.channelPages.subscribeShowing(parent.channel) }),
     selectedStore({ snapshot: () => thread(read()), subscribe: store.threads.subscribeShowing(place, true) }),
     selectedStore({ snapshot: () => before(read()), subscribe: store.subscribeShowingBefore(place) }),
-    selectedStore({ snapshot: () => commandList(read()), subscribe: store.subscribeShowing("commands") }),
+    selectedStore({ snapshot: () => webhookCommandList(read()), subscribe: store.subscribeShowing("webhookCommands") }),
     selectedStore({ snapshot: () => subscribedChannels(read()), subscribe: store.subscribeShowing("subscriptions") }),
     selectedStore({ snapshot: () => schedules(read()), subscribe: store.subscribeShowing("schedules") }),
     selectedStore({ snapshot: () => deletedSchedules(read()), subscribe: store.subscribe }),

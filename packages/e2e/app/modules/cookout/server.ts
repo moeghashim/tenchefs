@@ -21,6 +21,11 @@
  * agent of the run that has run `cookout join` in a state folder of its own,
  * optionally through a relay, and posts with `post`. `watchLine` and
  * `watchOutput` are the `cookout watch` stdout format.
+ * `interruptedDev` is the one case that runs no cookout under test: it starts the repository's dev program
+ * (`app/dev.ts start`, behind `pnpm dev`, ADR 0079) as its own process, waits for its startup line, sends
+ * it SIGINT as Ctrl-C does, and gives the database path that line named and the exit code. It runs here,
+ * not in the root Vitest projects, because a fresh process that loads the whole app takes about 1 s to
+ * boot on an idle machine and over 5 s on a busy unit test shard (#831).
  * `browserFixtures` is a `cookout` fixture for Playwright's `test.extend`: one
  * run for each browser test, closed when it ends, and its page logged in by
  * token on request. `exampleWebhookCommand` is the Webhook command the example handler
@@ -55,6 +60,7 @@ export { exampleWebhookCommand, requireExampleWebhookCommand } from "./lib/serve
 export { type BrowserFixtures, type BrowserRun, browserFixtures } from "./lib/server/browser-run.ts";
 export { type Answered, type Relay, openRelay } from "./lib/server/relay.ts";
 export { shownMessage } from "./lib/server/shown-message.ts";
+export { type InterruptedDev, interruptedDev } from "./lib/server/interrupted-dev.ts";
 export {
   type JoinAgent,
   type RunCookout,

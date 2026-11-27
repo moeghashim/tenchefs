@@ -55,7 +55,7 @@ const paths = readdirSync(TREE, { encoding: "utf8", recursive: true })
 const [found, firstFix] = await Promise.all([lint(pristine), fixThenSuggest()]);
 unwrap(SCRIPT, firstFix);
 const before = tally(unwrap(SCRIPT, found), FIXTURE);
-const fixed = await lintFixed({ check, fix, passesLeft: MAX_FIX_PASSES - ONE, paths, suggest });
+const fixed = await lintFixed({ check, fix, format: [], passesLeft: MAX_FIX_PASSES - ONE, paths, suggest });
 const after = tally(unwrap(SCRIPT, fixed), RUN);
 const raised: string[] = [];
 for (const [key, count] of after) {

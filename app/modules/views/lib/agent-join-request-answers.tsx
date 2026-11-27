@@ -1,5 +1,7 @@
 import type { AgentJoinApproval, AgentJoinApprovalState } from "../../board/index.ts";
 import { Button, ButtonRow } from "../../design-system/controls.tsx";
+import { useCallback, useContext } from "react";
+import { LandingContext } from "../../landing/index.ts";
 import { Muted } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 
@@ -8,6 +10,8 @@ const TEXT = {
   dismiss: "Dismiss",
   dismissed: "Dismissed. The waiting join stops; you can close this page.",
 } as const;
+
+const HEADING = "main h1";
 
 type ShownState = Extract<AgentJoinApprovalState, { readonly idleExpiry: string }>;
 
@@ -30,8 +34,15 @@ function isAnswering({ status }: ShownState): boolean {
 
 export function AgentJoinRequestAnswers(props: AgentJoinRequestAnswersProps): ReactNode {
   const { approval, state } = props;
-  const handleApprove = approval.approve;
-  const handleDismiss = approval.dismiss;
+  const { watch } = useContext(LandingContext);
+  const handleApprove = useCallback(() => {
+    approval.approve();
+    watch(HEADING);
+  }, [approval, watch]);
+  const handleDismiss = useCallback(() => {
+    approval.dismiss();
+    watch(HEADING);
+  }, [approval, watch]);
   const answering = isAnswering(state);
   return (
     <>

@@ -1,6 +1,6 @@
 import type { Failure, PostState } from "./failure.ts";
 import type { MessageId, ReadPosition } from "../../sdk/index.ts";
-import type { CallState } from "./command-call.ts";
+import type { CallState } from "./webhook-command-call.ts";
 
 type OlderState = { readonly status: "idle" } | { readonly status: "loading" } | Failure;
 

@@ -59,13 +59,13 @@
 import { CliError, Command } from "effect/cli";
 import { cookoutServer, serveCommand } from "./lib/server/serve.ts";
 import { loginCommand, logoutCommand } from "./lib/server/login.ts";
-import { usageFailed, withJsonPresenter } from "./lib/server/output.ts";
+import { onRunnerHost, verbCommands } from "./lib/server/verbs.ts";
 
+import { usageFailed, withJsonPresenter } from "./lib/server/output.ts";
 import { Effect } from "effect";
 import type { ServeLayers } from "./lib/server/serve.ts";
 import packageJson from "../../../package.json" with { type: "json" };
 import { sayInterrupted } from "./lib/server/interrupted.ts";
-import { verbCommands } from "./lib/server/verbs.ts";
 import { watchCommand } from "./lib/server/watch.ts";
 import { whoamiCommand } from "./lib/server/whoami.ts";
 
@@ -86,6 +86,7 @@ export const runCookout = (args: readonly string[], layers: ServeLayers) =>
     (command) => Command.runWith(command, { version: packageJson.version })(args),
     Effect.catchIf(CliError.isCliError, () => usageFailed),
     withJsonPresenter,
+    onRunnerHost(layers.runnerHost),
     Effect.onInterrupt(() => sayInterrupted(args)),
   );
 

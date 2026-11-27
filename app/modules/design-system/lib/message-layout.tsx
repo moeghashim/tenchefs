@@ -1,10 +1,8 @@
 import { Avatar } from "./avatar.tsx";
-import { ChoiceKeys } from "./choice-keys.tsx";
 import { HoverButtons } from "./hover-buttons.tsx";
 import { MessageHeader } from "./message-header.tsx";
 import type { MessageLayoutParts } from "./message-parts.ts";
 import { MessageTime } from "./message-time.tsx";
-import { OpenThreadKey } from "./open-thread-key.tsx";
 import type { ReactNode } from "react";
 
 export function MessageLayout(parts: MessageLayoutParts): ReactNode {
@@ -40,8 +38,6 @@ export function MessageLayout(parts: MessageLayoutParts): ReactNode {
         replyOnHover={parts.replyOnHover}
         thread={parts.thread}
       />
-      <OpenThreadKey href={parts.threadHref} />
-      <ChoiceKeys choices={parts.choices} />
     </>
   );
 }

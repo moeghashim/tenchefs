@@ -2,7 +2,7 @@ import type { AgentJoinRequests, DeactivatedQuietAgents, DeactivationOffers, Nud
 import type { DeactivatedQuietAgent, DeactivationOffer, InboxAgentJoinRequest, Nudge } from "../../sdk/index.ts";
 import { AgentJoinRequestRow } from "./agent-join-request-row.tsx";
 import type { Identities } from "../../composer/index.ts";
-import { OpenOfferRow } from "./open-offer-row.tsx";
+import { OpenOffers } from "./open-offers.tsx";
 import type { ReactNode } from "react";
 import { UnreadDeactivatedQuietAgentRow } from "./unread-deactivated-quiet-agent-row.tsx";
 import { UnreadNudgeRow } from "./unread-nudge-row.tsx";
@@ -47,14 +47,11 @@ export function ForYouNotices(props: ForYouNoticesProps): ReactNode {
           key={`deactivated ${String(entry.id)}`}
         />
       ))}
-      {props.offers.map((offer) => (
-        <OpenOfferRow
-          identities={actions.identities}
-          key={`offer ${String(offer.id)}`}
-          offer={offer}
-          offers={actions.deactivationOffers}
-        />
-      ))}
+      <OpenOffers
+        deactivationOffers={actions.deactivationOffers}
+        identities={actions.identities}
+        offers={props.offers}
+      />
       {props.nudges.map((nudge) => (
         <UnreadNudgeRow key={`nudge ${String(nudge.id)}`} nudge={nudge} nudges={actions.nudges} />
       ))}

@@ -7,6 +7,7 @@ const URL = "https://github.com/o/r/actions/runs/";
 
 interface Stub {
   readonly conclusion: string;
+  readonly event?: string;
   readonly sha: string;
   readonly status: string;
 }
@@ -17,8 +18,8 @@ interface Stubbed {
   readonly runs: readonly unknown[];
 }
 
-function run({ conclusion, sha, status }: Stub): unknown {
-  return { conclusion, headSha: sha, status, url: `${URL}${sha}` };
+function run({ conclusion, event = "push", sha, status }: Stub): unknown {
+  return { conclusion, event, headSha: sha, status, url: `${URL}${sha}` };
 }
 
 function done(sha: string, conclusion: string): unknown {
@@ -61,6 +62,47 @@ it("picks the newest green v1 commit over a newer red one and a newer one still 
     ],
     outcome: { ok: true, value: GREEN },
   });
+});
+
+function dispatched(sha: string, conclusion: string): unknown {
+  return run({ conclusion, event: "workflow_dispatch", sha, status: "completed" });
+}
+
+it("releases v1's head when its newest Check run, started by workflow_dispatch, is green", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const choice = chosen({ commits: [NEWEST, GREEN], runs: [dispatched(NEWEST, "success"), done(GREEN, "success")] });
+
+  expect(choice).toStrictEqual({
+    lines: [`chose ${NEWEST}: its Check run is green (${URL}${NEWEST})`],
+    outcome: { ok: true, value: NEWEST },
+  });
+});
+
+it("ignores a dispatched Check run on a commit older than v1's head", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const choice = chosen({ commits: [NEWEST, OLDER], runs: [done(NEWEST, "failure"), dispatched(OLDER, "success")] });
+
+  expect(choice).toStrictEqual({
+    lines: [
+      `skipped ${NEWEST}: its Check run is red (${URL}${NEWEST})`,
+      `skipped ${OLDER}: it has no Check push run`,
+      "chose nothing: none of the newest 2 v1 commits has a green Check run",
+    ],
+    outcome: { ok: false, reason: "no v1 commit has a green Check run to release" },
+  });
+});
+
+it("ignores a dispatched Check run on v1's head when a newer push run there is red", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const choice = chosen({ commits: [NEWEST], runs: [done(NEWEST, "failure"), dispatched(NEWEST, "success")] });
+
+  expect(choice.lines).toStrictEqual([
+    `skipped ${NEWEST}: its Check run is red (${URL}${NEWEST})`,
+    "chose nothing: none of the newest 1 v1 commits has a green Check run",
+  ]);
 });
 
 it("picks nothing, and says so, when no v1 commit has a green Check run", { timeout: 1000 }, () => {

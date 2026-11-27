@@ -2,7 +2,7 @@
 import type { AgentJoinCollectedResponse, AgentJoinRequestResponse, AgentJoinRequestStartedResponse, AgentSessionResponse, DenyAgentJoinResponse, LeaveResponse, ListAgentSessionsResponse, RevokeAgentSessionResponse } from "../../../agent-sessions/index.ts";
 import type { JoinCodeResponse } from "../../../agent-sessions/join-codes.ts";
 import type { ChannelResponse, ListChannelsResponse } from "../../../channels/index.ts";
-import type { AgentJoinRequestsEvent, AgentSessionEvent, ChannelDeletedEvent, ChannelEvent, CleanCloseResponse, CommandEvent, ConnectedEvent, DeactivatedQuietAgentEvent, DeactivationOfferEvent, IdentityDeletedEvent, IdentityEvent, InboxItemEvent, MessageDeletedEvent, MessageEvent, NudgeEvent, NudgeReadEvent, OfflineAlertEvent, PresenceEvent, PresenceResponse, ReactionEvent, ReadPositionEvent, ReadPositionMovedBackEvent, ReadReceiptEvent, SubscriptionEvent, ThreadEvent } from "../../../events/index.ts";
+import type { AgentJoinRequestsEvent, AgentSessionEvent, ChannelDeletedEvent, ChannelEvent, CleanCloseResponse, CommandEvent, ConnectedEvent, DeactivatedQuietAgentEvent, DeactivationOfferEvent, IdentityDeletedEvent, IdentityEvent, InboxItemEvent, MessageDeletedEvent, MessageEvent, NudgeEvent, NudgeReadEvent, OfflineAlertEvent, PresenceEvent, PresenceResponse, ReactionEvent, ReadPositionEvent, ReadPositionMovedBackEvent, ReadReceiptEvent, SubscriptionEvent, ThreadEvent, WakeRunResponse } from "../../../events/index.ts";
 import type { ErrorResponse, HealthResponse, SchemaProblems } from "../../../http/index.ts";
 import type { DeactivateIdentityResponse, IdentityMessageCountResponse, IdentityResponse, IdentityWithTokenResponse, ListIdentitiesResponse } from "../../../identities/index.ts";
 import type { AckAllResponse, AckResponse, DeactivatedQuietAgentResponse, DeactivationOfferResponse, FollowResponse, InboxHistoryResponse, InboxResponse, MarkUnreadResponse, NudgeResponse, OfflineAlertResponse, ReadPositionsResponse, SubscriptionResponse } from "../../../inbox/index.ts";
@@ -50,6 +50,7 @@ export declare function isReadPositionMovedBackEvent(data: unknown): data is Rea
 export declare function isReadReceiptEvent(data: unknown): data is ReadReceiptEvent;
 export declare function isSubscriptionEvent(data: unknown): data is SubscriptionEvent;
 export declare function isThreadEvent(data: unknown): data is ThreadEvent;
+export declare function isWakeRunResponse(data: unknown): data is WakeRunResponse;
 export declare function isErrorResponse(data: unknown): data is ErrorResponse;
 export declare function isHealthResponse(data: unknown): data is HealthResponse;
 export declare function isSchemaProblems(data: unknown): data is SchemaProblems;

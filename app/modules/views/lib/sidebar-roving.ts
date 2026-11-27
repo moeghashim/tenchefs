@@ -84,16 +84,16 @@ function roving(): () => void {
   };
 }
 
-function moveFocus(step: keyof typeof STEPS): Act {
+function focusAt(to: (at: number, count: number) => number): Act {
   return () => {
     const at = focusedAt();
     if (at === NOT_FOUND) {
       return false;
     }
     const links = linksIn();
-    const to = Math.min(Math.max(at + STEPS[step], FIRST), links.length - LAST);
+    const target = to(at, links.length);
     for (const [index, link] of links.entries()) {
-      if (index === to) {
+      if (index === target) {
         link.focus();
       }
     }
@@ -101,4 +101,17 @@ function moveFocus(step: keyof typeof STEPS): Act {
   };
 }
 
-export { SIDEBAR, moveFocus, roving, sidebar };
+function moveFocus(step: keyof typeof STEPS): Act {
+  return focusAt((at, count) => Math.min(Math.max(at + STEPS[step], FIRST), count - LAST));
+}
+
+function focusEnd(end: "first" | "last"): Act {
+  return focusAt((_at, count) => {
+    if (end === "first") {
+      return FIRST;
+    }
+    return count - LAST;
+  });
+}
+
+export { SIDEBAR, focusEnd, moveFocus, roving, sidebar };

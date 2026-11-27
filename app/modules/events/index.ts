@@ -33,6 +33,7 @@ export type {
   OfflineReason,
   Presence,
   PresenceResponse,
+  WakeRunResponse,
 } from "../presence/index.ts";
 
 /** A new item in the caller's inbox, sent the moment another identity posts it. */
@@ -113,9 +114,9 @@ export interface MessageEvent {
 }
 
 /**
- * A thread just closed or reopened, by Close, Reopen, a reply in a closed thread or a reply sent with `close`: its
- * top-level message as it now
- * stands, with `closedAt` and `closedBy` while closed. Sent only on the all-channels feed. It has no SSE `id`.
+ * A thread just closed, reopened or retitled (Close, Reopen, a reply in a closed thread or sent with `close`, a title
+ * change): its top-level message as it now stands, with its closed and title fields. Only on the all-channels feed.
+ * It has no SSE `id`.
  */
 export interface ThreadEvent {
   readonly type: "thread";

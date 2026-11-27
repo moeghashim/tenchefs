@@ -56,3 +56,4 @@ export async function setScreenPresences(presences: Presences): Promise<void> {
   await postScreenAttachments(presences);
 }
 export { attachScreenFiles } from "./screen-attachments.ts";
+export { titleScreenThread } from "./screen-title.ts";

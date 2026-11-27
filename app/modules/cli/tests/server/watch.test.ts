@@ -21,10 +21,11 @@ interface Posted {
 
 const ONE_LINE = 1;
 const TWO_LINES = 2;
+const THREE_LINES = 3;
 const A_WHILE = "5 seconds";
 const HEARTBEAT_INTERVAL = "15 seconds";
 const FIRST_HEARTBEAT = 1;
-const FOUR_HEARTBEATS = 4;
+const AN_HOUR_OF_HEARTBEATS = 240;
 const SHOWN = 120;
 const LONG = 150;
 const LONG_TEXT = `@bob look\n\nat  ${Str.repeat(LONG)("x")}`;
@@ -137,7 +138,7 @@ function heartbeatsAfter(link: CuttableLink, count: number): Effect.Effect<void>
 
 function postAfterHeartbeats(link: CuttableLink, ann: TestIdentity): Effect.Effect<MessageId> {
   const heartbeats = Effect.forEach(
-    Arr.range(FIRST_HEARTBEAT, FOUR_HEARTBEATS),
+    Arr.range(FIRST_HEARTBEAT, AN_HOUR_OF_HEARTBEATS),
     (count) => heartbeatsAfter(link, count),
     {
       concurrency: 1,
@@ -164,11 +165,66 @@ function watchThroughHeartbeats(): Effect.Effect<Watched<MessageId>, never, Comm
   }).pipe(Effect.provide(testCookout()));
 }
 
-it.effect("cookout watch stays on its connection while heartbeats arrive, however long nothing else does", () =>
+it.effect("cookout watch stays on its one connection for an hour of heartbeats with nothing else", () =>
   Effect.gen(function* watchHeartbeats() {
     const { during: posted, stderrLines, stdoutJson } = yield* watchThroughHeartbeats();
 
     expect(stdoutJson).toMatchObject([{ item: { message: { id: posted } } }]);
     expect(stderrLines).toHaveLength(ONE_LINE);
+  }).pipe(Effect.provide(commandLineServices)),
+);
+
+function postAcrossADrop(
+  link: CuttableLink,
+  ann: TestIdentity,
+): Effect.Effect<readonly [MessageId, MessageId, MessageId]> {
+  return Effect.gen(function* dropThenPost() {
+    const before = yield* mention(ann, "@bob before the drop");
+    yield* link.relayed(`id: ${String(before)}\n`);
+    yield* link.cut;
+    const first = yield* mention(ann, "@bob in the gap");
+    const second = yield* mention(ann, "@bob in the gap again");
+    yield* Effect.raceFirst(link.relayed(`id: ${String(second)}\n`), passTime);
+    return [before, first, second] as const;
+  });
+}
+
+function watchAcrossADrop(): Effect.Effect<
+  Watched<readonly [MessageId, MessageId, MessageId]>,
+  never,
+  CommandLineNeeds | Scope.Scope
+> {
+  return Effect.gen(function* watchAsBob() {
+    const cookout = yield* TestCookout;
+    const link = yield* cuttableLink(cookout.url);
+    const ann = yield* cookout.createIdentity("ann");
+    const bob = yield* cookout.createIdentity("bob");
+    const folder = yield* freshStateFolder;
+    yield* answer(() => ann.client.createChannel({ name: "grill" }));
+    return yield* watchCookout({
+      args: ["watch", "--json"],
+      env: { COOKOUT_STATE_DIR: folder, COOKOUT_TOKEN: bob.token, COOKOUT_URL: link.url },
+      lines: THREE_LINES,
+      whileWatching: postAcrossADrop(link, ann),
+    });
+  }).pipe(Effect.provide(testCookout()));
+}
+
+it.effect("cookout watch prints each mention posted while its stream was dropped once, after it reconnects", () =>
+  Effect.gen(function* watchDrop() {
+    const {
+      during: [before, first, second],
+      stderrLines,
+      stdoutJson,
+    } = yield* watchAcrossADrop();
+
+    expect(stdoutJson).toMatchObject([
+      { item: { message: { id: before } } },
+      { item: { message: { id: first } } },
+      { item: { message: { id: second } } },
+    ]);
+    expect(stderrLines).toContain(
+      '{"reconnecting":"board unavailable (The server ended the stream.), retrying in 1s"}',
+    );
   }).pipe(Effect.provide(commandLineServices)),
 );

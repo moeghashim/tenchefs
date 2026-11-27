@@ -1,4 +1,5 @@
 import { Array as Arr, Effect, Predicate } from "effect";
+import { AssetStore, Storage } from "../../../storage/server.ts";
 import type { Caller, IdentityChanges } from "./auth.ts";
 import type { Identity, IdentityName } from "../../index.ts";
 import { IdentityMessageCountResponseSchema, IdentityResponseSchema } from "./wire.ts";
@@ -9,9 +10,9 @@ import type { DeleteIdentityResult } from "../../../storage/server.ts";
 import { HttpServerResponse } from "effect/http";
 import type { Refusal } from "../../../http/index.ts";
 import type { Route } from "../../../http/server.ts";
-import { Storage } from "../../../storage/server.ts";
 
 const CONFLICT = 409;
+const AVATARS_REMOVED_AT_ONCE = 100;
 
 function hasMessages(name: IdentityName): Refusal {
   return {
@@ -54,13 +55,35 @@ function deletedOrRefused(name: IdentityName, result: DeleteIdentityResult): Eff
   return Effect.fail(identityNotFound(name));
 }
 
-const deleteRoute: Route<Caller | Storage | IdentityChanges> = {
+const avatarBytesRemoved: Effect.Effect<void, never, Storage | AssetStore> = Effect.gen(function* removeAvatarBytes() {
+  const storage = yield* Storage;
+  const assets = yield* AssetStore;
+  const ids = yield* storage.avatarsToRemove(AVATARS_REMOVED_AT_ONCE);
+  if (Arr.isReadonlyArrayEmpty(ids)) {
+    return;
+  }
+  yield* assets.remove(ids).pipe(
+    Effect.andThen(storage.avatarsRemoved(ids)),
+    Effect.catchTag("StorageUnavailable", ({ message }: { readonly message: string }) =>
+      Effect.logError(
+        `The bytes of ${String(ids.length)} avatars of deleted identities couldn't be removed from the asset store (${Arr.join(ids, ", ")}): ${message}`,
+      ),
+    ),
+  );
+}).pipe(
+  Effect.catchTag("StorageUnavailable", ({ message }: { readonly message: string }) =>
+    Effect.logError(`The avatars of deleted identities couldn't be read to remove their bytes: ${message}`),
+  ),
+);
+
+const deleteRoute: Route<Caller | Storage | AssetStore | IdentityChanges> = {
   handle: (params) =>
     Effect.gen(function* deleteIdentityRoute() {
       yield* requireAdmin;
       const name = yield* nameParam(params);
       const storage = yield* Storage;
       const deleted = yield* Effect.flatMap(storage.deleteIdentity(name), (result) => deletedOrRefused(name, result));
+      yield* avatarBytesRemoved;
       const identity = yield* announcedDeleted(deleted);
       return yield* HttpServerResponse.schemaJson(IdentityResponseSchema)({ identity });
     }),
@@ -84,4 +107,7 @@ const messageCountRoute: Route<Caller | Storage> = {
   path: identityMessageCountPath,
 };
 
-export const deletionRoutes: readonly Route<Caller | Storage | IdentityChanges>[] = [deleteRoute, messageCountRoute];
+export const deletionRoutes: readonly Route<Caller | Storage | AssetStore | IdentityChanges>[] = [
+  deleteRoute,
+  messageCountRoute,
+];

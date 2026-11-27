@@ -252,7 +252,7 @@ async function main(): Promise<void> {
   console.log(`ok   installed ${PACKAGE}@${version} from npm`);
   const optOuts = parseJson(readFileSync(OPT_OUTS, "utf8"));
   optedOut = unwrap(SCRIPT, optedOutSteps({ optOuts, steps: STEPS, version }));
-  const cookout = await startDevCookout({});
+  const cookout = await startDevCookout();
   try {
     await drive(join(setUp(cookout)));
   } catch (error) {

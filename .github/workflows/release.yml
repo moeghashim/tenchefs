@@ -1,8 +1,9 @@
 name: Release
 
 # Release is the gate (#636, docs/adr/0114-release-is-the-gate-on-the-newest-green-v1-commit.md). Its
-# first job picks the newest v1 commit whose Check push run is green, reusing that run's static
-# checks and unit tests. On that commit it runs every browser test (6 shards, moved from Check),
+# first job picks the newest v1 commit whose Check push run is green (on v1's head, a newest Check
+# run started by workflow_dispatch counts too, docs/adr/0129), reusing that run's static checks and
+# unit tests. On that commit it runs every browser test (6 shards, moved from Check),
 # pack smoke, the published client and the e2e suite on the Docker image. Only when all of them
 # pass does it fast-forward main to that commit, call Deploy, and run changesets: it opens or
 # updates the Version Packages pull request against v1, and once that is merged and no changesets

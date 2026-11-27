@@ -41,7 +41,7 @@ interface Refused {
 
 interface ShownOf {
   readonly call: CallState;
-  readonly command: string;
+  readonly webhookCommand: string;
 }
 
 const JSON_BOX: Prompt = { kind: "json" };
@@ -254,8 +254,8 @@ function errorText(messages: readonly string[]): string | null {
   return messages.join("; ");
 }
 
-function shownCall({ call, command }: ShownOf): CallState {
-  if (call.status === "idle" || call.command !== command) {
+function shownCall({ call, webhookCommand: command }: ShownOf): CallState {
+  if (call.status === "idle" || call.webhookCommand !== command) {
     return IDLE;
   }
   return call;

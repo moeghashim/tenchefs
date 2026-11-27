@@ -1,6 +1,6 @@
 import { adminClient, newIdentity } from "./people.ts";
 import { expect, test } from "@playwright/test";
-import { inSidebar, inTopBar, sidebarLink } from "./regions.ts";
+import { inSidebar, inThread, inTopBar, sidebarLink } from "./regions.ts";
 import type { Message } from "../../../sdk/index.ts";
 import type { Page } from "@playwright/test";
 import { logInToChannels } from "./login.ts";
@@ -68,6 +68,56 @@ test("on a narrow screen the sidebar hides behind a button, and the thread panel
       return width;
     })
     .toBe(NARROW.width);
+});
+
+const HALF = 2;
+
+interface Point {
+  readonly left: number;
+  readonly top: number;
+}
+
+function avatarAt(point: Point): boolean {
+  const hit = globalThis.document.elementFromPoint(point.left, point.top);
+  if (hit === null) {
+    return false;
+  }
+  return hit.closest("main [data-testid='replier-avatar']") !== null;
+}
+
+async function avatarOnTop(page: Page): Promise<boolean> {
+  const box = await page.getByRole("main").getByTestId("replier-avatar").boundingBox();
+  if (box === null) {
+    return false;
+  }
+  const onTop = await page.evaluate(avatarAt, { left: box.x + box.width / HALF, top: box.y + box.height / HALF });
+  return onTop;
+}
+
+test("on a narrow screen a reply's avatar in the channel stays under the thread panel and the open sidebar", async ({
+  page,
+}) => {
+  const message = await narrowLogIn(page);
+  await adminClient().createMessage({ channel: unique("browser-narrow"), replyTo: message.id, text: "Narrow reply" });
+  await page.goto(`/#/channels/${unique("browser-narrow")}/threads/${String(message.id)}`);
+
+  await expect(inThread(page)).toContainText("Narrow reply");
+  await expect
+    .poll(async () => {
+      const onTop = await avatarOnTop(page);
+      return onTop;
+    })
+    .toBe(false);
+
+  await inTopBar(page).getByRole("button", { exact: true, name: "Open the sidebar" }).click();
+
+  await expect(inSidebar(page)).toBeVisible();
+  await expect
+    .poll(async () => {
+      const onTop = await avatarOnTop(page);
+      return onTop;
+    })
+    .toBe(false);
 });
 
 test("the theme switch changes the theme at once, keeps it across a reload, and System follows the system", async ({

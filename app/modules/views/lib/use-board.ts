@@ -4,20 +4,19 @@ import type {
   ChannelMessagesState,
   ChannelsState,
   ClosingRefusal,
-  CommandsState,
   ListedSchedules,
   MessageBeforeState,
   Outgoing,
   SubscriptionsState,
   ThreadClosing,
   ThreadMessagesState,
+  WebhookCommandsState,
 } from "../../board/index.ts";
 import type { ChannelName, MessageId, SearchResult } from "../../sdk/index.ts";
 import {
   channelList,
   channelPage,
   closingRefusal,
-  commandList,
   deletedChannelNotice,
   deletedSchedules,
   messageBeforeOf,
@@ -25,6 +24,7 @@ import {
   searchResultsOf,
   subscribedChannels,
   threadOf,
+  webhookCommandList,
 } from "../../board/index.ts";
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
 import type { ScheduledMessageId } from "../../scheduled-messages/index.ts";
@@ -33,7 +33,7 @@ type Subscribe = (listener: () => void) => () => void;
 
 const BoardStoreContext = createContext<BoardStore | null>(null);
 
-type Listed = "channels" | "commands" | "schedules" | "subscriptions";
+type Listed = "channels" | "webhookCommands" | "schedules" | "subscriptions";
 
 interface ThreadPlace {
   readonly channel: ChannelName;
@@ -103,8 +103,8 @@ function useDeletedChannelNotice(): ChannelName | null {
   return useListed("channels", deletedChannelNotice);
 }
 
-function useCommands(): CommandsState {
-  return useListed("commands", commandList);
+function useWebhookCommands(): WebhookCommandsState {
+  return useListed("webhookCommands", webhookCommandList);
 }
 
 function useSubscriptions(): SubscriptionsState {
@@ -146,7 +146,7 @@ function useChannelCalls(channel: ChannelName): ChannelCalls {
   return useMemo(
     () => ({
       call: (command: string, data: string, called: () => void) => {
-        channelPages.call(channel, { called, command, data });
+        channelPages.call(channel, { called, data, webhookCommand: command });
       },
       editCallData: (data: string) => {
         channelPages.editCallData(channel, data);
@@ -206,7 +206,7 @@ export {
   useChannelSchedules,
   useChannels,
   useClosingRefusal,
-  useCommands,
+  useWebhookCommands,
   useDeletedChannelNotice,
   useDeletedSchedules,
   useMessageBefore,

@@ -6,6 +6,7 @@ import { FoldEntry } from "./fold-entry.tsx";
 import { MessageEntry } from "./message-entry.tsx";
 import { MessageRefusals } from "./message-refusals.tsx";
 import type { ReactNode } from "react";
+import type { Reply } from "./use-message-menu.ts";
 import { feedRows } from "./feed-rows.ts";
 
 type Loaded = Extract<ChannelMessagesState, { readonly status: "loaded" }>;
@@ -22,7 +23,10 @@ interface FeedStreamProps {
   readonly threads: ReadonlyMap<MessageId, ThreadNews>;
   readonly menu: MessageMenu;
   readonly closing: ThreadClosing;
+  readonly reply: Reply;
 }
+
+export type { FeedStreamProps };
 
 export function FeedStream(props: FeedStreamProps): ReactNode {
   const { state } = props;
@@ -60,8 +64,10 @@ export function FeedStream(props: FeedStreamProps): ReactNode {
               parent={null}
               threadParent={null}
               receipts={state.receipts}
-              reply={null}
+              reply={props.reply}
               row={row.row}
+              spaced
+              titled
             />
           );
         })}

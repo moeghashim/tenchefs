@@ -1,6 +1,7 @@
-import { Array as Arr, DateTime, Effect, Predicate, PubSub } from "effect";
+import { Array as Arr, DateTime, Effect, Predicate, PubSub, String as Str } from "effect";
 import type { MessageId, TopLevelMessage, TopLevelMessageResponse } from "../../index.ts";
 import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
+import type { Identity } from "../../../identities/index.ts";
 import type { MessageDeletion } from "./deleting.ts";
 import type { MessagesService } from "./service.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -19,7 +20,7 @@ type ThreadChange = Effect.Success<ReturnType<Storage["Service"]["reopenThread"]
 
 type ClosedThreadsService = Pick<
   MessagesService,
-  "closeThread" | "reopenThread" | "threadChanged" | "deleteMessage" | "deleted"
+  "closeThread" | "reopenThread" | "setThreadTitle" | "threadChanged" | "deleteMessage" | "deleted"
 >;
 
 interface ThreadHub {
@@ -50,6 +51,24 @@ function answerFor(asked: MessageId): (change: ThreadChange) => Fails<TopLevelMe
     }
     return Effect.succeed({ message: change.parent });
   };
+}
+
+interface TitleChange {
+  readonly caller: Identity;
+  readonly id: MessageId;
+  readonly title: string;
+}
+
+function titleChange(
+  storage: Storage["Service"],
+  { caller, id, title }: TitleChange,
+): Effect.Effect<ThreadChange, StorageUnavailable> {
+  if (Str.isEmpty(title)) {
+    return storage.clearThreadTitle(id);
+  }
+  return Effect.flatMap(DateTime.now, (now) =>
+    storage.setThreadTitle(id, { title, titleSetAt: isoTimeOf(now), titleSetBy: caller.name }),
+  );
 }
 
 function threadHub(oneAtATime: OneAtATime): Effect.Effect<ThreadHub> {
@@ -87,6 +106,8 @@ function closedThreadsOn({ hub, storage }: ClosedThreadsOn): ClosedThreadsServic
         const change = yield* hub.changeThenPublish(storage.reopenThread(id, isoTimeOf(now)));
         return yield* answerFor(id)(change);
       }),
+    setThreadTitle: (caller, id, title) =>
+      Effect.flatMap(hub.changeThenPublish(titleChange(storage, { caller, id, title })), answerFor(id)),
     threadChanged: hub.threadChanged,
   };
 }

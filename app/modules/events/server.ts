@@ -60,6 +60,7 @@ import {
   ReadReceiptEventSchema,
   SubscriptionEventSchema,
   ThreadEventSchema,
+  WakeRunResponseSchema,
 } from "./lib/server/wire.ts";
 import { Effect, Exit, Scope, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -138,4 +139,5 @@ export const eventResponseSchemas = {
   ReadReceiptEvent: ReadReceiptEventSchema,
   SubscriptionEvent: SubscriptionEventSchema,
   ThreadEvent: ThreadEventSchema,
+  WakeRunResponse: WakeRunResponseSchema,
 };

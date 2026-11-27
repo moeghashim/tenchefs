@@ -16,7 +16,7 @@ export function MessageAction(parts: MessageActionParts): ReactNode {
   const { keys } = useContext(MessageKeys).reply;
   if (actionHref !== null) {
     return (
-      <HoverAction href={actionHref} keys={keys} name={parts.actionLabel}>
+      <HoverAction href={actionHref} keys={keys} name={parts.actionLabel} onFollow={onAction}>
         <ReplyIcon />
       </HoverAction>
     );

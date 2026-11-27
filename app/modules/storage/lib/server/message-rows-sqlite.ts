@@ -3,7 +3,7 @@ import { AttachmentsColumn, attachmentsColumn, attachmentsField } from "./attach
 import type { Author, Closing, Message, MessageId } from "../../../messages/index.ts";
 import type { DialectForms, SqlDatabase } from "./adapters/sql-database.ts";
 import type { Harness, IdentityName, Owner } from "../../../identities/index.ts";
-import type { NewMessage, ReplyTarget } from "./messages.ts";
+import type { NewMessage, ReplyTarget, Titling } from "./messages.ts";
 import { isHarness, isIdentityName, isOwner } from "../../../identities/index.ts";
 import { isMessageId, shownRepliers } from "../../../messages/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
@@ -47,6 +47,9 @@ const MessageRow = Schema.Struct({
   scheduled_message_deleted_at: Schema.NullOr(Schema.String),
   scheduled_message_id: Schema.NullOr(ScheduledMessageIdColumn),
   text: Schema.String,
+  title: Schema.NullOr(Schema.String),
+  title_set_at: Schema.NullOr(IsoTimeSchema),
+  title_set_by: Schema.NullOr(IdentityNameColumn),
 });
 
 type MessageRowType = typeof MessageRow.Type;
@@ -80,7 +83,7 @@ const REPLIERS: DialectForms<string> = { postgres: POSTGRES_REPLIERS, sqlite: SQ
 function messageColumns(db: SqlDatabase): string {
   const repliers = REPLIERS[db.dialect];
   return `id, channel, author_name, author_owner, text, data, reply_to, mentions, created_at, harness,
-  closed_at, closed_by, scheduled_message_id,
+  closed_at, closed_by, title, title_set_by, title_set_at, scheduled_message_id,
   (SELECT schedules.deleted_at FROM scheduled_messages AS schedules
     WHERE schedules.id = messages.scheduled_message_id) AS scheduled_message_deleted_at,
   (SELECT count(*) FROM messages AS replies WHERE replies.reply_to = messages.id AND replies.deleted_at IS NULL) AS reply_count,
@@ -121,6 +124,13 @@ function closingOf(row: MessageRowType): Partial<Closing> {
   return { closedAt: row.closed_at, closedBy: row.closed_by };
 }
 
+function titlingOf(row: MessageRowType): Partial<Titling> {
+  if (Predicate.isNull(row.title) || Predicate.isNull(row.title_set_by) || Predicate.isNull(row.title_set_at)) {
+    return {};
+  }
+  return { title: row.title, titleSetAt: row.title_set_at, titleSetBy: row.title_set_by };
+}
+
 function scheduledOf(row: MessageRowType): { readonly scheduledMessage?: ScheduledMessageMarker } {
   if (Predicate.isNull(row.scheduled_message_id)) {
     return NO_SCHEDULE;
@@ -150,7 +160,14 @@ function messageOf(row: MessageRowType, data: DataField): Message {
       latestReplyId: row.latest_reply_id,
       replyCount: row.reply_count,
     };
-    return { ...content, ...replies, ...closingOf(row), kind: "top-level", repliers: repliersOf(row) };
+    return {
+      ...content,
+      ...replies,
+      ...closingOf(row),
+      ...titlingOf(row),
+      kind: "top-level",
+      repliers: repliersOf(row),
+    };
   }
   return { ...content, kind: "reply", replyTo: row.reply_to };
 }

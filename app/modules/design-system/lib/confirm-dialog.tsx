@@ -8,6 +8,7 @@ import { useCallback } from "react";
 export function ConfirmDialog(parts: ConfirmDialogParts): ReactNode {
   const { onCancel } = parts;
   const handleConfirm = parts.onConfirm;
+  const handleCloseFocused = parts.onCloseFocused;
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -25,8 +26,10 @@ export function ConfirmDialog(parts: ConfirmDialogParts): ReactNode {
           confirm={parts.confirm}
           destructive={parts.destructive}
           error={parts.error}
+          onCloseFocused={handleCloseFocused}
           onConfirm={handleConfirm}
           pending={parts.pending}
+          returnTo={parts.returnTo}
           title={parts.title}
         />
       </Portal>

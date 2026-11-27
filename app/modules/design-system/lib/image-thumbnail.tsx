@@ -1,14 +1,19 @@
-import type { ImageThumbnailParts } from "./attachment-parts.ts";
-import { ImageViewer } from "./image-viewer.tsx";
+import { AttachmentImage } from "./attachment-image.tsx";
 import type { ReactNode } from "react";
-import { Root } from "@radix-ui/react-dialog";
-import { ThumbnailButton } from "./thumbnail-button.tsx";
+import type { ThumbnailParts } from "./attachment-parts.ts";
+import { useThumbnail } from "./use-thumbnail.ts";
 
-export function ImageThumbnail(parts: ImageThumbnailParts): ReactNode {
+export function ImageThumbnail(parts: ThumbnailParts): ReactNode {
+  const { button, onOpen } = useThumbnail(parts.at);
   return (
-    <Root>
-      <ThumbnailButton name={parts.name} size={parts.size} src={parts.src} />
-      <ImageViewer detail={parts.detail} name={parts.name} size={parts.size} src={parts.src} />
-    </Root>
+    <button
+      aria-haspopup="dialog"
+      className="block cursor-zoom-in rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      onClick={onOpen}
+      ref={button}
+      type="button"
+    >
+      <AttachmentImage name={parts.name} size={parts.size} small={false} src={parts.src} />
+    </button>
   );
 }

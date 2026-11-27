@@ -24,27 +24,38 @@ interface FileCoverage {
 type PageCoverage = Readonly<Record<string, FileCoverage>>;
 interface FunctionCoverage {
   readonly called: boolean;
+  readonly source: number;
   readonly span: Span;
 }
 interface Segment {
   readonly line: number;
   readonly offset: number;
+  readonly source: number;
+}
+interface SourceMapped {
+  readonly segments: readonly Segment[];
+  readonly sources: readonly string[];
 }
 
 type Served = readonly [string, Outcome<FileCoverage>];
 
 const APP_SOURCE = /^app\/.+\.(?:js|ts|tsx)$/v;
-const INLINE_MAP = "//# sourceMappingURL=data:application/json;base64,";
+const BUNDLE = /^assets\/[^\/]+\.js$/v;
+const INLINE_MAP = "//# sourceMappingURL=data:application/json;";
+const BASE64 = "base64,";
 const BLANK = new URL("about:blank");
-const NO_SEGMENT: Segment = { line: 0, offset: 0 };
+const NO_SEGMENT: Segment = { line: 0, offset: 0, source: -1 };
 const GENERATED_ONLY = 1;
 const NEXT = 1;
 const NOT_FOUND = -1;
 const NONE = 0;
 const HALF = 2;
 
-function appFile(url: string): string {
-  const file = (URL.parse(url) ?? BLANK).pathname.slice(NEXT);
+function servedPath(url: string): string {
+  return (URL.parse(url) ?? BLANK).pathname.slice(NEXT);
+}
+
+function appFile(file: string): string {
   if (!APP_SOURCE.test(file)) {
     return "";
   }
@@ -59,24 +70,38 @@ function lineStarts(source: string): readonly number[] {
   return starts;
 }
 
-function segmentsOf(source: string): Outcome<readonly Segment[]> {
+function inlineMap(source: string): string {
   const at = source.lastIndexOf(INLINE_MAP);
-  if (at === NOT_FOUND) {
+  const encodedAt = source.indexOf(BASE64, at);
+  if (at === NOT_FOUND || encodedAt === NOT_FOUND) {
+    return "";
+  }
+  return source.slice(encodedAt + BASE64.length).trim();
+}
+
+function sourceMapped(source: string): Outcome<SourceMapped> {
+  const encoded = inlineMap(source);
+  if (encoded === "") {
     return { ok: false, reason: "no source map" };
   }
-  const encoded = source.slice(at + INLINE_MAP.length).trim();
   const starts = lineStarts(source);
-  const segments = decodedMappings(new TraceMap(Buffer.from(encoded, "base64").toString("utf8"))).flatMap(
-    (line: readonly Readonly<SourceMapSegment>[], generatedLine: number) =>
-      line.flatMap((segment: Readonly<SourceMapSegment>): readonly Segment[] => {
-        if (segment.length === GENERATED_ONLY) {
-          return [];
-        }
-        const [column, , originalLine] = segment;
-        return [{ line: originalLine + NEXT, offset: (starts[generatedLine] ?? NONE) + column }];
-      }),
+  const map = new TraceMap(Buffer.from(encoded, "base64").toString("utf8"));
+  const segments = decodedMappings(map).flatMap((line: readonly Readonly<SourceMapSegment>[], generatedLine: number) =>
+    line.flatMap((segment: Readonly<SourceMapSegment>): readonly Segment[] => {
+      if (segment.length === GENERATED_ONLY) {
+        return [];
+      }
+      const [column, sourceIndex, originalLine] = segment;
+      return [{ line: originalLine + NEXT, offset: (starts[generatedLine] ?? NONE) + column, source: sourceIndex }];
+    }),
   );
-  return { ok: true, value: segments.toSorted((left, right) => left.offset - right.offset) };
+  return {
+    ok: true,
+    value: {
+      segments: segments.toSorted((left, right) => left.offset - right.offset),
+      sources: map.sources.map((file) => file ?? ""),
+    },
+  };
 }
 
 function firstAtOrAfter(segments: readonly Segment[], offset: number): number {
@@ -93,25 +118,33 @@ function firstAtOrAfter(segments: readonly Segment[], offset: number): number {
   return low;
 }
 
-function spanOf(segments: readonly Segment[], { endOffset, startOffset }: Range): readonly Span[] {
-  const first = firstAtOrAfter(segments, startOffset);
-  const last = firstAtOrAfter(segments, endOffset) - NEXT;
-  const firstLine = (segments[first] ?? NO_SEGMENT).line;
-  const lastLine = (segments[last] ?? NO_SEGMENT).line;
-  if (first > last || lastLine < firstLine) {
-    return [];
-  }
-  return [[firstLine, lastLine]];
+function oneSourceSpan(first: Segment, last: Segment): boolean {
+  return first.source === last.source && first.line <= last.line;
 }
 
-function fileCoverage(script: ScriptCoverage, segments: readonly Segment[]): FileCoverage {
+function functionOf(
+  segments: readonly Segment[],
+  { count, endOffset, startOffset }: Range,
+): readonly FunctionCoverage[] {
+  const firstIndex = firstAtOrAfter(segments, startOffset);
+  const lastIndex = firstAtOrAfter(segments, endOffset) - NEXT;
+  const first = segments[firstIndex] ?? NO_SEGMENT;
+  const last = segments[lastIndex] ?? NO_SEGMENT;
+  if (firstIndex > lastIndex || !oneSourceSpan(first, last)) {
+    return [];
+  }
+  return [{ called: count > NONE, source: first.source, span: [first.line, last.line] }];
+}
+
+function functionsOf(script: ScriptCoverage, segments: readonly Segment[]): readonly FunctionCoverage[] {
   const { length } = script.source ?? "";
-  const ranges = script.functions
+  return script.functions
     .flatMap(({ ranges: [whole] }) => whole ?? [])
-    .filter((range) => range.startOffset !== NONE || range.endOffset < length);
-  const functions = ranges.flatMap((range): readonly FunctionCoverage[] =>
-    spanOf(segments, range).map((span) => ({ called: range.count > NONE, span })),
-  );
+    .filter((range) => range.startOffset !== NONE || range.endOffset < length)
+    .flatMap((range) => functionOf(segments, range));
+}
+
+function fileCoverage(functions: readonly FunctionCoverage[]): FileCoverage {
   return {
     called: functions.filter(({ called }) => called).map(({ span }) => span),
     functions: functions.map(({ span }) => span),
@@ -125,16 +158,39 @@ function okEntry<Value>([key, outcome]: readonly [string, Outcome<Value>]): read
   return [[key, outcome.value]];
 }
 
-function servedFile(script: ScriptCoverage): readonly Served[] {
-  const file = appFile(script.url);
-  if (file === "") {
+function servedModule(script: ScriptCoverage, file: string): readonly Served[] {
+  const mapped = sourceMapped(script.source ?? "");
+  if (!mapped.ok) {
+    return [[file, mapped]];
+  }
+  return [[file, { ok: true, value: fileCoverage(functionsOf(script, mapped.value.segments)) }]];
+}
+
+function servedBundle(script: ScriptCoverage): readonly Served[] {
+  const mapped = sourceMapped(script.source ?? "");
+  if (!mapped.ok) {
     return [];
   }
-  const segments = segmentsOf(script.source ?? "");
-  if (!segments.ok) {
-    return [[file, segments]];
+  const functions = functionsOf(script, mapped.value.segments);
+  return mapped.value.sources.flatMap((source, index): readonly Served[] => {
+    if (appFile(source) === "") {
+      return [];
+    }
+    const own = functions.filter((covered) => covered.source === index);
+    return [[source, { ok: true, value: fileCoverage(own) }]];
+  });
+}
+
+function servedFile(script: ScriptCoverage): readonly Served[] {
+  const served = servedPath(script.url);
+  const file = appFile(served);
+  if (file !== "") {
+    return servedModule(script, file);
   }
-  return [[file, { ok: true, value: fileCoverage(script, segments.value) }]];
+  if (BUNDLE.test(served)) {
+    return servedBundle(script);
+  }
+  return [];
 }
 
 function pageCoverage(scripts: readonly ScriptCoverage[]): Outcome<PageCoverage> {

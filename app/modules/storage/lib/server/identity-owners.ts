@@ -67,9 +67,13 @@ function sqlCreateRefusal(db: SqlDatabase): (identity: Identity) => Fails<Option
 export { memoryDeactivations, sqlDeactivations } from "./identity-deactivations.ts";
 
 export {
+  type AvatarRemovalsSection,
+  type AvatarsToRemove,
   type DeleteIdentityResult,
   type IdentityDeletesSection,
+  memoryAvatarRemovals,
   memoryRemoveIdentity,
+  sqlAvatarRemovals,
   sqlIdentityDeletes,
 } from "./identity-deletes.ts";
 

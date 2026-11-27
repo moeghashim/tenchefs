@@ -9,10 +9,18 @@ import { isoTimeOf } from "../../../time/server.ts";
 interface OpenedStream {
   readonly caller: Identity;
   readonly authorization: string | undefined;
+  readonly runner: boolean;
 }
 
 const WATCH: LiveConnectionDetail = { via: "watch" };
 const WEB: LiveConnectionDetail = { via: "web" };
+
+function runnerOf(runner: boolean): Connection["runner"] {
+  if (runner) {
+    return "asleep";
+  }
+  return "not a runner";
+}
 
 function joinedHost(identity: IdentityName): Effect.Effect<Option.Option<string>, never, Storage> {
   return Effect.gen(function* findJoinedHost() {
@@ -26,21 +34,22 @@ function joinedHost(identity: IdentityName): Effect.Effect<Option.Option<string>
 const connectionOf = Effect.fnUntraced(function* detailOfConnection({
   authorization,
   caller,
+  runner,
 }: OpenedStream): Effect.fn.Return<Connection, never, Storage> {
   if (Predicate.isUndefined(authorization)) {
     const loginCredential = yield* LoginCredentialSent;
-    return { detail: WEB, sentWith: { kind: "web", loginCredential } };
+    return { detail: WEB, runner: "not a runner", sentWith: { kind: "web", loginCredential } };
   }
   const sent = yield* AgentSessionSent;
   if (Option.isNone(sent)) {
-    return { detail: WATCH, sentWith: { kind: "identity token" } };
+    return { detail: WATCH, runner: runnerOf(runner), sentWith: { kind: "identity token" } };
   }
   const host = yield* joinedHost(caller.name);
   const detail = Option.match(host, {
     onNone: () => WATCH,
     onSome: (joinedFrom): LiveConnectionDetail => ({ host: joinedFrom, via: "watch" }),
   });
-  return { detail, sentWith: { hash: sent.value, kind: "agent session" } };
+  return { detail, runner: runnerOf(runner), sentWith: { hash: sent.value, kind: "agent session" } };
 });
 
 export { connectionOf };

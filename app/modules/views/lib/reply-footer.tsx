@@ -25,14 +25,5 @@ export function ReplyFooter(props: ReplyFooterProps): ReactNode {
   if (state.status !== "loaded") {
     return null;
   }
-  return (
-    <MessageBox
-      draft={props.draft}
-      focused={props.focused}
-      onPost={handleReply}
-      onSchedule={null}
-      post={state.reply}
-      text={text}
-    />
-  );
+  return <MessageBox draft={props.draft} focused={props.focused} onPost={handleReply} post={state.reply} text={text} />;
 }

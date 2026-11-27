@@ -1,6 +1,6 @@
 import type { ChannelMessagesState, MessageBeforeState, ThreadMessagesState } from "./message-selectors.ts";
 import type { ChannelName, ScheduledMessageId } from "../../sdk/index.ts";
-import type { ChannelsState, CommandsState } from "./listed-slices.ts";
+import type { ChannelsState, WebhookCommandsState } from "./listed-slices.ts";
 import { channelMessages, messageBefore, threadMessages } from "./message-selectors.ts";
 import type { BoardState } from "./board-store.ts";
 import type { ClosingRefusal } from "./thread-closing.ts";
@@ -17,8 +17,8 @@ function deletedChannelNotice(state: BoardState): ChannelName | null {
   return state.notice;
 }
 
-function commandList(state: BoardState): CommandsState {
-  return state.commands;
+function webhookCommandList(state: BoardState): WebhookCommandsState {
+  return state.webhookCommands;
 }
 
 function subscribedChannels(state: BoardState): SubscriptionsState {
@@ -74,7 +74,7 @@ export {
   channelList,
   channelPage,
   closingRefusal,
-  commandList,
+  webhookCommandList,
   deletedChannelNotice,
   deletedSchedules,
   messageBeforeOf,

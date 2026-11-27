@@ -1,5 +1,5 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
-import type { ChannelsState, CommandsState } from "./listed-slices.ts";
+import type { ChannelsState, WebhookCommandsState } from "./listed-slices.ts";
 import type { OwnClient, OwnParts, Schedules } from "./own-parts.ts";
 import type { BoardCalls } from "./board-calls.ts";
 import type { ChannelPages } from "./channel-pages.ts";
@@ -22,7 +22,7 @@ interface ThreadCalls {
   readonly ack: (place: ThreadPlace, id: MessageId) => void;
 }
 
-type OwnShown = "channels" | "commands" | "schedules" | "subscriptions";
+type OwnShown = "channels" | "webhookCommands" | "schedules" | "subscriptions";
 
 interface OwnShowing {
   readonly channelPages: ChannelPageCalls;
@@ -35,7 +35,7 @@ interface OwnShowing {
 interface OwnState {
   readonly channels: ChannelsState;
   readonly notice: ChannelName | null;
-  readonly commands: CommandsState;
+  readonly webhookCommands: WebhookCommandsState;
   readonly schedules: Schedules;
   readonly subscriptions: SubscriptionsState;
   readonly messages: MessagesHeld;
@@ -117,18 +117,18 @@ function createOwn(options: OwnOptions): Own {
     state: () => ({
       channels: parts.channels.state(),
       closingRefusal: parts.calls.closingRefusal(),
-      commands: parts.commands.state(),
       messageDeleting: parts.calls.deleting(),
       messages: parts.messages.state(),
       notice: parts.notice(),
       schedules: parts.schedules.state(),
       subscriptions: parts.subscriptions.state(),
+      webhookCommands: parts.webhookCommands.state(),
     }),
     subscribers: (following) => ({
       channels: showingPart(following, parts.channels),
-      commands: showingPart(following, parts.commands),
       schedules: showingPart(following, parts.schedules),
       subscriptions: showingPart(following, parts.subscriptions),
+      webhookCommands: showingPart(following, parts.webhookCommands),
     }),
   };
 }

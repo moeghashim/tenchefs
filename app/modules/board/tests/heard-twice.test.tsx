@@ -11,7 +11,7 @@ type Shown = Parameters<BoardStore["subscribeShowing"]>[number];
 
 const SLICES: readonly Shown[] = [
   "channels",
-  "commands",
+  "webhookCommands",
   "identities",
   "inbox",
   "presence",

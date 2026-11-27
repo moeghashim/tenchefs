@@ -1,3 +1,4 @@
+import { Array as Arr, Context, Effect, Layer, Ref } from "effect";
 import {
   AssetStore,
   StorageUnavailable,
@@ -5,7 +6,6 @@ import {
   memoryStorage,
   sqliteStorage,
 } from "../../../storage/server.ts";
-import { Context, Effect, Layer } from "effect";
 import type { FileSystem, Path, Scope } from "effect";
 import {
   ScriptedTriggers,
@@ -36,7 +36,7 @@ interface BackingOptions {
   readonly storage?: StorageKind;
   readonly secrets?: "test" | "live";
   readonly triggers?: "receiver" | "scripted";
-  readonly assets?: "failing-removes";
+  readonly assets?: "failing-removes" | "first-remove-fails";
 }
 
 type Stores = Storage | AssetStore;
@@ -75,9 +75,33 @@ const failingRemoves: Layer.Layer<AssetStore, never, AssetStore> = Layer.effect(
   })),
 );
 
+const firstRemoveFails: Layer.Layer<AssetStore, never, AssetStore> = Layer.effect(
+  AssetStore,
+  Effect.gen(function* failFirstRemove() {
+    const assets = yield* AssetStore;
+    const failed = yield* Ref.make(false);
+    return {
+      ...assets,
+      remove: (ids) =>
+        Effect.flatMap(Ref.get(failed), (already) => {
+          if (already || Arr.isReadonlyArrayEmpty(ids)) {
+            return assets.remove(ids);
+          }
+          return Effect.andThen(
+            Ref.set(failed, true),
+            Effect.fail(StorageUnavailable.make({ message: "The test made this asset store fail to remove once." })),
+          );
+        }),
+    };
+  }),
+);
+
 function withAssets(stores: Layer.Layer<Stores>, assets: BackingOptions["assets"]): Layer.Layer<Stores> {
   if (assets === "failing-removes") {
     return Layer.merge(stores, Layer.provide(failingRemoves, stores));
+  }
+  if (assets === "first-remove-fails") {
+    return Layer.merge(stores, Layer.provide(firstRemoveFails, stores));
   }
   return stores;
 }

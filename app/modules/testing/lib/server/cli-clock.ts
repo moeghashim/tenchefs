@@ -1,8 +1,8 @@
 import { Array as Arr, Deferred, Duration, Effect, Fiber } from "effect";
-import type { CliResult, CommandLineNeeds } from "./cli.ts";
+import type { CliResult, CommandLineNeeds } from "./command-line.ts";
 import type { Console, Scope } from "effect";
 import { TestClock, TestConsole } from "effect/testing";
-import { cliResult, exitCodeAfter, exitCodeOf, verbLayers } from "./cli.ts";
+import { cliResult, exitCodeAfter, exitCodeOf, verbLayers } from "./command-line.ts";
 import { runCookout as runCommandLine } from "../../../cli/server.ts";
 
 interface RunWhile<During, DuringNeeds> {

@@ -9,7 +9,10 @@ import { sqlOpenThreads } from "./open-threads-sqlite.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
-type ClosedThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads">;
+type ClosedThreadsSection = Pick<
+  MessagesSection,
+  "closeThread" | "reopenThread" | "listOpenThreads" | "setThreadTitle" | "clearThreadTitle"
+>;
 
 interface ClosedThreadsOptions {
   readonly db: SqlDatabase;
@@ -26,6 +29,11 @@ const REOPEN =
   "UPDATE messages SET closed_at = NULL, closed_by = NULL WHERE id = ? AND closed_at IS NOT NULL RETURNING id";
 const REOPEN_AT = `UPDATE messages SET closed_at = NULL, closed_by = NULL, reopened_at = ?
   WHERE id = ? AND closed_at IS NOT NULL RETURNING id`;
+
+const SET_TITLE = `UPDATE messages SET title = ?, title_set_by = ?, title_set_at = ?
+  WHERE id = ? AND (title IS NULL OR title <> ?) RETURNING id`;
+const CLEAR_TITLE = `UPDATE messages SET title = NULL, title_set_by = NULL, title_set_at = NULL
+  WHERE id = ? AND title IS NOT NULL RETURNING id`;
 
 function isTopLevel(message: Message): message is TopLevelMessage {
   return message.kind === "top-level";
@@ -77,9 +85,12 @@ function sqlClosedThreads(options: ClosedThreadsOptions): ClosedThreadsSection {
   const { db } = options;
   return {
     ...sqlOpenThreads(options),
+    clearThreadTitle: (id) => changeThread(options, id, (parent) => db.get(CLEAR_TITLE, parent)),
     closeThread: (id, { closedAt, closedBy }) =>
       changeThread(options, id, (parent) => db.get(CLOSE, closedAt, closedBy, parent)),
     reopenThread: (id, reopenedAt) => changeThread(options, id, (parent) => db.get(REOPEN_AT, reopenedAt, parent)),
+    setThreadTitle: (id, { title, titleSetAt, titleSetBy }) =>
+      changeThread(options, id, (parent) => db.get(SET_TITLE, title, titleSetBy, titleSetAt, parent, title)),
   };
 }
 

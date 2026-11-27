@@ -2,12 +2,15 @@ import type { ActionMenuParts } from "./menu-parts.ts";
 import { CloseLink } from "./close-link.tsx";
 import { PanelAloneLink } from "./panel-alone-link.tsx";
 import type { PanelAloneParts } from "./panel-alone-parts.ts";
-import { PanelTitle } from "./panel-title.tsx";
+import { PanelTitleArea } from "./panel-title-area.tsx";
+import type { PanelTitling } from "./panel-titling-parts.ts";
 import type { ReactNode } from "react";
 
 interface SidePanelHeaderParts {
   readonly label: string;
   readonly detail: string;
+  readonly title?: string | null | undefined;
+  readonly titling?: PanelTitling | null | undefined;
   readonly closeHref: string;
   readonly closeLabel: string;
   readonly menu?: ActionMenuParts | null | undefined;
@@ -36,7 +39,13 @@ export function SidePanelHeader(parts: SidePanelHeaderParts): ReactNode {
   const { after, before } = aloneLinks(parts.alone ?? null);
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-5">
-      <PanelTitle detail={parts.detail} label={parts.label} menu={parts.menu ?? null} />
+      <PanelTitleArea
+        detail={parts.detail}
+        label={parts.label}
+        menu={parts.menu ?? null}
+        title={parts.title ?? null}
+        titling={parts.titling}
+      />
       <PanelAloneLink link={before} />
       <CloseLink href={parts.closeHref} label={parts.closeLabel} onFollow={parts.onClose ?? null} />
       <PanelAloneLink link={after} />

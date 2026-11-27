@@ -6,6 +6,8 @@ const PEOPLE = 'ul[aria-label="Identities"]';
 const ROWS = `${PEOPLE} > li a[href]`;
 const STEPS = { next: 1, previous: -1 } as const;
 const FIRST = 0;
+const LAST = 1;
+const NO_STEP = 0;
 const NOT_FOUND = -1;
 
 interface PeopleKeysOf {
@@ -50,17 +52,30 @@ function beside(by: number): number {
   return NOT_FOUND;
 }
 
-function step({ moved, open, shown }: Stepping, by: number): Act {
+function moveTo({ moved, open, shown }: Stepping, at: number): boolean {
+  const row = rows()[at] ?? null;
+  const name = shown[at] ?? null;
+  if (!(row instanceof HTMLElement) || name === null) {
+    return false;
+  }
+  moved({ name, open });
+  row.focus();
+  return true;
+}
+
+function step(stepping: Stepping, by: number): Act {
+  return () => moveTo(stepping, beside(by));
+}
+
+function end(stepping: Stepping, last: boolean): Act {
   return () => {
-    const at = beside(by);
-    const row = rows()[at] ?? null;
-    const name = shown[at] ?? null;
-    if (!(row instanceof HTMLElement) || name === null) {
+    if (beside(NO_STEP) === NOT_FOUND) {
       return false;
     }
-    moved({ name, open });
-    row.focus();
-    return true;
+    if (last) {
+      return moveTo(stepping, rows().length - LAST);
+    }
+    return moveTo(stepping, FIRST);
   };
 }
 
@@ -82,7 +97,12 @@ function usePeopleKeys(keys: PeopleKeysOf): IdentityName | null {
   useEffect(() => {
     const stepping = { moved: setMoved, open, shown };
     return keymap.bind({
-      actions: { nextPerson: step(stepping, STEPS.next), previousPerson: step(stepping, STEPS.previous) },
+      actions: {
+        firstPerson: end(stepping, false),
+        lastPerson: end(stepping, true),
+        nextPerson: step(stepping, STEPS.next),
+        previousPerson: step(stepping, STEPS.previous),
+      },
       scope: "people list",
       within: peopleList,
     });

@@ -74,7 +74,7 @@ it("marking all as read is off while nothing is unread", { timeout: 5000 }, asyn
   const unmount = openAt({ client: reader, hash: "#/inbox" });
   await screen.findByText("You're all caught up.");
 
-  expect(inPane().getByRole("button", { name: "Mark all as read" })).toHaveProperty("disabled", true);
+  expect(inPane().getByRole("button", { name: "Mark all as read" }).getAttribute("aria-disabled")).toBe("true");
 
   unmount();
 });

@@ -5,19 +5,9 @@ interface Numbered {
   readonly number: number;
 }
 
-interface Rename {
-  readonly from: Numbered;
-  readonly to: Numbered;
-}
-
 interface Renumbering {
   readonly added: readonly string[];
   readonly v1: readonly string[];
-}
-
-interface References {
-  readonly renames: readonly Rename[];
-  readonly text: string;
 }
 
 const WIDTH = 4;
@@ -70,37 +60,4 @@ function takenOnV1({ added, v1 }: Renumbering): readonly string[] {
   });
 }
 
-function renumbering({ added, v1 }: Renumbering): readonly Rename[] {
-  const highest = Math.max(NONE, ...numbered(v1).map((adr) => adr.number));
-  const ours = numbered(added);
-  if (ours.every((adr) => adr.number > highest)) {
-    return [];
-  }
-  return ours.map((adr, index) => {
-    const number = highest + index + ONE;
-    const file = path.join(path.dirname(adr.file), `${padded(number)}${path.basename(adr.file).slice(WIDTH)}`);
-    return { from: adr, to: { file, number } };
-  });
-}
-
-function escaped(text: string): string {
-  return text.replaceAll(/[$()*+.?[\\\]^{|}]/gu, String.raw`\$&`);
-}
-
-function rewriteReferences({ renames, text }: References): string {
-  const replacements = new Map(
-    renames.flatMap((rename) => [
-      [path.basename(rename.from.file), path.basename(rename.to.file)],
-      [`ADR ${padded(rename.from.number)}`, `ADR ${padded(rename.to.number)}`],
-    ]),
-  );
-  if (replacements.size === NONE) {
-    return text;
-  }
-  const keys = [...replacements.keys()].map((key) => escaped(key));
-  const pattern = new RegExp(`(?:${keys.join("|")})(?!\\d)`, "gu");
-  return text.replaceAll(pattern, (found) => replacements.get(found) ?? found);
-}
-
-export type { Rename };
-export { duplicateNumbers, renumbering, rewriteReferences, takenOnV1 };
+export { duplicateNumbers, takenOnV1 };

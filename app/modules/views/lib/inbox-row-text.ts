@@ -8,6 +8,9 @@ const START = 0;
 const ELLIPSIS = 1;
 
 function contextOf(item: InboxItem): string | null {
+  if (typeof item.parent.title === "string") {
+    return item.parent.title;
+  }
   if (item.message.kind !== "reply") {
     return null;
   }

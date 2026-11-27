@@ -89,16 +89,18 @@ function stubClipboard(): Mock<(text: string) => Promise<void>> {
   return writeText;
 }
 
-it("right-clicking a thread's header opens its actions menu, every item with an icon", { timeout: 5000 }, async () => {
+it("right-clicking a thread's header opens its actions menu, every item with an icon and its key", {
+  timeout: 5000,
+}, async () => {
   expect.hasAssertions();
 
   const { close } = await openThread("web-thread-menu-right");
   fireEvent.contextMenu(within(header()).getByRole("heading", { name: "Thread" }));
 
   await expect(menuItems(MENU)).resolves.toStrictEqual([
-    ["Close", true],
-    ["Mark unread", true],
-    ["Copy link", true],
+    ["Closex", true],
+    ["Mark unreadAlt+Enter", true],
+    ["Copy linkl", true],
   ]);
 
   close();
@@ -111,9 +113,9 @@ it("a thread header's More actions button opens the same menu", { timeout: 5000 
   pressed(headerMoreActions);
 
   await expect(menuItems("More actions")).resolves.toStrictEqual([
-    ["Close", true],
-    ["Mark unread", true],
-    ["Copy link", true],
+    ["Closex", true],
+    ["Mark unreadAlt+Enter", true],
+    ["Copy linkl", true],
   ]);
 
   close();
@@ -193,6 +195,101 @@ it("copy link in a thread header's menu puts the thread's full URL on the clipbo
   await waitFor(() => {
     expect(writeText.mock.calls).toStrictEqual([[new URL(hash, globalThis.location.href).href]]);
   });
+
+  close();
+});
+
+function pressOnTitle(key: string, altKey = false): void {
+  const heading = within(header()).getByRole("heading", { name: "Thread" });
+  heading.focus();
+  fireEvent.keyDown(heading, { altKey, key });
+}
+
+interface Pressing {
+  readonly answered: Answering["answered"];
+  readonly method: ClientMethod;
+  readonly shown: string;
+}
+
+async function pressedAndAnswered({ answered, method, shown }: Pressing): Promise<void> {
+  pressOnTitle("x");
+  await answered(method);
+  await inThread().findEnabledButton(shown);
+}
+
+it("x on a thread's focused title closes the thread, and x again reopens it", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const { answered, close, parent, reader } = await openThread("web-thread-title-x");
+  await pressedAndAnswered({ answered, method: "closeThread", shown: "Reopen thread" });
+  const closedBy = await closedByOf(reader, parent);
+  await pressedAndAnswered({ answered, method: "reopenThread", shown: "Close thread" });
+
+  expect([closedBy, await closedByOf(reader, parent)]).toStrictEqual([expect.stringMatching(/-reader$/u), null]);
+
+  close();
+});
+
+it("alt+Enter on a thread's focused title marks the thread's parent unread", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const { answered, close, reader } = await openThread("web-thread-title-unread");
+  await answeredUntil({
+    answered,
+    done: async () => {
+      const { items } = await reader.inbox();
+      return items.length === NONE;
+    },
+    method: "ack",
+  });
+  pressOnTitle("Enter", true);
+  await answered("markUnread");
+
+  await waitFor(async () => {
+    const { items } = await reader.inbox();
+
+    expect(items.map((item) => item.message.text)).toContain("Deploy?");
+  });
+
+  close();
+});
+
+it("l on a thread's focused title copies the thread's full URL", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const writeText = stubClipboard();
+  const { close, hash } = await openThread("web-thread-title-copy");
+  pressOnTitle("l");
+
+  await waitFor(() => {
+    expect(writeText.mock.calls).toStrictEqual([[new URL(hash, globalThis.location.href).href]]);
+  });
+
+  close();
+});
+
+it("x in the thread's reply box types, closing nothing", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { close } = await openThread("web-thread-title-box");
+  const box = within(inThread().element()).getByRole("textbox", { name: /reply/iu });
+  fireEvent.keyDown(box, { key: "x" });
+  fireEvent.keyDown(box, { altKey: true, key: "Enter" });
+
+  await expect(inThread().findEnabledButton("Close thread")).resolves.toBeDefined();
+
+  close();
+});
+
+it("x on the thread header's More actions button closes nothing", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { close } = await openThread("web-thread-title-more");
+  const button = headerMoreActions();
+  button.focus();
+  fireEvent.keyDown(button, { key: "x" });
+
+  await expect(inThread().findEnabledButton("Close thread")).resolves.toBeDefined();
 
   close();
 });

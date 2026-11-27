@@ -5,6 +5,7 @@ type Command = (args: readonly string[]) => Outcome<string>;
 
 interface CheckRunOn {
   readonly conclusion: string;
+  readonly event: string;
   readonly sha: string;
   readonly status: string;
   readonly url: string;
@@ -45,6 +46,8 @@ type Judged = { readonly green: true; readonly url: string } | { readonly green:
 const GREEN = "success";
 const CANCELLED = "cancelled";
 const COMPLETED = "completed";
+const PUSH = "push";
+const DISPATCH = "workflow_dispatch";
 const NONE = 0;
 const DEPTH = 50;
 const RUNS = 200;
@@ -53,14 +56,12 @@ const RUN_LIST = [
   "list",
   "--workflow",
   "Check",
-  "--event",
-  "push",
   "--branch",
   "v1",
   "--limit",
   String(RUNS),
   "--json",
-  "headSha,status,conclusion,url",
+  "headSha,status,conclusion,url,event",
 ] as const;
 
 function textOf(value: unknown, key: string): string {
@@ -72,7 +73,22 @@ function runOf(value: unknown): readonly CheckRunOn[] {
   if (sha === "") {
     return [];
   }
-  return [{ conclusion: textOf(value, "conclusion"), sha, status: textOf(value, "status"), url: textOf(value, "url") }];
+  return [
+    {
+      conclusion: textOf(value, "conclusion"),
+      event: textOf(value, "event"),
+      sha,
+      status: textOf(value, "status"),
+      url: textOf(value, "url"),
+    },
+  ];
+}
+
+function runsJudging(all: readonly CheckRunOn[], sha: string, commits: readonly string[]): readonly CheckRunOn[] {
+  const runs = all.filter((run) => run.sha === sha);
+  const [head] = commits;
+  const [newest] = runs;
+  return runs.filter((run) => run.event === PUSH || (sha === head && run === newest && run.event === DISPATCH));
 }
 
 function notGreen(runs: readonly CheckRunOn[]): Judged {
@@ -105,7 +121,7 @@ function chooseReleaseCommit({ commits, runs }: Choosing): Choice {
   const parsed = runs.flatMap((value) => runOf(value));
   const lines: string[] = [];
   for (const sha of commits) {
-    const verdict = judged(parsed.filter((run) => run.sha === sha));
+    const verdict = judged(runsJudging(parsed, sha, commits));
     if (verdict.green) {
       lines.push(`chose ${sha}: its Check run is green (${verdict.url})`);
       return { chosen: { sha, url: verdict.url }, lines };

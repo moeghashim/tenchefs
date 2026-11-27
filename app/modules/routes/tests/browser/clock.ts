@@ -16,12 +16,16 @@ interface ClockFixtures {
   readonly ownCookout: OwnCookout;
 }
 
-const clockFixtures: Fixtures<ClockFixtures, object, PlaywrightTestArgs & PlaywrightTestOptions> = {
+interface ClockOptions {
+  readonly webFolder: string;
+}
+
+const clockFixtures: Fixtures<ClockFixtures & ClockOptions, object, PlaywrightTestArgs & PlaywrightTestOptions> = {
   baseURL: async ({ ownCookout }, provide) => {
     await provide(ownCookout.webUrl);
   },
-  ownCookout: async ({ request: _request }, provide) => {
-    const cookout = await startDevCookout({});
+  ownCookout: async ({ webFolder }, provide) => {
+    const cookout = await startDevCookout({ webFolder });
     const { adminToken, clockUrl, webUrl } = cookout;
     const admin = testClient({ token: adminToken, url: webUrl });
     async function newIdentity(request: CreateIdentityRequest): Promise<Person> {
@@ -37,6 +41,7 @@ const clockFixtures: Fixtures<ClockFixtures, object, PlaywrightTestArgs & Playwr
       await cookout.stop();
     }
   },
+  webFolder: ["", { option: true }],
 };
 
-export { type ClockFixtures, type OwnCookout, clockFixtures };
+export { type ClockFixtures, type ClockOptions, type OwnCookout, clockFixtures };

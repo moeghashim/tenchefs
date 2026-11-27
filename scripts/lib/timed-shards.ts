@@ -1,4 +1,4 @@
-import type { Gh, Reading, Recorded, Timings } from "./recorded-timings.ts";
+import type { Download, Gh, Reading, Recorded, Timings } from "./recorded-timings.ts";
 import type { FileTiming } from "./slowest-files.ts";
 import type { Outcome } from "./tools.ts";
 import { readTimings } from "./slowest-files.ts";
@@ -6,6 +6,7 @@ import { recordedTimings } from "./recorded-timings.ts";
 
 interface Splitting {
   readonly files: readonly string[];
+  readonly groupOf: (file: string) => string;
   readonly name: string;
   readonly shard: string;
   readonly timings: readonly FileTiming[];
@@ -17,8 +18,10 @@ interface Split {
 }
 
 interface Fetching {
+  readonly download?: Download;
   readonly gh: Gh;
   readonly run: string;
+  readonly sleep?: (ms: number) => void;
 }
 
 interface Shard {
@@ -28,7 +31,12 @@ interface Shard {
 
 interface Planning extends Fetching {
   readonly files: Outcome<readonly string[]>;
+  readonly groupOf?: (file: string) => string;
   readonly shard: string;
+}
+
+interface Loaded extends Split {
+  readonly group: number;
 }
 
 interface Recording extends Timings {
@@ -90,27 +98,59 @@ function weighed(files: readonly string[], recorded: ReadonlyMap<string, number>
     .toSorted((left, right) => right.seconds - left.seconds || left.file.localeCompare(right.file));
 }
 
-function withFile(shards: readonly Split[], { file, seconds }: FileTiming): readonly Split[] {
-  const least = Math.min(...shards.map((shard) => shard.seconds));
-  const at = shards.findIndex((shard) => shard.seconds === least);
-  return shards.map((shard, index) => {
-    if (index !== at) {
+function oneGroup(): string {
+  return "";
+}
+
+function withFile(shards: readonly Loaded[], { file, seconds }: FileTiming): readonly Loaded[] {
+  const [least] = shards.toSorted((left, right) => left.group - right.group || left.seconds - right.seconds);
+  return shards.map((shard) => {
+    if (shard !== least) {
       return shard;
     }
-    return { files: [...shard.files, file], seconds: shard.seconds + seconds };
+    return { files: [...shard.files, file], group: shard.group + seconds, seconds: shard.seconds + seconds };
   });
 }
 
-function split(weights: readonly FileTiming[], { index, total }: Shard): Split {
-  let shards: readonly Split[] = Array.from({ length: total }, () => EMPTY);
+type Group = readonly [string, readonly FileTiming[]];
+
+function nameOf([name]: Group): string {
+  return name;
+}
+
+function totalOf([, group]: Group): number {
+  return sum(group.map(({ seconds }) => seconds));
+}
+
+function groupsOf(
+  weights: readonly FileTiming[],
+  groupOf: (file: string) => string,
+): readonly (readonly FileTiming[])[] {
+  const groups = new Map<string, readonly FileTiming[]>();
   for (const weight of weights) {
-    shards = withFile(shards, weight);
+    const group = groupOf(weight.file);
+    groups.set(group, [...(groups.get(group) ?? []), weight]);
+  }
+  return [...groups.entries()]
+    .toSorted(
+      (left: Group, right: Group) => totalOf(right) - totalOf(left) || nameOf(left).localeCompare(nameOf(right)),
+    )
+    .map(([, group]: Group) => group);
+}
+
+function split(weights: readonly FileTiming[], { index, total }: Shard, groupOf: (file: string) => string): Split {
+  let shards: readonly Loaded[] = Array.from({ length: total }, () => ({ ...EMPTY, group: NONE }));
+  for (const group of groupsOf(weights, groupOf)) {
+    shards = shards.map((shard) => ({ ...shard, group: NONE }));
+    for (const weight of group) {
+      shards = withFile(shards, weight);
+    }
   }
   const { files, seconds } = shards[index - FIRST] ?? EMPTY;
   return { files: files.toSorted(), seconds };
 }
 
-function shardByTime({ files, name, shard, timings }: Splitting): Outcome<Split> {
+function shardByTime({ files, groupOf, name, shard, timings }: Splitting): Outcome<Split> {
   const parsed = shardOf(shard);
   if (!parsed.ok) {
     return parsed;
@@ -119,7 +159,7 @@ function shardByTime({ files, name, shard, timings }: Splitting): Outcome<Split>
   if (recorded.size === NONE) {
     return { ok: false, reason: `no ${name} test file has a recorded time` };
   }
-  return { ok: true, value: split(weighed(files, recorded), parsed.value) };
+  return { ok: true, value: split(weighed(files, recorded), parsed.value, groupOf) };
 }
 
 interface Timed {
@@ -127,14 +167,14 @@ interface Timed {
   readonly recorded: Recorded;
 }
 
-function recordedFor({ files, gh, run }: Planning, recording: Recording): Reading<Timed> {
+function recordedFor({ files, ...fetching }: Planning, recording: Recording): Reading<Timed> {
   if (!files.ok) {
     return { kind: "unrecorded", reason: files.reason };
   }
-  if (run === "") {
+  if (fetching.run === "") {
     return { kind: "unrecorded", reason: "this isn't a GitHub Actions run" };
   }
-  const recorded = recordedTimings({ gh, recording, run });
+  const recorded = recordedTimings({ ...fetching, recording });
   if (recorded.kind !== "read") {
     return recorded;
   }
@@ -147,7 +187,13 @@ function timedPlan(planning: Planning, recording: Recording): Reading<Plan> {
     return found;
   }
   const { all, recorded } = found.value;
-  const timed = shardByTime({ files: all, name: recording.name, shard: planning.shard, timings: recorded.timings });
+  const timed = shardByTime({
+    files: all,
+    groupOf: planning.groupOf ?? oneGroup,
+    name: recording.name,
+    shard: planning.shard,
+    timings: recorded.timings,
+  });
   if (!timed.ok) {
     return { kind: "unrecorded", reason: timed.reason };
   }

@@ -1,5 +1,5 @@
 import { expect, it, onTestFinished, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { Check } from "../lib/check-runner.ts";
 import path from "node:path";
 import { runChecks } from "../lib/check-runner.ts";
@@ -90,4 +90,68 @@ it("names no skip on a run of one job", { timeout: 10_000 }, async () => {
   const lines = await printed([PASSING], { job: "a" });
 
   expect(lines.some((line) => line.startsWith("skipped:"))).toBe(false);
+});
+
+const MANY = 23;
+const SHOWN = 20;
+const HEADING_MORE_AND_VERDICT = 3;
+const SUMMARY_LINES = SHOWN + HEADING_MORE_AND_VERDICT;
+const LAST_SHOWN = -3;
+const MORE = -2;
+
+function script(file: string): string {
+  return `process.stderr.write(require("node:fs").readFileSync(${JSON.stringify(file)}, "utf8")); process.exit(1);`;
+}
+
+function failingCheck(name: string, file: string): Check {
+  return { budget: 60, command: ["node", "-e", script(file)], job: "a", name };
+}
+
+function summaryOf(lines: readonly string[]): readonly string[] {
+  return lines.slice(lines.indexOf("Failures:"));
+}
+
+function outputFile(content: string): string {
+  const dir = mkdtempSync(path.join(tmpdir(), "check-failures-"));
+  onTestFinished(() => {
+    rmSync(dir, { force: true, recursive: true });
+  });
+  const file = path.join(dir, "output.txt");
+  writeFileSync(file, content);
+  return file;
+}
+
+it("names each failing test and lint violation just before its fail verdict", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const lint = outputFile("app/main.ts:3 eslint(no-magic-numbers) No magic number: 7\n1 new violation in 1 file\n");
+  const lines = await printed([
+    failingCheck("tests", "scripts/tests/fixtures/vitest-failure.txt"),
+    failingCheck("lint", lint),
+  ]);
+
+  expect(summaryOf(lines)).toStrictEqual([
+    "Failures:",
+    "  tests: |server| scripts/tests/zz-sample.test.ts > fails on an assertion",
+    "  tests: |server| scripts/tests/zz-sample.test.ts > fails on a throw",
+    "  lint: app/main.ts:3 eslint(no-magic-numbers)",
+    "RESULT: FAIL (tests, lint)",
+  ]);
+});
+
+it("caps the failures it names at 20 of each kind", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const violations = Array.from(
+    { length: MANY },
+    (_unused, index) => `a.ts:${String(index)} eslint(no-ternary) Ternary`,
+  );
+  const lint = failingCheck("lint", outputFile(`${violations.join("\n")}\n`));
+  const summary = summaryOf(await printed([lint]));
+
+  expect([summary.length, summary.at(LAST_SHOWN), summary.at(MORE)]).toStrictEqual([
+    SUMMARY_LINES,
+    "  lint: a.ts:19 eslint(no-ternary)",
+    "  …and 3 more lint violations",
+  ]);
 });

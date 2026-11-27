@@ -52,7 +52,7 @@ async function expectLastHighlightedInView({ list, options }: Scrolled): Promise
   await expect(list.getByRole("option").nth(FIRST)).not.toBeInViewport();
 }
 
-async function manyCommands(prefix: string): Promise<readonly string[]> {
+async function manyWebhookCommands(prefix: string): Promise<readonly string[]> {
   const names = manyNames(prefix);
   const admin = adminClient();
   await Promise.all(
@@ -88,10 +88,10 @@ test("with 12 mention matches, ↓ 11 times highlights the 12th, scrolled into v
   await expect(box).toHaveValue(`Ping @${names[LAST] ?? ""} `);
 });
 
-test("with 12 command matches, ↓ 11 times highlights the 12th, scrolled into view, and Enter picks it", async ({
+test("with 12 Webhook command matches, ↓ 11 times highlights the 12th, scrolled into view, and Enter picks it", async ({
   page,
 }) => {
-  const names = await manyCommands(unique("browser-many-command"));
+  const names = await manyWebhookCommands(unique("browser-many-command"));
   const box = await messageBoxIn(page, unique("browser-many-commands"));
   await box.pressSequentially(`/${unique("browser-many-command")}`);
   const list = inPane(page).getByRole("listbox", { exact: true, name: "Command suggestions" });

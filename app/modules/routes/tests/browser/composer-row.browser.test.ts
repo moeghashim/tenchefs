@@ -42,21 +42,29 @@ async function openedChannel(channel: string): Promise<Opened> {
   return { channel, thread: String(message.id), token };
 }
 
+async function rowOf(form: Locator): Promise<readonly [Line, Line]> {
+  const send = await lineOf(form.getByRole("button", { exact: true, name: "Send" }));
+  const attach = await lineOf(form.getByRole("button", { exact: true, name: "Attach files" }));
+  return [send, attach];
+}
+
 function channelBox(pane: Locator): Locator {
   return pane.getByRole("form", { exact: true, name: "Post to the channel" });
 }
 
-test("the channel composer's Post later dots share Send's height and vertical centre", async ({ page }) => {
+test("the channel composer's attach button shares Send's height and vertical centre, and Send has no Post later beside it", async ({
+  page,
+}) => {
   const { channel, token } = await openedChannel(unique(`${CHANNEL}-channel`));
   await page.setViewportSize(WIDE);
   await logIn({ page, token });
   await page.goto(`/#/channels/${channel}`);
 
   const form = channelBox(inPane(page));
-  const send = await lineOf(form.getByRole("button", { exact: true, name: "Send" }));
-  const later = await lineOf(form.getByRole("button", { exact: true, name: "Post later" }));
+  const [send, attach] = await rowOf(form);
 
-  expect(later).toStrictEqual(send);
+  expect(attach).toStrictEqual(send);
+  await expect(form.getByRole("button", { exact: true, name: "Post later" })).toHaveCount(NONE);
 });
 
 test("with a thread open, both composers' buttons keep Send's height and centre", async ({ page }) => {
@@ -65,11 +73,9 @@ test("with a thread open, both composers' buttons keep Send's height and centre"
   await logIn({ page, token });
   await page.goto(`/#/channels/${channel}/threads/${thread}`);
 
-  const form = channelBox(inPane(page));
   const reply = inThread(page).getByRole("form", { exact: true, name: "Reply to the thread" });
-  const send = await lineOf(form.getByRole("button", { exact: true, name: "Send" }));
-  const later = await lineOf(form.getByRole("button", { exact: true, name: "Post later" }));
-  const replySend = await lineOf(reply.getByRole("button", { exact: true, name: "Send" }));
+  const [send, attach] = await rowOf(channelBox(inPane(page)));
+  const [replySend, replyAttach] = await rowOf(reply);
 
-  expect([later, replySend.height]).toStrictEqual([send, send.height]);
+  expect([attach, replySend.height, replyAttach]).toStrictEqual([send, send.height, replySend]);
 });

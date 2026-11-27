@@ -1,5 +1,5 @@
-import type { MenuChoice, MoreActionsLook } from "./menu-parts.ts";
 import { Portal, Root } from "@radix-ui/react-dropdown-menu";
+import type { MenuChoice } from "./menu-parts.ts";
 import { MoreActionsButton } from "./more-actions-button.tsx";
 import { MoreActionsContent } from "./more-actions-content.tsx";
 import type { ReactNode } from "react";
@@ -9,7 +9,6 @@ interface MoreActionsParts {
   readonly choices: readonly MenuChoice[];
   readonly label: string;
   readonly inTabOrder?: boolean;
-  readonly look?: MoreActionsLook;
 }
 
 export function MoreActions(parts: MoreActionsParts): ReactNode {
@@ -18,12 +17,7 @@ export function MoreActions(parts: MoreActionsParts): ReactNode {
   const handleReturned = menu.onReturned;
   return (
     <Root onOpenChange={handleOpenChange} open={menu.open}>
-      <MoreActionsButton
-        inTabOrder={parts.inTabOrder ?? true}
-        label={parts.label}
-        look={parts.look ?? "hover"}
-        returning={menu.returning}
-      />
+      <MoreActionsButton inTabOrder={parts.inTabOrder ?? true} label={parts.label} returning={menu.returning} />
       <Portal>
         <MoreActionsContent choices={parts.choices} onReturned={handleReturned} />
       </Portal>

@@ -1,6 +1,6 @@
 /**
  * The test composition root, importable only from tests. `runDev`,
- * `startDev` (`startProbedDev` with `--probe`) and `startFakeRoutine` run the dev program's commands (ADR 0079) in process. It builds the test
+ * `startDev` (`startProbedDev` with `--probe`, `startDevServing` with `--web` and a built web folder) and `startFakeRoutine` run the dev program's commands (ADR 0079) in process. It builds the test
  * Layers (a cookout on port 0 with memory storage and test secrets, its
  * admin on a token it makes and identities seeded through `Storage`, both storage
  * Layers on fresh stores, a store that is unusable). `assetStoreLayers` are the asset store Layers on fresh stores, S3 on
@@ -28,6 +28,8 @@
  * does, and wait until it has answered 502 so many times, or freeze, so it stops answering: open streams send
  * nothing more and every later request waits for ever.
  * `pastOwnPresence` reads an all-channels feed past its own caller coming online, and `watchingAllChannels` opens one so.
+ * `wakingAgents` joins agents with the fake wake command and starts a runner for them, and `runnerEventsIn` and
+ * `untilRunnerEvents` read its event log through `cookout runner logs`.
  * `silentConnection` connects to a server and sends nothing. `cuttableRelay`,
  * from the http module, is a link a test can cut and restore, from another
  * process too, as the browser tests do.
@@ -53,17 +55,41 @@ export {
   startServe,
   type Watched,
   watchCookout,
-} from "./lib/server/cli.ts";
+} from "./lib/server/command-line.ts";
 export { interruptCookout } from "./lib/server/cli-interrupt.ts";
-export { type DevProcess, startDev, startFakeRoutine, startProbedDev } from "./lib/server/dev.ts";
+export { type DevProcess, startDev, startDevServing, startFakeRoutine, startProbedDev } from "./lib/server/dev.ts";
 export {
-  type InterruptedDev,
-  interruptDevBinary,
   runCookoutBinary,
   watchCookoutBinary,
 } from "./lib/server/process.ts";
 export { signalWatchBinary, type StoppedWatch } from "./lib/server/cli-signal.ts";
 export { runCookoutWhile } from "./lib/server/cli-clock.ts";
+export { type FakeWakeSettings, type StartedRunner, fakeWakeCommand, startRunner } from "./lib/server/runner.ts";
+export {
+  type RegistrationFile,
+  type WakeLogLine,
+  agentSessionTokenIn,
+  agentSessionTokensIn,
+  registeredAgentsIn,
+  registrationIn,
+  runnerWritten,
+  wakeEvents,
+  wakeLog,
+} from "./lib/server/wake-runs.ts";
+export {
+  type EventKind,
+  type RunnerEvent,
+  type WakingAgent,
+  type WakingAgents,
+  eventsOfKind,
+  joinedAgent,
+  runnerEventsIn,
+  runnerEventsOf,
+  untilRunnerEvents,
+  wakingAgents,
+} from "./lib/server/runner-events.ts";
+export { type BoardAgent, type WakeBoard, WAKE_CHANNEL, boardAgent, wakeBoard } from "./lib/server/wake-board.ts";
+export { joinWaking, mention, mentions, repliesTo, startsIn } from "./lib/server/wake-agents.ts";
 export { type IdentityFixtureOptions, identityFixture, identityName } from "./lib/server/identities.ts";
 export { type CuttableLink, cuttableLink } from "./lib/server/cuttable-link.ts";
 export { cuttableRelay } from "../http/server.ts";
@@ -103,3 +129,4 @@ export type { LastEnd } from "./lib/server/booted.ts";
 export { fixtureTime, isoTime, testStartTime } from "./lib/server/time.ts";
 export { triggerToken } from "../webhook-fake/server.ts";
 export { type BuiltWeb, builtWebFolder } from "./lib/server/web.ts";
+export { type ServiceHost, type ServiceHostOptions, serviceHost } from "./lib/server/service-host.ts";

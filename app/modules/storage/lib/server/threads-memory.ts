@@ -1,6 +1,6 @@
 import { Array as Arr, Option, Predicate, pipe } from "effect";
 import type { Closing, Message, MessageId, OpenThread, Reply, TopLevelMessage } from "../../../messages/index.ts";
-import type { MessagesSection, NewMessage, ThreadStateChange } from "./messages.ts";
+import type { MessagesSection, NewMessage, ThreadStateChange, Titling } from "./messages.ts";
 import type { OpenThreadsPageRequest, StoredOpenThreadsPage } from "./open-threads.ts";
 import { closingBy, counted, threadIdOf } from "./messages.ts";
 import { involves, lastActivityOf, pageOfOpenThreads } from "./open-threads.ts";
@@ -51,7 +51,10 @@ interface ChangedBy {
   readonly close: NewMessage["close"];
 }
 
-type ThreadsSection = Pick<MessagesSection, "closeThread" | "reopenThread" | "listOpenThreads" | "searchMessages">;
+type ThreadsSection = Pick<
+  MessagesSection,
+  "closeThread" | "reopenThread" | "listOpenThreads" | "searchMessages" | "setThreadTitle" | "clearThreadTitle"
+>;
 
 function findMessage({ id, messages }: Finding): Option.Option<Message> {
   return Arr.findFirst(messages, (message) => message.id === id);
@@ -98,6 +101,21 @@ function reopening(parent: TopLevelMessage): Option.Option<TopLevelMessage> {
   return Option.map(
     Option.liftPredicate(parent, ({ closedAt }) => Predicate.isNotUndefined(closedAt)),
     reopened,
+  );
+}
+
+function titling(titled: Titling): ParentChange {
+  return (parent) =>
+    Option.map(
+      Option.liftPredicate(parent, ({ title }) => title !== titled.title),
+      (other) => ({ ...other, ...titled }),
+    );
+}
+
+function untitling(parent: TopLevelMessage): Option.Option<TopLevelMessage> {
+  return Option.map(
+    Option.liftPredicate(parent, ({ title }) => Predicate.isNotUndefined(title)),
+    ({ title: _title, titleSetAt: _titleSetAt, titleSetBy: _titleSetBy, ...untitled }) => untitled,
   );
 }
 
@@ -189,16 +207,24 @@ function openThreadsIn(
   return pageOfOpenThreads({ page, threads: Arr.map(shown, openThreadOf(data)) });
 }
 
+function changedThread(
+  id: MessageId,
+  change: ParentChange,
+): (data: MemoryThreads) => Changed<ThreadStateChange | undefined> {
+  return (data) => {
+    const [result, next] = changeThread(data, id, change);
+    return [Option.getOrUndefined(result), next];
+  };
+}
+
 function memoryThreads({ change, read }: ThreadsOn): ThreadsSection {
   return {
     ...memorySearch((work) => read((data) => work(data.messages))),
-    closeThread: (id, closed) =>
-      change((data) => {
-        const [result, next] = changeThread(data, id, closing(closed));
-        return [Option.getOrUndefined(result), next];
-      }),
+    clearThreadTitle: (id) => change(changedThread(id, untitling)),
+    closeThread: (id, closed) => change(changedThread(id, closing(closed))),
     listOpenThreads: (identity, page) => read((data) => openThreadsIn(data, identity, page)),
     reopenThread: (id, at) => change((data) => reopenAt(data, { at, id })),
+    setThreadTitle: (id, titled) => change(changedThread(id, titling(titled))),
   };
 }
 

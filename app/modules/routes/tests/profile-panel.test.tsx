@@ -8,6 +8,7 @@ import { testAgentDisplayName } from "../../testing/index.ts";
 import { watched } from "./watched.ts";
 
 const NONE = 0;
+const ONE = 1;
 
 interface Crew {
   readonly human: CookoutClient;
@@ -180,6 +181,58 @@ it("a profile open beside the login page closes to the people page", { timeout: 
   const close = openAt({ client: stranger, hash: `#/login?profile=${prefix}-bot` });
 
   await expect(inProfile().findByRole("link", { name: "Close profile" })).resolves.toHaveProperty("hash", "#/people");
+
+  close();
+});
+
+async function escapedInDisplayName(text: string): Promise<readonly unknown[]> {
+  const form = await inProfile().findByRole("form", { name: "Display name" });
+  const field = within(form).getByRole("textbox");
+  fireEvent.change(field, { target: { value: text } });
+  field.focus();
+  fireEvent.keyDown(field, { key: "Escape" });
+  return [
+    profilePanels(),
+    globalThis.document.activeElement === inProfile().element(),
+    within(form).getByDisplayValue(text) === field,
+  ];
+}
+
+it("the first Escape in a field of the panel leaves it for the panel, keeping the text, and the next closes it", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const prefix = "web-panel-field-escape";
+  const { human } = await crewOf(prefix);
+  const close = openAt({ client: human, hash: `#/channels/${prefix}?profile=${prefix}-human` });
+  const kept = await escapedInDisplayName("Half typed");
+  fireEvent.keyDown(inProfile().element(), { key: "Escape" });
+  await waitFor(() => {
+    expect(profilePanels()).toBe(NONE);
+  });
+
+  expect(kept).toStrictEqual([ONE, true, true]);
+
+  close();
+});
+
+it("an Escape in a field outside the panel, such as the People filter, closes the panel", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const prefix = "web-panel-filter-escape";
+  const { stranger } = await crewOf(prefix);
+  const close = openAt({ client: stranger, hash: `#/people?profile=${prefix}-bot` });
+  await inProfile().findByRole("heading", { level: 3 });
+  const filter = await screen.findByRole("textbox", { name: "Filter by name" });
+  filter.focus();
+  fireEvent.keyDown(filter, { key: "Escape" });
+
+  await waitFor(() => {
+    expect(profilePanels()).toBe(NONE);
+  });
 
   close();
 });

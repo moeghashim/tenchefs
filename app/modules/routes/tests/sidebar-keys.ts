@@ -118,6 +118,7 @@ interface Hanging {
 }
 
 function hangingSubscribe(reader: Readonly<CookoutClient>): Hanging {
+  holdsCallsOpen("subscribe");
   let asked = 0;
   const reached = Promise.withResolvers<boolean>();
   return {

@@ -28,6 +28,11 @@ import { expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import { openAt } from "./render.tsx";
 
+function endPressed(key: string): string {
+  pressed({ key });
+  return focusedName();
+}
+
 it("only one sidebar link is in the tab order, and the row buttons are out of it", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
@@ -58,6 +63,21 @@ it("↑ and ↓ move between the sidebar's links, stopping at the ends, and do n
   pressed({ key: "ArrowDown" });
 
   expect([...moved, focusedName()]).toStrictEqual(["People & agents", "cookout", "Collapse sidebar"]);
+
+  close();
+});
+
+it("home and End move to the sidebar's first and last links, and do nothing off a link", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const close = openAt({ client: await readerOf(channelsOf("web-sidebar-keys-ends")), hash: "#/inbox" });
+  await focusInbox();
+  const ends = [endPressed("End"), endPressed("Home")];
+  focusCollapse();
+
+  expect([...ends, endPressed("End")]).toStrictEqual(["Settings", "cookout", "Collapse sidebar"]);
 
   close();
 });

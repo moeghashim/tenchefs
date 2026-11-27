@@ -1,11 +1,13 @@
 import { Argument, Command, Flag } from "effect/cli";
+import { Effect, Option } from "effect";
 import type { ListOpenThreadsQuery, SearchRequest } from "../../../messages/client.ts";
+import { answer, answered } from "./output.ts";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
+import type { CallFailure } from "./adapters/sdk.ts";
 import type { CommandFailed } from "./output.ts";
 import type { MessageId } from "../../../messages/index.ts";
-import { Option } from "effect";
 import type { SearchSort } from "../../../search/index.ts";
-import { answer } from "./output.ts";
+import { callServer } from "./adapters/sdk.ts";
 import { searchSorts } from "../../../search/index.ts";
 
 type ThreadCommand = Command.Command<"thread", object, object, CommandFailed, AgentSessionStateNeeds>;
@@ -85,6 +87,22 @@ const searchCommand = Command.make(
   ),
 );
 
+const CLEARED = "";
+
+const titleOrClear: CallFailure = { code: "usage", message: "Give either the title or --clear, not both." };
+
+interface TitleFlags {
+  readonly title: Option.Option<string>;
+  readonly clear: boolean;
+}
+
+function titleToSend({ clear, title }: TitleFlags): Effect.Effect<string, CallFailure> {
+  if (Option.isSome(title) === clear) {
+    return Effect.fail(titleOrClear);
+  }
+  return Effect.succeed(Option.getOrElse(title, () => CLEARED));
+}
+
 function threadCommandFor(messageIdArgument: Argument.Argument<MessageId>): ThreadCommand {
   const getCommand = Command.make("get", { id: messageIdArgument }, ({ id }) =>
     answer((client) => client.getThread(id)),
@@ -95,9 +113,30 @@ function threadCommandFor(messageIdArgument: Argument.Argument<MessageId>): Thre
   const reopenCommand = Command.make("reopen", { id: messageIdArgument }, ({ id }) =>
     answer((client) => client.reopenThread(id)),
   ).pipe(Command.withDescription("Reopen the thread holding a message and print its top-level message."));
+  const titleCommand = Command.make(
+    "title",
+    {
+      clear: Flag.Boolean("clear").pipe(Flag.withDefault(false), Flag.withDescription("Remove the thread's title.")),
+      id: messageIdArgument,
+      title: Argument.String("title").pipe(
+        Argument.optional,
+        Argument.withDescription("The Thread title: one line, at most 100 characters after trimming."),
+      ),
+    },
+    ({ clear, id, title }) =>
+      answered(
+        Effect.flatMap(titleToSend({ clear, title }), (sent) =>
+          callServer((client) => client.setThreadTitle(id, sent)),
+        ),
+      ),
+  ).pipe(
+    Command.withDescription(
+      "Set, change or (with --clear) clear the title of the thread holding a message, and print its top-level message.",
+    ),
+  );
   return Command.make("thread").pipe(
-    Command.withDescription("Read, list, close and reopen threads."),
-    Command.withSubcommands([getCommand, listCommand, closeCommand, reopenCommand]),
+    Command.withDescription("Read, list, close, reopen and title threads."),
+    Command.withSubcommands([getCommand, listCommand, closeCommand, reopenCommand, titleCommand]),
   );
 }
 

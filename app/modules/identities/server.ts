@@ -122,11 +122,13 @@ export interface AdminSettings {
 }
 
 /**
- * Makes `adminToken` the only token of the identity named `adminName`, and makes it an admin: it creates a human
- * admin on a store without one, and gives it back its admin flag if another admin removed it. `cookout serve` runs
- * it at every boot with `COOKOUT_ADMIN_TOKEN` and `COOKOUT_ADMIN_NAME` (Matt, 2026-11-23, mattpocock/cookout#85 and
- * #107), so a token rotated since, lost or leaked stops working once the setting changes and the server restarts.
- * A new name leaves the identity the token belonged to in place, still an admin, with no working token.
+ * Makes `adminToken` the only token of the identity named `adminName` when the setting differs from the one boot last
+ * applied, and makes it an admin: it creates a human admin on a store without one, and gives it back its admin flag
+ * if another admin removed it. `cookout serve` runs it at every boot with `COOKOUT_ADMIN_TOKEN` and
+ * `COOKOUT_ADMIN_NAME` (Matt, 2026-11-23, mattpocock/cookout#85 and #107), so a token lost or leaked stops working,
+ * with the web sessions made with it, once the setting changes and the server restarts. With the setting unchanged, a
+ * token rotated since and its web sessions survive any number of restarts (ADR 0130). A new name leaves the identity
+ * the token belonged to in place, still an admin, with no working token.
  *
  * @param settings The token from `COOKOUT_ADMIN_TOKEN` and the name from `COOKOUT_ADMIN_NAME`.
  * @returns A Layer that sets the token when it is built, and fails with `AdminNameIsAgent` if the name is an agent's.
@@ -145,8 +147,11 @@ export function adminTokenSet(
       }
       const hash = yield* secrets.hashToken(adminToken);
       const admin = yield* humanAdmin(adminName);
-      yield* storage.setOnlyToken(admin, hash);
-      yield* storage.revokeLoginCredentialsMadeWithRevokedTokens(admin.name);
+      const applied = yield* storage.applyAdminSetting(admin, hash);
+      yield* Effect.when(
+        storage.revokeLoginCredentialsMadeWithRevokedTokens(admin.name),
+        Effect.succeed(applied === "applied"),
+      );
       return yield* storage.setAdmin(admin.name, true);
     }),
   );

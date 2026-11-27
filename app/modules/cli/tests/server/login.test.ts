@@ -15,6 +15,7 @@ import { isUserCode } from "../../../logins/index.ts";
 const PERMISSIONS = 0o1000;
 const PRIVATE_FILE = 0o600;
 const SHARED_FILE = 0o644;
+const WINDOWS_HOST = { cookout: [], osRelease: "", platform: "win32", uid: 0, wslConf: "" } as const;
 const ONE_AT_A_TIME = { concurrency: 1 } as const;
 
 type Env = Readonly<Record<string, string>>;
@@ -192,19 +193,25 @@ it.effect.each(harnesses)("inside a harness (%o) the Login is never sent: the ve
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("the CLI refuses a credentials file others can read with credentials_unsafe", () =>
-  Effect.gen(function* sharedCredentials() {
-    const { ada, env, file } = yield* loggedIn;
-    const fs = yield* FileSystem.FileSystem;
-    yield* Effect.orDie(fs.chmod(file, SHARED_FILE));
+it.effect(
+  "the CLI refuses a credentials file others can read with credentials_unsafe, except on Windows, which has no POSIX modes",
+  () =>
+    Effect.gen(function* sharedCredentials() {
+      const { ada, env, file } = yield* loggedIn;
+      const fs = yield* FileSystem.FileSystem;
+      yield* Effect.orDie(fs.chmod(file, SHARED_FILE));
 
-    const results = yield* Effect.all([run(env, "whoami"), logIn(env, ada.token)], ONE_AT_A_TIME);
+      const results = yield* Effect.all(
+        [run(env, "whoami"), logIn(env, ada.token), runCookout({ args: ["whoami"], env, runnerHost: WINDOWS_HOST })],
+        ONE_AT_A_TIME,
+      );
 
-    expect(results).toMatchObject([
-      { exitCode: 1, stderrJson: { error: { code: "credentials_unsafe" } } },
-      { exitCode: 1, stderrJson: { error: { code: "credentials_unsafe" } } },
-    ]);
-  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+      expect(results).toMatchObject([
+        { exitCode: 1, stderrJson: { error: { code: "credentials_unsafe" } } },
+        { exitCode: 1, stderrJson: { error: { code: "credentials_unsafe" } } },
+        { exitCode: 0, stdoutJson: { identity: { name: "ada" }, source: "login" } },
+      ]);
+    }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
 it.effect("login --token whose config folder can't be made fails with cli_error", () =>

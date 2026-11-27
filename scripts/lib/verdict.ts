@@ -15,10 +15,6 @@ function verdictLine(failed: readonly string[]): string {
   return `RESULT: FAIL (${failed.join(", ")})`;
 }
 
-function mergedLine(sha: string): string {
-  return `RESULT: MERGED ${sha}`;
-}
-
 function failedJobsOr({ jobs, step }: { readonly jobs: readonly string[]; readonly step: string }): string {
   if (jobs.length === NONE) {
     return step;
@@ -49,4 +45,4 @@ function verdictOnExit(firstStep: string): Verdict {
   };
 }
 
-export { EXIT_CUT_OFF, cutOffLine, failedJobsOr, mergedLine, verdictLine, verdictOnExit };
+export { EXIT_CUT_OFF, cutOffLine, failedJobsOr, verdictLine, verdictOnExit };

@@ -24,7 +24,7 @@ export function StandaloneArticle(parts: StandaloneArticleParts): ReactNode {
     onAction: handleAction,
     threadHref: message.threadHref,
   });
-  const article = useScrollWhenLinked({ focus: true, linked: message.mark === "linked", menu: message.menu });
+  const article = useScrollWhenLinked({ choices, focus: true, linked: message.mark === "linked", menu: message.menu });
   return (
     <ActionContextMenu choices={choices} label={TEXT.menu}>
       <article
@@ -50,7 +50,6 @@ export function StandaloneArticle(parts: StandaloneArticleParts): ReactNode {
           reactions={message.menu.reactions}
           replyOnHover={message.replyOnHover}
           thread={hoverThread(message)}
-          threadHref={message.threadHref}
           time={message.time}
         >
           {message.children}

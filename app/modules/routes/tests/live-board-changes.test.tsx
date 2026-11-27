@@ -1,5 +1,5 @@
 import type { CookoutClient, CookoutEvent, EventStream } from "../../sdk/index.ts";
-import { addCommand, suggestedFor } from "./commands.ts";
+import { addWebhookCommand, suggestedFor } from "./webhook-commands.ts";
 import { adminClient, clientWith, newIdentity } from "./identities.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -93,15 +93,17 @@ async function ownerWithAgent(prefix: string): Promise<CookoutClient> {
   return human.client;
 }
 
-it("a command registered elsewhere shows in the / suggestions without a reload", { timeout: 5000 }, async () => {
+it("a Webhook command registered elsewhere shows in the / suggestions without a reload", {
+  timeout: 5000,
+}, async () => {
   expect.hasAssertions();
 
-  await addCommand({ description: "Builds it", name: "web-live-command-build" });
+  await addWebhookCommand({ description: "Builds it", name: "web-live-command-build" });
   const close = await openChannelLive(adminClient(), "web-live-command");
 
   await expect(suggestedFor("/web-live-command")).resolves.toStrictEqual(["/web-live-command-buildBuilds it"]);
 
-  await addCommand({ description: "Ships it", name: "web-live-command-ship" });
+  await addWebhookCommand({ description: "Ships it", name: "web-live-command-ship" });
 
   await waitFor(async () => {
     await expect(suggestedFor("/web-live-command")).resolves.toStrictEqual([

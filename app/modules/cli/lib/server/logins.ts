@@ -13,6 +13,7 @@ import {
 } from "effect";
 import { cookoutUrl, home, xdgConfigHome } from "../../../config/server.ts";
 import { baseUrlOf } from "../../../http/client.ts";
+import { hasPrivateMode } from "./private-mode.ts";
 
 interface LoginFailure {
   readonly code: "cli_error" | "config_folder_missing" | "credentials_damaged" | "credentials_unsafe";
@@ -24,7 +25,6 @@ type Needs = FileSystem.FileSystem | Path.Path;
 const PRETTY = 2;
 const PRIVATE_FOLDER = 0o700;
 const PRIVATE_FILE = 0o600;
-const PERMISSIONS = 0o1000;
 
 const CredentialsSchema = Schema.Struct({
   defaultBoard: Schema.optionalKey(Schema.String),
@@ -82,9 +82,12 @@ function unsafe(file: string): LoginFailure {
   };
 }
 
-function isPrivateFile({ mode, type, uid }: FileSystem.File.Info, user: Option.Option<number>): boolean {
+function isPrivateFile({ mode, type, uid }: FileSystem.File.Info, user: Option.Option<number>): Effect.Effect<boolean> {
   const ownedByUser = Option.isNone(user) || Equal.equals(uid, user);
-  return type === "File" && mode % PERMISSIONS === PRIVATE_FILE && ownedByUser;
+  return Effect.map(
+    hasPrivateMode({ mode, wanted: PRIVATE_FILE }),
+    (modeIsPrivate) => type === "File" && modeIsPrivate && ownedByUser,
+  );
 }
 
 function readAt({ file, fs }: CredentialsLocation): Effect.Effect<Credentials, LoginFailure> {
@@ -95,7 +98,8 @@ function readAt({ file, fs }: CredentialsLocation): Effect.Effect<Credentials, L
     }
     const info = yield* Effect.mapError(fs.lstat(file), failure);
     const user = yield* currentUser;
-    if (!isPrivateFile(info, user)) {
+    const isPrivate = yield* isPrivateFile(info, user);
+    if (!isPrivate) {
       return yield* Effect.fail(unsafe(file));
     }
     const text = yield* Effect.mapError(fs.readFileString(file), failure);

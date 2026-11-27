@@ -38,7 +38,15 @@ it("every item in a message's More actions menu shows an icon before its label",
   pressed(() => button);
 
   await expect(itemsOf("More actions")).resolves.toStrictEqual(
-    withIcons(["Reply→ or Enter or r", "Open threadt", ...REACTIONS, "Mark unreadAlt+Enter", "Copy linkl", "Closex"]),
+    withIcons([
+      "Reply→ or Enter or r",
+      "Open threadt",
+      ...REACTIONS,
+      "Mark unreadAlt+Enter",
+      "Copy linkl",
+      "Copy textc",
+      "Closex",
+    ]),
   );
 
   close();
@@ -53,7 +61,15 @@ it("every item in a closed message's context menu shows an icon before its label
   fireEvent.contextMenu(await inPane().findByText("Deploy?"));
 
   await expect(itemsOf("Message actions")).resolves.toStrictEqual(
-    withIcons(["Reply→ or Enter or r", "Open threadt", ...REACTIONS, "Mark unreadAlt+Enter", "Copy linkl", "Reopenx"]),
+    withIcons([
+      "Reply→ or Enter or r",
+      "Open threadt",
+      ...REACTIONS,
+      "Mark unreadAlt+Enter",
+      "Copy linkl",
+      "Copy textc",
+      "Reopenx",
+    ]),
   );
 
   close();

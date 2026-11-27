@@ -19,3 +19,5 @@
 ## Not yet done
 
 - Deleting an identity doesn't yet remove its avatar's bytes from the asset store.
+
+Superseded in part on 2026-11-26 by [ADR 0137](0137-deleting-an-identity-deletes-its-avatar-bytes.md): deleting an identity now deletes its avatar bytes.

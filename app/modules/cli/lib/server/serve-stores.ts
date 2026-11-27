@@ -17,6 +17,7 @@ import {
   withoutDatabaseSecret,
 } from "../../../storage/server.ts";
 import type { CommandFailed } from "./output.ts";
+import type { RunnerHost } from "./host.ts";
 import { refused } from "./output.ts";
 
 type ServeStorage = (setting: StorageSetting) => Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem>;
@@ -104,5 +105,11 @@ function servedStorage(path: string): Effect.Effect<ServedStorage, Config.Config
   });
 }
 
+interface ServeLayers {
+  readonly runnerHost?: RunnerHost;
+  readonly storage: ServeStorage;
+  readonly webFolder?: string;
+}
+
 export { chosenAssetStore, servedStorage };
-export type { ServeStorage, ServedStorage };
+export type { ServeLayers, ServedStorage };

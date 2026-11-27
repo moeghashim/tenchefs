@@ -1,5 +1,5 @@
 import type { CookoutEvent, EventStream } from "../../../sdk/index.ts";
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 import type { Scope } from "effect";
 import type { TestIdentity } from "./cookout.ts";
 import { answer } from "./calls.ts";
@@ -25,7 +25,8 @@ function watchingAllChannels({ client, identity }: TestIdentity): Effect.Effect<
   return Effect.gen(function* watchPastOwnPresence() {
     const opened = yield* Effect.acquireRelease(
       answer(() => client.watch({ allChannels: true })),
-      (events: EventStream) => answer(() => events.close()),
+      (events: EventStream) =>
+        Effect.ignore(Effect.tryPromise({ catch: Function.constVoid, try: () => events.close() })),
     );
     const events = opened[Symbol.asyncIterator]();
     yield* pastOwnPresence({ events, name: identity.name });

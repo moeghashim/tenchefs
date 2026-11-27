@@ -34,7 +34,7 @@ it("waits for a run that has not appeared yet, then watches it", { timeout: 10_0
 
   const gh = fake({ list: [[], RUN], view: [view({ jobs: [done("lint")], status: COMPLETED })] });
 
-  const { logs, sleeps, step } = gh.gate(["--commit", "abc"], [], POLLS);
+  const { logs, sleeps, step } = gh.gate(["--commit", "abc"], POLLS);
 
   expect([step, sleeps, logs]).toStrictEqual([
     { kind: "done" },
@@ -48,7 +48,7 @@ it("gives up on a run that never appears after the last wait", { timeout: 10_000
 
   const gh = fake({ list: [[]], view: [] });
 
-  const { sleeps, step } = gh.gate(["--commit", "abc"], [], POLLS);
+  const { sleeps, step } = gh.gate(["--commit", "abc"], POLLS);
 
   expect([reasonOf(step), sleeps]).toStrictEqual([
     "v1 has no Check push run: run list --workflow Check --event push --limit 1 --json databaseId --commit abc",

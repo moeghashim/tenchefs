@@ -4,6 +4,14 @@ import type { ReactNode } from "react";
 interface ImageCaptionParts {
   readonly name: string;
   readonly detail: string;
+  readonly at: number;
+  readonly count: number;
+}
+
+const ONE = 1;
+
+function counterOf({ at, count }: ImageCaptionParts): string {
+  return `${String(at + ONE)} / ${String(count)}`;
 }
 
 export function ImageCaption(parts: ImageCaptionParts): ReactNode {
@@ -15,6 +23,7 @@ export function ImageCaption(parts: ImageCaptionParts): ReactNode {
       <Description asChild>
         <span className="shrink-0 text-muted-foreground">{parts.detail}</span>
       </Description>
+      {parts.count > ONE && <output className="shrink-0 text-muted-foreground tabular-nums">{counterOf(parts)}</output>}
     </figcaption>
   );
 }

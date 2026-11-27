@@ -1,5 +1,5 @@
+import type { ImageBox, ImageThumbnailParts } from "../../design-system/messages.tsx";
 import type { Attachment } from "../../sdk/index.ts";
-import type { ImageBox } from "../../design-system/messages.tsx";
 
 const KILOBYTE = 1000;
 const MEGABYTE = 1_000_000;
@@ -37,4 +37,17 @@ function imageBoxOf(attachment: Attachment): ImageBox | null {
   return { height, width };
 }
 
-export { assetUrl, imageBoxOf, readableSize };
+function shownImageOf(attachment: Attachment): ImageThumbnailParts {
+  return {
+    detail: readableSize(attachment.size),
+    name: attachment.name,
+    size: imageBoxOf(attachment),
+    src: assetUrl(attachment),
+  };
+}
+
+function imagesOf(attachments: readonly Attachment[]): readonly Attachment[] {
+  return attachments.filter((attachment) => attachment.image);
+}
+
+export { assetUrl, imageBoxOf, imagesOf, readableSize, shownImageOf };

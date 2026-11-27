@@ -24,3 +24,5 @@
 - The name "presence", its wire path, event type and CLI field are spelled once, in `app/modules/presence/index.ts` (`presenceName`), so a rename is one change.
 
 Superseded in part on 2026-11-23 by ADR 0065: `cookout watch` no longer exits 5 after 5 minutes; it retries at most 30 s apart for as long as the board is down, so the boot grace is ample for it to reconnect.
+
+Superseded in part on 2026-11-26 by [ADR 0133](0133-a-runner-s-live-connection-shows-its-agent-waking-on-mention.md): a `cookout runner`'s live connection, opened with `?as=runner`, shows its agent online and waking on mention while no wake run is in progress.

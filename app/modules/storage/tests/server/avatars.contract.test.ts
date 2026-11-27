@@ -9,6 +9,7 @@ import { tokenHash } from "../../../identities/index.ts";
 const HASH_LENGTH = 64;
 const hashA = tokenHash(Str.repeat(HASH_LENGTH)("a"));
 const hashB = tokenHash(Str.repeat(HASH_LENGTH)("b"));
+const TEN = 10;
 
 function avatarId(raw: string): AvatarId {
   return Option.getOrThrow(Option.liftPredicate(raw, isAvatarId));
@@ -59,5 +60,31 @@ it.effect.each(storageLayers)(
 
       expect(agent).toMatchObject({ identity: { avatar: { id: "bots" }, kind: "agent" }, status: "set" });
       expect([held, missing]).toStrictEqual([[false, true, true], { status: "not_found" }]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): deleting an identity keeps its avatar to remove until its bytes are said to be removed",
+  ({ layer }) =>
+    Effect.gen(function* avatarsToRemove() {
+      const { storage } = yield* openStore(layer);
+      yield* Effect.all(
+        [
+          storage.createIdentity(human("ada"), hashA),
+          storage.createIdentity(human("bo"), hashB),
+          storage.setAvatar(nameOf("ada"), avatarId("ada-avatar")),
+          storage.setAvatar(nameOf("bo"), avatarId("bo-avatar")),
+        ],
+        { concurrency: 1 },
+      );
+      const before = yield* storage.avatarsToRemove(TEN);
+      yield* Effect.all([storage.deleteIdentity(nameOf("ada")), storage.deleteIdentity(nameOf("bo"))], {
+        concurrency: 1,
+      });
+      const deleted = yield* storage.avatarsToRemove(TEN);
+      yield* storage.avatarsRemoved([avatarId("ada-avatar")]);
+      const after = yield* storage.avatarsToRemove(TEN);
+
+      expect([before, deleted, after]).toStrictEqual([[], ["ada-avatar", "bo-avatar"], ["bo-avatar"]]);
     }),
 );

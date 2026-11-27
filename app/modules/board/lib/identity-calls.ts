@@ -16,6 +16,7 @@ type IdentityCallsClient = Pick<
   | "removeAdmin"
   | "revokeAgentSession"
   | "rotateToken"
+  | "setAvatar"
   | "setDescription"
   | "setDisplayName"
   | "setTrigger"
@@ -36,6 +37,7 @@ interface IdentityCalls {
   readonly setAdmin: (name: IdentityName, admin: boolean) => Promise<void>;
   readonly setDisplayName: (name: IdentityName, text: string | null) => Promise<void>;
   readonly setDescription: (name: IdentityName, text: string | null) => Promise<void>;
+  readonly setAvatar: (name: IdentityName, png: Uint8Array) => Promise<void>;
   readonly createAgent: (agent: NewAgent) => Promise<Created>;
   readonly rotateToken: (name: IdentityName) => Promise<Token>;
   readonly revokeSession: (name: IdentityName) => Promise<void>;
@@ -69,12 +71,16 @@ function adminSetter({ client }: IdentityCallsOptions): (name: IdentityName, adm
 function textCalls(
   options: IdentityCallsOptions,
   put: (identity: Identity) => void,
-): Pick<IdentityCalls, "setAdmin" | "setDescription" | "setDisplayName"> {
+): Pick<IdentityCalls, "setAdmin" | "setAvatar" | "setDescription" | "setDisplayName"> {
   const { client } = options;
   const admin = adminSetter(options);
   return {
     setAdmin: async (name, made) => {
       put(await admin(name, made));
+    },
+    setAvatar: async (name, png) => {
+      const { identity } = await client.setAvatar(name, png);
+      put(identity);
     },
     setDescription: async (name, text) => {
       const { identity } = await client.setDescription(name, text);

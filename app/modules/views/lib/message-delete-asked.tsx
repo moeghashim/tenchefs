@@ -33,6 +33,7 @@ export function MessageDeleteAsked(props: MessageDeleteAskedProps): ReactNode {
       onConfirm={handleConfirm}
       open
       pending={deleting.pending}
+      returnTo={null}
       title={titleOf(asked)}
     />
   );

@@ -22,7 +22,7 @@ async function buildServer(): Promise<void> {
     logLevel: "warn",
     outDir: WEB_TEST_BUILD,
     platform: "node",
-    target: "node22.18",
+    target: "node22.19",
   });
 }
 

@@ -4,6 +4,7 @@ import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import { CardBody } from "../../design-system/layout.tsx";
 import { ChannelTop } from "./channel-top.tsx";
 import { FeedStream } from "./feed-stream.tsx";
+import type { FeedStreamProps } from "./feed-stream.tsx";
 import type { ReactNode } from "react";
 import { ReadRefusal } from "./read-refusal.tsx";
 import type { Unread } from "../../unread/index.ts";
@@ -21,6 +22,7 @@ interface MessageRowsProps {
   readonly readPosition: number | null;
   readonly unread: Unread;
   readonly closing: ThreadClosing;
+  readonly reply: FeedStreamProps["reply"];
 }
 
 export type { MessageRowsProps };
@@ -53,6 +55,7 @@ export function MessageRows(props: MessageRowsProps): ReactNode {
         menu={props.unread.menu}
         open={props.open}
         readPosition={props.readPosition}
+        reply={props.reply}
         state={state}
         threads={threads}
       />

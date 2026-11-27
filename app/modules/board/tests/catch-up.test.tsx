@@ -21,7 +21,7 @@ const TWO = 2;
 
 const SHOWN = [
   "channels",
-  "commands",
+  "webhookCommands",
   "identities",
   "inbox",
   "presence",

@@ -1,6 +1,7 @@
 import type { ActionMenuParts, MenuChoice } from "../../design-system/messages.tsx";
 import type { InboxItem, MessageId } from "../../sdk/index.ts";
 import type { InboxRow } from "../../unread/index.ts";
+import type { Keymap } from "../../keymap/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { useMemo } from "react";
 
@@ -9,6 +10,7 @@ const TEXT = { label: "Inbox row actions", markRead: "Mark read", markUnread: "M
 interface InboxRowActions {
   readonly ack: (id: MessageId) => void;
   readonly markUnread: (id: MessageId) => void;
+  readonly shortcutOf: Keymap["shortcutOf"];
 }
 
 interface InboxRowMenuOf {
@@ -43,6 +45,7 @@ function readChoice({ actions, row, unread }: ReadChoiceOf): MenuChoice {
     return {
       href: null,
       icon: "mark-read",
+      keys: actions.shortcutOf("markRowRead"),
       label: TEXT.markRead,
       onSelect: () => {
         actions.ack(row.latest.message.id);
@@ -52,6 +55,7 @@ function readChoice({ actions, row, unread }: ReadChoiceOf): MenuChoice {
   return {
     href: null,
     icon: "mark-unread",
+    keys: actions.shortcutOf("markRowUnread"),
     label: TEXT.markUnread,
     onSelect: () => {
       actions.markUnread(oldestOf(row).message.id);
@@ -67,7 +71,13 @@ function useInboxRowMenu({ actions, row, unread }: InboxRowMenuOf): ActionMenuPa
     return {
       choices: [
         readChoice({ actions, row, unread }),
-        { href: openHrefOf(row.latest), icon: "open-in-channel", label: TEXT.open, onSelect: null },
+        {
+          href: openHrefOf(row.latest),
+          icon: "open-in-channel",
+          keys: actions.shortcutOf("openRow"),
+          label: TEXT.open,
+          onSelect: null,
+        },
       ],
       label: TEXT.label,
     };

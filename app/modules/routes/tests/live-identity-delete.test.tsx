@@ -6,7 +6,7 @@ import { boardStoreFor } from "./defaults.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
 import { testAgentDisplayName } from "../../testing/index.ts";
-import { type } from "./commands.ts";
+import { type } from "./webhook-commands.ts";
 import { watched } from "./watched.ts";
 
 type BoardStore = ReturnType<typeof boardStoreFor>;

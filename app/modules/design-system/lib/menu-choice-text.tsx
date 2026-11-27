@@ -8,16 +8,13 @@ interface MenuChoiceTextParts {
 
 export function MenuChoiceText(parts: MenuChoiceTextParts): ReactNode {
   const { choice } = parts;
-  const keys = choice.keys ?? null;
   return (
     <>
       {menuIcon(choice.icon)}
       {choice.label}
-      {keys !== null && (
-        <kbd aria-hidden className="ml-auto pl-4 font-sans text-muted-foreground">
-          {keys.label}
-        </kbd>
-      )}
+      <kbd aria-hidden className="ml-auto pl-4 font-sans text-muted-foreground">
+        {choice.keys.label}
+      </kbd>
     </>
   );
 }

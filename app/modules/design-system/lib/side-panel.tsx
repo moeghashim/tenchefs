@@ -54,6 +54,8 @@ export function SidePanel(parts: SidePanelParts): ReactNode {
         label={parts.label}
         menu={parts.menu}
         onClose={handleClose}
+        title={parts.title}
+        titling={parts.titling}
       />
       <FileDrop onFiles={parts.onFiles ?? null}>{parts.children}</FileDrop>
     </aside>

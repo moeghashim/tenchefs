@@ -9,6 +9,7 @@ const DIR = "app/modules/routes/tests/browser";
 const RUN = "900";
 const MS = 1000;
 const LAST = -1;
+const ARTIFACT_ID = 7001;
 const RECORDED = { alpha: 50, bravo: 40, charlie: 30 };
 const AFTER_FIRST = 1;
 
@@ -28,18 +29,25 @@ function reportOf(seconds: Readonly<Record<string, number>>): string {
 
 const ARTIFACTS = JSON.stringify({
   artifacts: [
-    { created_at: "2026-11-25T09:00:00Z", expired: false, name: "test-timings-browser-1", workflow_run: { id: 800 } },
+    {
+      created_at: "2026-11-25T09:00:00Z",
+      expired: false,
+      id: ARTIFACT_ID,
+      name: "test-timings-browser-1",
+      workflow_run: { id: 800 },
+    },
   ],
 });
 
+function download(_artifact: string, into: string): Outcome<string> {
+  const dir = path.join(into, ".timings");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "browser.json"), reportOf(RECORDED));
+  return { ok: true, value: "" };
+}
+
 function recorded(args: readonly string[]): Outcome<string> {
-  const [verb, target = ""] = args;
-  if (verb === "run") {
-    const dir = path.join(args.at(LAST) ?? "", ".timings");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(path.join(dir, "browser.json"), reportOf(RECORDED));
-    return { ok: true, value: "" };
-  }
+  const [, target = ""] = args;
   if (target.endsWith(`/runs/${RUN}`)) {
     return { ok: true, value: JSON.stringify({ created_at: "2026-11-25T10:00:00Z" }) };
   }
@@ -63,7 +71,7 @@ const UNRECORDED = "since no Check run recorded browser timings before run 900";
 function planOf(shard: string, run: readonly string[], gh: typeof recorded): readonly [readonly string[], string] {
   const cwd = mkdtempSync(path.join(tmpdir(), "reached-browser-"));
   const tests = { all: false, run, skipped: [] } as const;
-  const { args, lines } = reachedShard({ cwd, gh, run: RUN, shard, tests });
+  const { args, lines } = reachedShard({ cwd, download, gh, run: RUN, shard, tests });
   return [args, lines.at(LAST) ?? ""];
 }
 
@@ -122,9 +130,9 @@ it("a docs-only change, or a shard whose share is empty, has nothing to run and 
   const one = { all: false, run: [file("alpha")], skipped: FILES.slice(AFTER_FIRST) } as const;
 
   expect([
-    reachedShard({ cwd, gh: recorded, run: RUN, shard: "1/6", tests: none }),
-    reachedShard({ cwd, gh: recorded, run: RUN, shard: "2/6", tests: one }).nothing,
-    reachedShard({ cwd, gh: recorded, run: RUN, shard: "1/6", tests: one }).args,
+    reachedShard({ cwd, download, gh: recorded, run: RUN, shard: "1/6", tests: none }),
+    reachedShard({ cwd, download, gh: recorded, run: RUN, shard: "2/6", tests: one }).nothing,
+    reachedShard({ cwd, download, gh: recorded, run: RUN, shard: "1/6", tests: one }).args,
   ]).toStrictEqual([
     {
       args: [],

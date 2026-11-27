@@ -54,6 +54,7 @@ export async function postScreenAttachments({ image, ownerToken, url }: Owner): 
     attachments: [
       { bytes: image, name: "hills.png" },
       { bytes: new TextEncoder().encode("x".repeat(NOTES_LENGTH)), name: "notes.txt" },
+      { bytes: image, name: "hills-again.png" },
     ],
     channel: "design",
     text: "The view from the office, and my notes.",

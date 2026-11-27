@@ -36,7 +36,7 @@ interface BoardState extends OwnState, InboxHeld {
 
 type Shown =
   | "channels"
-  | "commands"
+  | "webhookCommands"
   | "identities"
   | "inbox"
   | "presence"

@@ -104,7 +104,7 @@ it("while suggestions show, the arrows move the highlight and Enter picks it ins
   close();
 });
 
-async function twoCommands(prefix: string): Promise<void> {
+async function twoWebhookCommands(prefix: string): Promise<void> {
   const schema = { properties: { branch: { type: "string" } }, type: "object" } as const;
   await Promise.all(
     [`${prefix}-first`, `${prefix}-second`].map(async (name) => {
@@ -114,12 +114,12 @@ async function twoCommands(prefix: string): Promise<void> {
   );
 }
 
-async function suggestCommands(text: string): Promise<void> {
+async function suggestWebhookCommands(text: string): Promise<void> {
   type(text);
   await screen.findByRole("listbox", { name: "Command suggestions" });
 }
 
-function highlightedCommand(): string | null {
+function highlightedWebhookCommand(): string | null {
   const list = screen.getByRole("listbox", { name: "Command suggestions" });
   return within(list).getByRole("option", { selected: true }).textContent;
 }
@@ -127,12 +127,12 @@ function highlightedCommand(): string | null {
 it("while command suggestions show, the arrows move the highlight and Tab picks it", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  await twoCommands("keys-tab");
+  await twoWebhookCommands("keys-tab");
   const close = await openChannel("web-keys-command-tab");
-  await suggestCommands("/keys-tab-");
-  const first = highlightedCommand();
+  await suggestWebhookCommands("/keys-tab-");
+  const first = highlightedWebhookCommand();
   press("ArrowUp");
-  const moved = highlightedCommand();
+  const moved = highlightedWebhookCommand();
   const prevented = !press("Tab");
 
   expect([first, moved, prevented, screen.queryByRole("form", { name: "Call /keys-tab-second" })]).toStrictEqual([
@@ -145,14 +145,14 @@ it("while command suggestions show, the arrows move the highlight and Tab picks 
   close();
 });
 
-it("while command suggestions show, Enter picks the highlighted command and sends nothing", {
+it("while command suggestions show, Enter picks the highlighted Webhook command and sends nothing", {
   timeout: 5000,
 }, async () => {
   expect.hasAssertions();
 
-  await twoCommands("keys-enter");
+  await twoWebhookCommands("keys-enter");
   const close = await openChannel("web-keys-command-enter");
-  await suggestCommands("/keys-enter-");
+  await suggestWebhookCommands("/keys-enter-");
   press("Enter");
 
   expect([await shownMessages(), screen.queryByRole("form", { name: "Call /keys-enter-first" })]).toStrictEqual([
@@ -166,9 +166,9 @@ it("while command suggestions show, Enter picks the highlighted command and send
 it("escape closes the command suggestions, so Enter sends the text as a message", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
-  await twoCommands("keys-escape");
+  await twoWebhookCommands("keys-escape");
   const close = await openChannel("web-keys-command-escape");
-  await suggestCommands("/keys-escape-f");
+  await suggestWebhookCommands("/keys-escape-f");
   press("Escape");
   const closed = screen.queryByRole("listbox", { name: "Command suggestions" });
   press("Enter");

@@ -95,7 +95,7 @@ it("your own message's menu ends with Delete, showing its key, and someone else'
   const { close } = await mineOpened("web-delete-menu", { texts: ["Theirs."] });
 
   await expect(menuEndOn(inPane, "Mine.")).resolves.toStrictEqual(["Closex", "DeleteDelete"]);
-  await expect(menuEndOn(inPane, "Theirs.")).resolves.toStrictEqual(["Copy linkl", "Closex"]);
+  await expect(menuEndOn(inPane, "Theirs.")).resolves.toStrictEqual(["Copy textc", "Closex"]);
 
   close();
 });

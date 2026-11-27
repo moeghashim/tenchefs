@@ -7,17 +7,20 @@ interface HeadingButtonParts {
   readonly expanded: boolean;
   readonly focused: boolean;
   readonly onClick: () => void;
+  readonly onFocused?: () => void;
 }
 
 export function HeadingButton(parts: HeadingButtonParts): ReactNode {
   const { onClick } = parts;
   const button = useFocusOnOpen<HTMLButtonElement>(parts.focused);
+  const handleFocus = parts.onFocused;
   return (
     <button
       aria-expanded={parts.expanded}
       aria-label={parts.label}
       className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-hover hover:text-foreground"
       onClick={onClick}
+      onFocus={handleFocus}
       ref={button}
       title={parts.label}
       type="button"

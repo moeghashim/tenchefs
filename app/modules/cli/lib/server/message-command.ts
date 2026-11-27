@@ -17,6 +17,7 @@ interface PostFlags {
   readonly replyTo: Option.Option<number>;
   readonly seen: Option.Option<number>;
   readonly text: string;
+  readonly title: Option.Option<string>;
 }
 
 interface UsageProblem {
@@ -36,9 +37,14 @@ const seenWithoutReplyTo: UsageProblem = {
   message: "--seen says how far you have read the thread you reply in: give it with --reply-to <message-id>.",
 };
 
-function usageProblem({ close, replyTo, seen }: PostFlags): Option.Option<UsageProblem> {
+const titleOnReply: UsageProblem = {
+  code: "usage",
+  message: "--title names a new thread, and a reply joins one: give it without --reply-to.",
+};
+
+function usageProblem({ close, replyTo, seen, title }: PostFlags): Option.Option<UsageProblem> {
   if (Option.isSome(replyTo)) {
-    return Option.none();
+    return Option.map(title, () => titleOnReply);
   }
   if (close) {
     return Option.some(closeWithoutReplyTo);
@@ -53,11 +59,12 @@ function withClose(request: PostMessageRequest, close: boolean): PostMessageRequ
   return request;
 }
 
-function postRequest({ channel, close, data, replyTo, seen, text }: PostFlags): PostMessageRequest {
+function postRequest({ channel, close, data, replyTo, seen, text, title }: PostFlags): PostMessageRequest {
   const withData = Option.match(data, { onNone: () => NOTHING, onSome: (value) => ({ data: value }) });
   const withReplyTo = Option.match(replyTo, { onNone: () => NOTHING, onSome: (value) => ({ replyTo: value }) });
   const withSeen = Option.match(seen, { onNone: () => NOTHING, onSome: (value) => ({ seen: value }) });
-  return withClose({ channel, text, ...withData, ...withReplyTo, ...withSeen }, close);
+  const withTitle = Option.match(title, { onNone: () => NOTHING, onSome: (value) => ({ title: value }) });
+  return withClose({ channel, text, ...withData, ...withReplyTo, ...withSeen, ...withTitle }, close);
 }
 
 function posted(flags: PostFlags): Effect.Effect<void, CommandFailed, AgentSessionStateNeeds> {
@@ -89,6 +96,13 @@ const closeFlag = Flag.Boolean("close").pipe(
   Flag.withDescription("With --reply-to, also close the thread, in the same step as the reply."),
 );
 
+const titleFlag = Flag.String("title").pipe(
+  Flag.optional,
+  Flag.withDescription(
+    "Post a titled thread: its Thread title, one line, at most 100 characters after trimming. Not with --reply-to.",
+  ),
+);
+
 const messagePostCommand = Command.make(
   "post",
   {
@@ -99,6 +113,7 @@ const messagePostCommand = Command.make(
     replyTo: replyToFlag,
     seen: seenFlag,
     text: textArgument,
+    title: titleFlag,
   },
   (flags) =>
     Option.match(usageProblem(flags), {
@@ -107,7 +122,7 @@ const messagePostCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Post a message, or a reply with --reply-to, which --close also closes in one step. --attach adds files.",
+    "Post a message, titled with --title, or a reply with --reply-to, which --close also closes in one step. --attach adds files.",
   ),
 );
 

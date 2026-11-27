@@ -218,6 +218,66 @@ it.effect.each(storageLayers)(
     }),
 );
 
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): the admin setting is applied once, and a token rotated since is kept until it changes",
+  ({ layer }) =>
+    Effect.gen(function* adminSettingAppliedOnce() {
+      const { storage } = yield* openStore(layer);
+      const admin = identity("admin", { admin: true });
+      const first = yield* storage.applyAdminSetting(admin, hashA);
+      yield* storage.replaceToken(nameOf("admin"), hashB);
+      const again = yield* storage.applyAdminSetting(admin, hashA);
+      const kept = yield* storage.findIdentityByTokenHash(hashB);
+      const changed = yield* storage.applyAdminSetting(admin, hashC);
+      const lookups = yield* Effect.forEach([hashA, hashB, hashC], storage.findIdentityByTokenHash, { concurrency: 1 });
+
+      expect([first, again, kept, changed]).toStrictEqual([
+        "applied",
+        "unchanged",
+        { identity: admin, status: "active" },
+        "applied",
+      ]);
+      expect(lookups).toStrictEqual([
+        { status: "revoked" },
+        { status: "revoked" },
+        { identity: admin, status: "active" },
+      ]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): an admin setting changed back to an earlier one is applied again",
+  ({ layer }) =>
+    Effect.gen(function* adminSettingChangedBack() {
+      const { storage } = yield* openStore(layer);
+      const admin = identity("admin", { admin: true });
+      yield* storage.applyAdminSetting(admin, hashA);
+      yield* storage.applyAdminSetting(admin, hashB);
+      const back = yield* storage.applyAdminSetting(admin, hashA);
+      const lookups = yield* Effect.forEach([hashA, hashB], storage.findIdentityByTokenHash, { concurrency: 1 });
+
+      expect(back).toBe("applied");
+      expect(lookups).toStrictEqual([{ identity: admin, status: "active" }, { status: "revoked" }]);
+    }),
+);
+
+it.effect.each(storageLayers)(
+  "storage contract ($adapter): with no admin setting recorded, a setting whose token the identity held counts as applied",
+  ({ layer }) =>
+    Effect.gen(function* adminSettingBeforeRecord() {
+      const { storage } = yield* openStore(layer);
+      const admin = identity("admin", { admin: true });
+      yield* storage.setOnlyToken(admin, hashA);
+      yield* storage.replaceToken(nameOf("admin"), hashB);
+      const unrecorded = yield* storage.applyAdminSetting(admin, hashA);
+      const kept = yield* storage.findIdentityByTokenHash(hashB);
+      const renamed = yield* storage.applyAdminSetting(identity("boss", { admin: true }), hashA);
+
+      expect([unrecorded, renamed]).toStrictEqual(["unchanged", "applied"]);
+      expect(kept).toStrictEqual({ identity: admin, status: "active" });
+    }),
+);
+
 it.effect.each(storageLayers)("storage contract ($adapter): identities cannot be used in a closed store", ({ layer }) =>
   Effect.gen(function* closedStore() {
     const { close, storage } = yield* openStore(layer);

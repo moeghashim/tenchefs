@@ -65,7 +65,16 @@ export interface MessageDeleteCalls {
   readonly deleteMessage: (messageId: MessageId) => Promise<DeletedMessageResponse>;
 }
 
-/** Closing and reopening the thread holding a message. */
+/** The body of `PUT /v1/messages/:id/title`. */
+export interface SetThreadTitleRequest {
+  /**
+   * The thread's new title, trimmed, then at most 100 characters on one line (400 `invalid_request` otherwise). Empty,
+   * or only whitespace, clears the title.
+   */
+  readonly title: string;
+}
+
+/** Closing, reopening and titling the thread holding a message. */
 export interface ClosedThreadCalls {
   /**
    * `PUT /v1/messages/:id/closed`: closes the thread holding the message (any message in it) and answers its top-level
@@ -80,6 +89,15 @@ export interface ClosedThreadCalls {
    * too. A missing message is 404 `message_not_found`.
    */
   readonly reopenThread: (messageId: MessageId) => Promise<TopLevelMessageResponse>;
+  /**
+   * `PUT /v1/messages/:id/title`: sets or changes the Thread title of the thread holding the message (any message in
+   * it) and answers its top-level message, now with `title`, `titleSetBy` (the caller) and `titleSetAt`. Any
+   * identity may title any thread; only the latest setter is kept. The title is trimmed; an empty one, or one of only
+   * whitespace, clears all three fields. Over 100 characters or with a line break is 400 `invalid_request`, and
+   * nothing changes. Setting the same title again changes nothing. A title is not a message: it mentions nobody and
+   * moves no Read position, and a reply keeps it. A missing message is 404 `message_not_found`.
+   */
+  readonly setThreadTitle: (messageId: MessageId, title: string) => Promise<TopLevelMessageResponse>;
 }
 
 /** The query of an Open threads page. With no `cursor`, the page starts at the stalest open thread. */
@@ -152,6 +170,12 @@ export interface PostMessageRequest {
    */
   readonly replyTo?: number;
   readonly close?: true;
+  /**
+   * A Thread title for a top-level message, stored with it in one step, its author the setter at its post time. The
+   * title is trimmed, then at most 100 characters on one line; an empty one posts the message untitled. With
+   * `replyTo`, or over 100 characters or with a line break, the post is 400 `invalid_request`, and nothing is stored.
+   */
+  readonly title?: string;
   /**
    * With `replyTo`: the caller has read the thread up to this message, later than `replyTo`. `replyTo` alone says it
    * has read up to `replyTo`. An agent's reply to a thread with newer replies by anyone else is refused `thread_moved`.

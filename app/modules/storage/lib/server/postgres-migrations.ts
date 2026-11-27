@@ -7,10 +7,11 @@ import {
   POSTGRES_TRIGGER_HEADERS_MIGRATION,
   POSTGRES_TRIGGER_SKIPPED_MIGRATION,
 } from "./feature-migrations.ts";
+import { currentVersion, tooNew } from "./postgres-schema-version.ts";
+import { POSTGRES_ADMIN_SETTING_MIGRATION } from "./admin-setting.ts";
 import { POSTGRES_SCHEDULED_MESSAGES_MIGRATION } from "./scheduled-messages-sqlite.ts";
 import type { PostgresDatabase } from "./adapters/postgres.ts";
-import { StorageUnavailable } from "./errors.ts";
-import { currentVersion } from "./postgres-schema-version.ts";
+import type { StorageUnavailable } from "./errors.ts";
 
 const postgresMigrations: readonly (readonly string[])[] = [
   [
@@ -257,22 +258,23 @@ const postgresMigrations: readonly (readonly string[])[] = [
     'ALTER TABLE messages ADD COLUMN deleted_at text COLLATE "C"',
     'ALTER TABLE messages ADD COLUMN deleted_by text COLLATE "C"',
   ],
+  POSTGRES_ADMIN_SETTING_MIGRATION,
+  ['CREATE TABLE avatars_to_remove (id text COLLATE "C" PRIMARY KEY)'],
+  [
+    'ALTER TABLE messages ADD COLUMN title text COLLATE "C"',
+    'ALTER TABLE messages ADD COLUMN title_set_by text COLLATE "C"',
+    'ALTER TABLE messages ADD COLUMN title_set_at text COLLATE "C"',
+  ],
 ];
 
 const NEXT_VERSION = 1;
-
-function tooNew(current: number): StorageUnavailable {
-  return StorageUnavailable.make({
-    message: `The database is at schema version ${current}, newer than this cookout (${postgresMigrations.length}). Upgrade cookout.`,
-  });
-}
 
 function applyNext(db: PostgresDatabase): Effect.Effect<boolean, StorageUnavailable> {
   return db.migrating(
     Effect.gen(function* applyNextMigration() {
       const version = yield* currentVersion(db);
       if (version > postgresMigrations.length) {
-        return yield* tooNew(version);
+        return yield* tooNew({ current: version, latest: postgresMigrations.length });
       }
       return yield* Option.match(Arr.get(postgresMigrations, version), {
         onNone: () => Effect.succeed(false),

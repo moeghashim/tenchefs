@@ -1,8 +1,8 @@
 import type { JsonValue, MessageId } from "../../sdk/index.ts";
 import type { PageAt, PageOps } from "./page-reads.ts";
 import { appliedToMessages, withFresh } from "./messages-table.ts";
-import { callFailure, notJson, parseData } from "./command-call.ts";
-import type { CallRequest } from "./command-call.ts";
+import { callFailure, notJson, parseData } from "./webhook-command-call.ts";
+import type { CallRequest } from "./webhook-command-call.ts";
 import type { Outgoing } from "./outgoing.ts";
 import { attachmentsOf } from "./outgoing.ts";
 import { failure } from "./failure.ts";
@@ -21,7 +21,7 @@ interface Calling {
   readonly ops: PageOps;
 }
 
-async function addNewest({ at, ops }: Calling, { called, command }: CallRequest): Promise<void> {
+async function addNewest({ at, ops }: Calling, { called, webhookCommand: command }: CallRequest): Promise<void> {
   await at.held.readInto({
     change: (held, read) =>
       ops.changed((page) => {
@@ -29,7 +29,12 @@ async function addNewest({ at, ops }: Calling, { called, command }: CallRequest)
         const added: readonly MessageId[] = read.messages
           .filter((message) => message.id > newest)
           .map((message) => message.id);
-        return { ...page, call: { command, status: "called" }, callData: "", ids: [...page.ids, ...added] };
+        return {
+          ...page,
+          call: { status: "called", webhookCommand: command },
+          callData: "",
+          ids: [...page.ids, ...added],
+        };
       })(withFresh({ fresh: read, held })),
     request: async () => {
       const read = await at.client.listMessages(at.name, { limit: at.pageSize });
@@ -46,19 +51,19 @@ interface Sending {
 
 async function sendCall(calling: Calling, { data, request }: Sending): Promise<void> {
   const { at, ops } = calling;
-  const { command } = request;
-  ops.update((page) => ({ ...page, call: { command, status: "calling" } }));
+  const { webhookCommand: command } = request;
+  ops.update((page) => ({ ...page, call: { status: "calling", webhookCommand: command } }));
   try {
     await at.client.callCommand(command, { channel: at.name, data });
     await addNewest(calling, request);
   } catch (error: unknown) {
-    ops.update((page) => ({ ...page, call: callFailure({ command, error }) }));
+    ops.update((page) => ({ ...page, call: callFailure({ error, webhookCommand: command }) }));
   }
 }
 
-async function callCommand(calling: Calling, request: CallRequest): Promise<void> {
+async function callWebhookCommand(calling: Calling, request: CallRequest): Promise<void> {
   const { ops } = calling;
-  const { command } = request;
+  const { webhookCommand: command } = request;
   const parsed = parseData(request.data);
   if (parsed.status === "not-json") {
     ops.update((page) => ({ ...page, call: notJson(command) }));
@@ -83,7 +88,7 @@ async function postMessage({ at, ops }: Calling, { files, posted, text }: PostRe
 function pageCalls(calling: Calling): PageCalls {
   return {
     call: async (request) => {
-      await callCommand(calling, request);
+      await callWebhookCommand(calling, request);
     },
     post: async (request) => {
       await postMessage(calling, request);

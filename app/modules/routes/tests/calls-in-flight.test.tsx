@@ -1,5 +1,5 @@
-import { createCallsInFlight, holdsCallsOpen, trackedCalls } from "../../testing/web.ts";
-import { expect, it, onTestFinished } from "vitest";
+import { createCallsInFlight, holdsCallsOpen, settledCalls, trackedCalls } from "../../testing/web.ts";
+import { expect, it, onTestFinished, vi } from "vitest";
 import { heldBack } from "./slow-calls.ts";
 import { screen } from "@testing-library/react";
 
@@ -152,4 +152,47 @@ it("a test that holds a call open on purpose reads the screen without waiting fo
   const loading = await Promise.race([hung, screen.findByText("loading")]);
 
   expect(loading).toBe(screen.getByText("loading"));
+});
+
+async function answeredInTurn(client: Chained, answered: (answers: readonly string[]) => void): Promise<void> {
+  const first = await client.first();
+  const second = await client.second();
+  answered([first, second]);
+}
+
+it("a test's end waits for a call it left in flight, and for the call that call's answer starts", {
+  timeout: 5000,
+}, () => {
+  expect.hasAssertions();
+
+  const answered = vi.fn<(answers: readonly string[]) => void>();
+  onTestFinished(async () => {
+    await settledCalls();
+
+    expect(answered).toHaveBeenCalledExactlyOnceWith(["first", "second"]);
+  });
+  const client = trackedCalls(heldBack({ client: { first: firstAnswer, second: secondAnswer }, delay: STALL_MS }));
+  const answers = answeredInTurn(client, answered);
+
+  expect(answers).toBeInstanceOf(Promise);
+});
+
+it("a call held open on purpose doesn't hold up its test's end", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  onTestFinished(async () => {
+    await settledCalls();
+  });
+  holdsCallsOpen("hang");
+  const hung = trackedCalls(hanging()).hang();
+
+  await expect(Promise.race([hung, soon()])).resolves.toBe("answered");
+});
+
+it("a call an earlier test held open doesn't hold up a later test's reads", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  shown("later");
+
+  await expect(screen.findByText("later")).resolves.toBe(screen.getByText("later"));
 });

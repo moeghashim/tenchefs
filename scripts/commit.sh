@@ -3,7 +3,7 @@
 # lefthook skips every pre-commit job when nothing is staged, so the hook alone can't say so.
 # A merge, `--amend`, `--allow-empty` and `--all` may stage nothing beforehand.
 # After the commit, it warns when origin/v1 has commits since the branch's merge base that touch a file the branch
-# changes, so a ticket hears about a clashing merge at its next commit rather than at merge-ticket (#475).
+# changes, so a ticket hears about a clashing merge at its next commit rather than when it lands (#475).
 # The warning never blocks the commit, and never changes its exit code.
 # It records how long its `git commit` took, almost all of it hook time, as a pre-commit line in the shared stage log
 # that `pnpm budgets` reads (#639, scripts/lib/stage-log.ts). Recording never fails or slows the commit.
@@ -56,9 +56,9 @@ warn_v1_overlap() {
   [ -z "$commit" ] || lines+=("  $commit: $touched")
   [ "${#lines[@]}" -gt 0 ] || return 0
   if [ "${#lines[@]}" -eq 1 ]; then
-    echo "warning: origin/v1 has 1 new commit touching files this branch changes; read it before you go on (merge-ticket will take it in):" >&2
+    echo "warning: origin/v1 has 1 new commit touching files this branch changes; read it before you go on (landing will merge it in):" >&2
   else
-    echo "warning: origin/v1 has ${#lines[@]} new commits touching files this branch changes; read them before you go on (merge-ticket will take them in):" >&2
+    echo "warning: origin/v1 has ${#lines[@]} new commits touching files this branch changes; read them before you go on (landing will merge them in):" >&2
   fi
   printf '%s\n' "${lines[@]}" >&2
 }

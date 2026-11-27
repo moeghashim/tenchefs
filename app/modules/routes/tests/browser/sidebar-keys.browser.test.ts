@@ -81,6 +81,16 @@ async function tabbedIntoSidebar(page: Page): Promise<void> {
   await expect(inSidebar(page).getByRole("link", { exact: true, name: "People & agents" })).toBeFocused();
 }
 
+async function tabbedOutPastEdge(page: Page): Promise<void> {
+  await page.keyboard.press("Tab");
+
+  await expect(inSidebar(page).getByRole("separator", { exact: true, name: "Resize the sidebar" })).toBeFocused();
+
+  await page.keyboard.press("Tab");
+
+  await expect(inSidebar(page).locator(":focus")).toHaveCount(NONE);
+}
+
 async function openedByArrows(page: Page): Promise<string> {
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
@@ -121,7 +131,7 @@ async function caughtUp(page: Page, channel: string): Promise<void> {
   await expect(page).toHaveURL(opened(channel));
 }
 
-test("the sidebar's links are one Tab stop: arrows move between them, Enter opens one, and Tab leaves", async ({
+test("the sidebar's links are one Tab stop: arrows move between them, Enter opens one, and Tab leaves past the resize edge", async ({
   page,
 }) => {
   const { reader } = await readerOf(unique("browser-sidebar-keys-tab"));
@@ -131,10 +141,8 @@ test("the sidebar's links are one Tab stop: arrows move between them, Enter open
 
   await expect(rowOf(page, channel)).toBeFocused();
 
-  await page.keyboard.press("Tab");
-
-  await expect(inSidebar(page).locator(":focus")).toHaveCount(NONE);
-
+  await tabbedOutPastEdge(page);
+  await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
 
   await expect(rowOf(page, channel)).toBeFocused();
@@ -208,4 +216,37 @@ test("the channel menu shows the keys for Mark all as read and Unsubscribe", asy
     "s",
   );
   await expect(menu.getByRole("menuitem", { exact: true, name: "Unsubscribe" }).locator("kbd")).toHaveText("s");
+});
+
+test("End focuses the sidebar's last link and Home its first", async ({ page }) => {
+  const { reader } = await readerOf(unique("browser-sidebar-keys-ends"));
+  await logInWithStream({ page, token: reader.token });
+  await tabbedIntoSidebar(page);
+  await page.keyboard.press("End");
+
+  await expect(inSidebar(page).getByRole("link", { exact: true, name: "Settings" })).toBeFocused();
+
+  await page.keyboard.press("Home");
+
+  await expect(inSidebar(page).getByRole("link", { exact: true, name: "cookout" })).toBeFocused();
+});
+
+test("the first Tab after load skips the sidebar's resize edge, and Tab still reaches it after the sidebar's items", async ({
+  page,
+}) => {
+  const { reader } = await readerOf(unique("browser-sidebar-keys-edge"));
+  await logInWithStream({ page, token: reader.token });
+  const edge = inSidebar(page).getByRole("separator", { exact: true, name: "Resize the sidebar" });
+  await page.reload();
+
+  await expect(sidebarLink({ label: "Inbox", page })).toBeVisible();
+
+  await page.keyboard.press("Tab");
+
+  await expect(inSidebar(page).getByRole("button", { exact: true, name: "Collapse sidebar" })).toBeFocused();
+
+  await inSidebar(page).getByRole("link", { exact: true, name: "Settings" }).focus();
+  await page.keyboard.press("Tab");
+
+  await expect(edge).toBeFocused();
 });

@@ -14,6 +14,10 @@ A top-level message and its replies, one level deep. Every top-level message is 
 A thread someone has closed, recording who closed it and when. Any identity can close or reopen one, and a new reply reopens it. The web UI folds it away but still lists its unread items in the Inbox, marked Closed (Matt, 2026-11-24, [#300](https://github.com/mattpocock/cookout/issues/300)), while the API, the CLI and `cookout watch` return it as before (Matt, 2026-11-23, close-threads grilling on the board, Q1 to Q3, Q6, Q8; recorded in [#215](https://github.com/mattpocock/cookout/issues/215); [ADR "a thread's closed state lives on its top-level message"](docs/adr/0064-a-thread-is-closed-on-its-top-level-message.md)).
 _Avoid_ (for the thread state, in prose and the UI): resolved, archived, done. Code isn't linted for these, since `done` and `resolved` are also JavaScript's iterator and promise words.
 
+**Thread title**:
+An optional one-line name for a thread, which anyone can set (Matt, 2026-11-26, board thread 6499, messages 6499 to 6539; recorded in [#816](https://github.com/mattpocock/cookout/issues/816); [ADR "a thread's title lives on its top-level message"](docs/adr/0140-a-thread-s-title-lives-on-its-top-level-message.md)).
+_Avoid_ (for the thread's name, in prose and the UI): subject, topic, heading. Code isn't linted for these, since `heading` and `subject` are already ordinary words in the code.
+
 **Reply**:
 A message posted in a thread. A reply to a reply attaches to the same thread.
 _Avoid_: also send to channel, reply broadcast
@@ -111,11 +115,11 @@ Whether an identity is online, and if not, when it was last seen and why it went
 _Avoid_: online status, availability (and plain "status", kept for custom status text)
 
 **Online**:
-An identity is online when it can be reached now: while it has at least one live connection, and for 60 s after its last one closes, or, for an agent with a trigger URL, while its last trigger call didn't fail. Otherwise it is offline, and its presence shows when it was last seen (Matt, 2026-11-23, presence grilling Q4, Q8, [#177](https://github.com/mattpocock/cookout/issues/177)). An agent online only through its trigger URL shows "Wakes on mention" (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)). A Deactivated identity is always offline.
+An identity is online when it can be reached now: while it has at least one live connection, and for 60 s after its last one closes, or, for an agent with a trigger URL, while its last trigger call didn't fail. Otherwise it is offline, and its presence shows when it was last seen (Matt, 2026-11-23, presence grilling Q4, Q8, [#177](https://github.com/mattpocock/cookout/issues/177)). An agent online only through its trigger URL shows "Wakes on mention" (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)), and so does an agent whose live connection is a runner's while no wake run is in progress (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763)). A Deactivated identity is always offline.
 _Avoid_: away, active presence, connected presence, wakeable
 
 **Unreachable**:
-An agent whose last trigger call failed and that has no live connection: a red presence dot, whose tooltip gives the call's status (or error) and time. The next successful call, or a live connection, makes it online again. The first failure of a streak raises one offline alert in its owner's Inbox, naming the status and the message that didn't get through; the next success clears it (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)).
+An agent whose last trigger call failed and that has no live connection: a red presence dot, whose tooltip gives the call's status (or error) and time. The next successful call, or a live connection, makes it online again. The first failure of a streak raises one offline alert in its owner's Inbox, naming the status and the message that didn't get through; the next success clears it (Matt, 2026-11-24, board msg 3089, [#378](https://github.com/mattpocock/cookout/issues/378#issuecomment-7132752282)). A runner-held agent whose last wake run failed (a non-zero exit or its timeout) is Unreachable too, until a wake run ends with exit 0; the first failure of a streak raises one `wake run failed` offline alert, and that run clears it (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763); [ADR 0136](docs/adr/0136-a-wake-run-times-out-and-a-failed-one-replies-and-makes-its-agent-unreachable.md)).
 _Avoid_: failing presence, broken presence
 
 **Live connection**:
@@ -140,6 +144,18 @@ _Avoid_: link (taken by [#125](https://github.com/mattpocock/cookout/issues/125)
 **Harness**:
 A program that runs an agent and the commands it gives, such as Claude Code or Codex, which the CLI detects from the environment ([ADR 0038](docs/adr/0038-a-human-token-from-an-agent-tool-is-refused-unless-overridden.md)). Inside one, `cookout join` makes the whole harness session, subagents included, act as the joined agent, keyed by the harness's session ID (Matt, 2026-11-23, [#116](https://github.com/mattpocock/cookout/issues/116), [ADR 0046](docs/adr/0046-join-keys-by-agent-tool-session.md)). Named by Matt on 2026-11-23, replacing "agent tool" ([#142](https://github.com/mattpocock/cookout/issues/142)).
 _Avoid_: agent tool, agent runtime
+
+**Runner**:
+The `cookout runner start` process, which keeps registered agents answering mentions while their harness sessions are closed: it holds one live connection per registration, as that agent, and starts a wake run for each mention (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763)). It never acks ([ADR 0131](docs/adr/0131-the-runner-wakes-a-registered-agent-one-wake-run-at-a-time.md)).
+
+**Registration**:
+What the runner needs to wake one agent, written beside a joined session's agent session state by `cookout join --wake` or `cookout runner register`: the agent, the board, the session's folder and `PATH`, its wake command, and its wake runs' timeout when it isn't the default. It holds no token (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763)).
+
+**Wake command**:
+The argv a registration keeps for waking its agent, such as `claude -p --resume {session-id} --allowedTools …`, with `{session-id}` filled in at registration (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763)).
+
+**Wake run**:
+One run of a wake command for the mentions waiting for one agent: spawned with no shell, in the registered folder, with an inbox JSON of those mentions on stdin. One agent's wake runs never overlap; mentions heard during one wait and go to the next together (Matt, 2026-11-26, board msg 6036, recorded on [#763](https://github.com/mattpocock/cookout/issues/763); [ADR 0134](docs/adr/0134-the-runner-queues-mentions-skips-answered-ones-and-catches-up-on-start.md)). One that outlives its timeout, 10 minutes unless its registration gives another, is killed with its children ([ADR 0136](docs/adr/0136-a-wake-run-times-out-and-a-failed-one-replies-and-makes-its-agent-unreachable.md)).
 
 **Webhook command token**:
 The token sent with one Webhook command call's webhook delivery, which lets the handler post replies in that call's thread only, for 24 h (Matt, 2026-11-23, [#114](https://github.com/mattpocock/cookout/issues/114)). Renamed from Command token with Webhook command (Matt, 2026-11-25, board thread 4333: msg 4337, and Q6 in msg 4338, accepted in msg 4341). The SDK, the routes and the stored data still say `command token` until the next breaking release.

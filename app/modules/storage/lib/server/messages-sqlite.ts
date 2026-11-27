@@ -38,8 +38,13 @@ const ONE_AT_A_TIME = { concurrency: 1 } as const;
 const isFoundRow = Schema.is(Schema.Struct({ found: Schema.Literal(FOUND) }));
 
 const INSERT_MESSAGE = `INSERT INTO messages
-  (id, channel, author_name, author_owner, text, data, reply_to, mentions, created_at, harness, scheduled_message_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  (id, channel, author_name, author_owner, text, data, reply_to, mentions, created_at, harness, scheduled_message_id,
+  title, title_set_by, title_set_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+type TitleColumns = readonly [string | null, string | null, string | null];
+
+const UNTITLED: TitleColumns = [null, null, null];
 
 function replyToOf(message: Message): MessageId | null {
   if (message.kind === "reply") {
@@ -70,6 +75,14 @@ function placementOf(db: SqlDatabase, { channel, replyTo }: NewMessage): Fails<P
   return Effect.map(replyTargets(db)(replyTo), (found) => placeIn({ channel, found }));
 }
 
+function titleColumnsOf(message: Message): TitleColumns {
+  if (message.kind === "reply") {
+    return UNTITLED;
+  }
+  const { title = null, titleSetAt = null, titleSetBy = null } = message;
+  return [title, titleSetBy, titleSetAt];
+}
+
 function scheduleOf({ scheduledMessage }: Message): number | null {
   if (Predicate.isUndefined(scheduledMessage)) {
     return null;
@@ -96,6 +109,7 @@ function insert(db: SqlDatabase, message: Message, data: string | null): Fails<v
       createdAt,
       harness,
       schedule,
+      ...titleColumnsOf(message),
     ] as const;
     yield* db.run(INSERT_MESSAGE, ...columns);
   });

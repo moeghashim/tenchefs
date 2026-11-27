@@ -8,6 +8,7 @@ import { createBoardStore } from "../../board/index.ts";
 import { createComposer } from "../../composer/index.ts";
 import { createPageFocus } from "../../page-focus/index.ts";
 import { handClock } from "./hand-clock.ts";
+import { pngAvatarCrop } from "./avatar-crop.ts";
 import { slowCalls } from "./slow-calls.ts";
 import { webTestCookout } from "../../../../scripts/web-test-server.ts";
 
@@ -41,7 +42,7 @@ interface ComposerOpening {
 }
 
 function composerFor({ boardStore, composer, storage }: ComposerOpening): Composer {
-  return composer ?? createComposer({ boardStore, storage: storage ?? memoryStorage() });
+  return composer ?? createComposer({ boardStore, crop: pngAvatarCrop, storage: storage ?? memoryStorage() });
 }
 
 function readingFor(reading: Reading | undefined): Reading {

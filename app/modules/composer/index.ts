@@ -17,11 +17,11 @@
  * and puts the caret after it; `clear` empties the box. While there are
  * suggestions, one is `highlighted` (the first, after each edit): `highlight`
  * moves it down or up, wrapping round, and `chooseHighlighted` chooses it.
- * When the identities or commands change, the suggestions are read again, but the highlighted
+ * When the identities or Webhook commands change, the suggestions are read again, but the highlighted
  * one stays highlighted while still listed, and suggestions `dismiss` hid stay hidden, so a change
  * elsewhere never moves what the keys act on.
  * `replyTo(name)` puts `@name ` at the start of the box (Reply on a thread's
- * message), unless the text already mentions them or they are deactivated,
+ * message, or on a channel message for its thread's box), unless the text already mentions them or they are deactivated,
  * and asks the box to take focus with the caret at the end.
  * `identities` is the identity list itself, an external store too, over the
  * board store's identities slice, so a view can tell a human from an agent
@@ -38,6 +38,8 @@
  * list at once and forgets the text, or, if the server refuses, keeps the
  * text and the refusal. `description(name)` is an agent's description as it
  * is edited, and saves the same way.
+ * `avatar(name)` is an avatar picked and not saved yet (#560): `choose` refuses a file over 2 MB or, after `options.crop`, not an image, else keeps the 256 px PNG with a `data:` URL to preview;
+ * `save` sends it and saves as `description` does, and `cancel` forgets it. `canvasAvatarCrop` is the page's crop.
  * `identities.actions(name)` is what an agent's owner or an admin does to
  * that identity: rotate its token, list and revoke its agent session (the board store's agent sessions for it, shown while `subscribeToSessions` has a reader),
  * deactivate it, reactivate it, delete it and transfer it. Each is asked
@@ -50,12 +52,10 @@
  * snapshot until `forgetToken` (`copyToken` puts it on the clipboard).
  * `identities.creation` creates an agent the caller owns, whose token then
  * shows in that agent's `actions`.
- * `channelDraft(channel)`, a channel's box, also suggests the registered
- * commands (from the board store's command list, read once the identities load)
- * whose names start with what follows `/` when that is the whole text;
- * choosing one makes it the draft's `command`, whose data the box prompts
- * for, until `clear`, or `unpick`, which brings back the text as it was; `dismiss` hides any suggestions until the next edit. A
- * thread's reply box suggests no commands, since a call is a top-level message.
+ * `channelDraft(channel)`, a channel's box, also suggests, when the whole text is `/` and a prefix, the Commands with names starting with it (only `/schedule`), then the registered Webhook commands that do (from the board store's list, read once the identities load), less any named like a Command.
+ * Choosing a Command completes the box to `/name `; `commandRun(text)` says when sending `/name`, or `/name ` and a text, runs it instead of posting, and with what text. Choosing a Webhook command makes it the draft's `webhookCommand`, whose data the box prompts
+ * for, until `clear`, or `unpickWebhookCommand`, which brings back the text as it was; `dismiss` hides any suggestions until the next edit. A
+ * thread's reply box suggests neither, since both act at the top level.
  * Each box's text, unsent, is kept in the browser's storage (`options.storage`, under the browser-storage module's
  * `keptTextKey`) for the identity logged in when the box is first drawn, so it shows only in its own box and only to
  * that identity, and comes back, with the caret at its end, when the page opens again (#600); while nobody is logged in it is kept
@@ -66,36 +66,32 @@
  * on the draft empties them with its text. An image among them has an object URL for its thumbnail until it leaves.
  */
 import type { AgentCreation, IdentityActions } from "./lib/owner-powers.ts";
-import type { BrowserStorage, DraftSnapshot, KeptText, Sources } from "./lib/snapshot.ts";
-import type { Command, Identity, IdentityName } from "../sdk/index.ts";
-import type { DisplayNameDraft, TriggerSettings } from "./lib/profile-stores.ts";
-import { EMPTY, changesFor, draftChanges, keptTextIn } from "./lib/snapshot.ts";
+import type { AvatarChoice, AvatarCrop, DisplayNameDraft, TriggerSettings } from "./lib/profile-stores.ts";
+import type { BrowserStorage, CommandRun, DraftSnapshot, KeptText, Sources, WebhookCommand } from "./lib/snapshot.ts";
+import {
+  COMMANDS,
+  EMPTY,
+  changesFor,
+  channelWebhookCommands,
+  commandRunIn,
+  draftChanges,
+  keptTextIn,
+} from "./lib/snapshot.ts";
+import type { Identity, IdentityName } from "../sdk/index.ts";
 import type { IdentityList, IdentityStore } from "./lib/identity-list.ts";
-import { commandList, loggedInName, selectedStore } from "../board/index.ts";
+import { loggedInName, selectedStore, webhookCommandList } from "../board/index.ts";
+import { storeIn, withAttachments } from "./lib/draft.ts";
 import type { AdminChanges } from "./lib/admin-change.ts";
 import type { IdentityDeletion } from "./lib/identity-deletion.ts";
-import type { PendingAttachments } from "./lib/pending-attachments.ts";
+import type { PendingAttachments } from "./lib/draft.ts";
 import { createAdminChanges } from "./lib/admin-change.ts";
 import { createIdentityDeletion } from "./lib/identity-deletion.ts";
 import { createIdentityList } from "./lib/identity-list.ts";
-import { createPendingAttachments } from "./lib/pending-attachments.ts";
 import { listenersOf } from "./lib/listeners.ts";
 import { ownerPowersOf } from "./lib/owner-powers.ts";
 import { profileStoresOf } from "./lib/profile-stores.ts";
 
-const NO_COMMANDS: readonly Command[] = [];
-
-function withAttachments(draft: Omit<Draft, "attachments">): Draft {
-  const attachments = createPendingAttachments();
-  return {
-    ...draft,
-    attachments,
-    clear: () => {
-      attachments.clear();
-      draft.clear();
-    },
-  };
-}
+const NO_WEBHOOK_COMMANDS: readonly WebhookCommand[] = [];
 
 function createDraft(list: IdentityList, sources: Sources, kept: KeptText): Omit<Draft, "attachments"> {
   const listeners = listenersOf(list.show);
@@ -115,6 +111,7 @@ function createDraft(list: IdentityList, sources: Sources, kept: KeptText): Omit
     clear: () => {
       change(() => changes.written(EMPTY, EMPTY));
     },
+    commandRun: (text) => commandRunIn({ listed: sources.commands, text }),
     dismiss: () => {
       change(changes.dismissed);
     },
@@ -124,29 +121,21 @@ function createDraft(list: IdentityList, sources: Sources, kept: KeptText): Omit
     highlight: (direction) => {
       change((snapshot) => changes.highlightMoved(snapshot, direction));
     },
-    pick: (name) => {
-      change((snapshot) =>
-        changes.picked(
-          snapshot,
-          snapshot.commands.filter((command) => command.name === name),
-        ),
-      );
+    pickCommand: (name) => {
+      change((snapshot) => changes.completed(snapshot, name));
+    },
+    pickWebhookCommand: (name) => {
+      change((snapshot) => changes.picked(snapshot, name));
     },
     replyTo: (name) => {
       change((snapshot) => changes.repliedTo(snapshot, name));
     },
     snapshot: current,
     subscribe: listeners.add,
-    unpick: () => {
+    unpickWebhookCommand: () => {
       change(changes.unpicked);
     },
   };
-}
-
-function storeIn<Store>(stores: Map<string, Store>, key: string, make: () => Store): Store {
-  const store = stores.get(key) ?? make();
-  stores.set(key, store);
-  return store;
 }
 
 interface IdentitiesMaking {
@@ -190,21 +179,25 @@ export interface Draft {
   readonly edit: (text: string, caret: number) => void;
   /** Puts `@name ` in place of the mention being typed. */
   readonly choose: (name: string) => void;
-  /** Chooses the highlighted suggestion, if there are any: a mention to put in, or a command to pick. */
+  /** Chooses the highlighted suggestion, if there are any: a mention to put in, a Command to complete, or a Webhook command to pick. */
   readonly chooseHighlighted: () => void;
   /** Puts `@name ` at the start of the box, unless the text already mentions them or they are deactivated, and has the box take focus with the caret at the end; with `null` (replying to yourself) it only takes focus. */
   readonly replyTo: (name: string | null) => void;
-  /** Picks the named command, if the box suggests it, keeping the text for `unpick`. */
-  readonly pick: (name: string) => void;
-  /** Drops the picked command and keeps the text, so the box comes back as it was, its suggestions hidden and `returned` true until the next edit. */
-  readonly unpick: () => void;
+  /** Completes the box to `/name ` with the caret at its end, if the box suggests the named Command. */
+  readonly pickCommand: (name: string) => void;
+  /** The Command that sending `text` runs in place of posting, with the text after `/name `, or `null` when it names none, so it posts. */
+  readonly commandRun: (text: string) => CommandRun | null;
+  /** Picks the named Webhook command, if the box suggests it, keeping the text for `unpickWebhookCommand`. */
+  readonly pickWebhookCommand: (name: string) => void;
+  /** Drops the picked Webhook command and keeps the text, so the box comes back as it was, its suggestions hidden and `returned` true until the next edit. */
+  readonly unpickWebhookCommand: () => void;
   /** Hides the suggestions until the next edit. */
   readonly dismiss: () => void;
   /** Moves the highlight one suggestion down or up, wrapping round. */
   readonly highlight: (direction: "down" | "up") => void;
   /** The files added to the box and not sent yet, by paste, drop or the attach button (#377). */
   readonly attachments: PendingAttachments;
-  /** Empties the box, its pending files included, and drops the picked command, as after sending its message or call. */
+  /** Empties the box, its pending files included, and drops the picked Webhook command, as after sending its message or call. */
   readonly clear: () => void;
 }
 
@@ -228,11 +221,11 @@ export interface Identities extends AdminChanges {
 /** The composer store: a draft for each message box (and each identity typing in it), and for each display name being edited. */
 export interface Composer {
   /**
-   * The draft for the box with this key (`channel/id` for a thread's reply box): the same store each time for one key. It suggests no commands.
+   * The draft for the box with this key (`channel/id` for a thread's reply box): the same store each time for one key. It suggests no Commands and no Webhook commands.
    * `members`, read at each edit, names the identities to suggest ahead of the other matches, in its order (a thread's members, most recent poster first); the first call for a key sets it.
    */
   readonly draft: (key: string, members: () => readonly IdentityName[]) => Draft;
-  /** The draft for a channel's message box, which also suggests commands: the same store each time for one channel. */
+  /** The draft for a channel's message box, which also suggests the Commands and the Webhook commands: the same store each time for one channel. */
   readonly channelDraft: (channel: string) => Draft;
   /** Who posted a message or a reply in this channel, from its messages the page has loaded, most recent first, without whoever is logged in. */
   readonly channelPosters: (channel: string) => readonly IdentityName[];
@@ -240,17 +233,21 @@ export interface Composer {
   readonly displayName: (name: IdentityName) => DisplayNameDraft;
   /** The description being edited for this agent: the same store each time for one name. */
   readonly description: (name: IdentityName) => DisplayNameDraft;
+  /** The avatar picked for this identity and not saved yet: the same store each time for one name. */
+  readonly avatar: (name: IdentityName) => AvatarChoice;
   /** The identity list the suggestions come from. */
   readonly identities: Identities;
   /** This agent's trigger URL for its owner: read when first shown, set with a write-only token, or cleared (#378). */
   readonly trigger: (name: IdentityName) => TriggerSettings;
 }
 
-/** What the composer store needs: the board store, which holds the identities and the commands a channel's box suggests, and makes the identities' changes on the server. */
+/** What the composer store needs: the board store, which holds the identities and the Webhook commands a channel's box suggests, and makes the identities' changes on the server. */
 export interface ComposerOptions {
   readonly boardStore: IdentityStore;
   /** Where each box's unsent text is kept: the browser's local storage on the page. */
   readonly storage: BrowserStorage;
+  /** How a picked image becomes an avatar's PNG: `canvasAvatarCrop` on the page. */
+  readonly crop: AvatarCrop;
 }
 
 /**
@@ -264,29 +261,28 @@ export function createComposer(options: ComposerOptions): Composer {
   const list = createIdentityList(options.boardStore);
   const deletion = createIdentityDeletion(options.boardStore);
   const readers = listenersOf(list.show);
-  function registered(): readonly Command[] {
-    const commands = commandList(options.boardStore.snapshot());
-    if (commands.status !== "loaded") {
-      return NO_COMMANDS;
-    }
-    return commands.commands;
+  function webhookCommands(): readonly WebhookCommand[] {
+    return channelWebhookCommands(webhookCommandList(options.boardStore.snapshot()));
   }
-  function keptDraft(box: string, sources: Sources): Draft {
+  function keptDraft(box: string, sources: Omit<Sources, "identities">): Draft {
     const kept = keptText(loggedInName(options.boardStore.snapshot()), box);
-    return storeIn(drafts, kept.key, () => withAttachments(createDraft(list, sources, kept)));
+    const all = { ...sources, identities: list.identities };
+    return storeIn({ key: kept.key, make: () => withAttachments(createDraft(list, all, kept)), stores: drafts });
   }
   list.onChange(readers.notify);
   return {
-    ...profileStoresOf(list),
+    ...profileStoresOf({ crop: options.crop, list }),
     channelDraft: (channel) =>
-      keptDraft(channel, { commands: registered, identities: list.identities, members: () => list.posters(channel) }),
+      keptDraft(channel, { commands: COMMANDS, members: () => list.posters(channel), webhookCommands }),
     channelPosters: list.posters,
-    draft: (key, members) => keptDraft(key, { commands: () => NO_COMMANDS, identities: list.identities, members }),
+    draft: (key, members) => keptDraft(key, { commands: [], members, webhookCommands: () => NO_WEBHOOK_COMMANDS }),
     identities: identitiesOf({ adminChanges: createAdminChanges(list), deletion, list, readers }),
   };
 }
 
-export type { DisplayNameDraft } from "./lib/profile-stores.ts";
+export type { AvatarChoice, DisplayNameDraft } from "./lib/profile-stores.ts";
+export type { Command } from "./lib/snapshot.ts";
+export { canvasAvatarCrop } from "./lib/canvas-crop.ts";
 export { type TriggerSettings, type TriggerSnapshot, savedUrl } from "./lib/trigger-settings.ts";
 export type { AgentCreation } from "./lib/agent-creation.ts";
 export type { PendingAttachment, PendingAttachments } from "./lib/pending-attachments.ts";

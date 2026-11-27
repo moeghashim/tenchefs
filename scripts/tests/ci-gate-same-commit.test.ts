@@ -1,7 +1,7 @@
 import { COMPLETED, RUN, RUNNING, done, ended, fake, reasonOf, running, view } from "./lib/fake-gh.ts";
 import { expect, it } from "vitest";
 
-const ARGS = ["--branch", "merge-ticket-7", "--commit", "abc"];
+const ARGS = ["--branch", "v1", "--commit", "abc"];
 const OTHER_URL = "https://github.com/o/r/actions/runs/41";
 const NEWER = 43;
 const OLDER = 41;

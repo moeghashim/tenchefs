@@ -1,10 +1,12 @@
-import { AttachmentItem, AttachmentList } from "../../design-system/messages.tsx";
-import { AttachmentView } from "./attachment-view.tsx";
-import type { Message } from "../../sdk/index.ts";
+import type { Attachment, Message } from "../../sdk/index.ts";
+import { imagesOf, shownImageOf } from "./attachment-text.ts";
+import { AttachmentItems } from "./attachment-items.tsx";
+import { ImageCarousel } from "../../design-system/messages.tsx";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
-const TEXT = { attachments: "Attachments" } as const;
 const NONE = 0;
+const NO_ATTACHMENTS: readonly Attachment[] = [];
 
 interface MessageAttachmentsProps {
   readonly message: Message;
@@ -12,17 +14,15 @@ interface MessageAttachmentsProps {
 }
 
 export function MessageAttachments(props: MessageAttachmentsProps): ReactNode {
-  const { attachments = [] } = props.message;
+  const { attachments = NO_ATTACHMENTS } = props.message;
+  const images = useMemo(() => imagesOf(attachments), [attachments]);
+  const shown = useMemo(() => images.map((image) => shownImageOf(image)), [images]);
   if (attachments.length === NONE) {
     return null;
   }
   return (
-    <AttachmentList label={TEXT.attachments}>
-      {attachments.map((attachment) => (
-        <AttachmentItem key={attachment.id}>
-          <AttachmentView attachment={attachment} linked={props.linked} />
-        </AttachmentItem>
-      ))}
-    </AttachmentList>
+    <ImageCarousel images={shown}>
+      <AttachmentItems attachments={attachments} images={images} linked={props.linked} />
+    </ImageCarousel>
   );
 }

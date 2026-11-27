@@ -1,6 +1,7 @@
-import type { Channel, ChannelName, Command, CookoutClient, CookoutEvent } from "../../sdk/index.ts";
+import type { Channel, ChannelName, CookoutClient, CookoutEvent } from "../../sdk/index.ts";
 import type { Failure } from "./failure.ts";
 import type { Slice } from "./slice.ts";
+import type { WebhookCommand } from "../../webhook-commands/index.ts";
 import { failure } from "./failure.ts";
 
 type ChannelsState =
@@ -8,14 +9,14 @@ type ChannelsState =
   | { readonly status: "loaded"; readonly channels: readonly Channel[] }
   | Failure;
 
-type CommandsState =
+type WebhookCommandsState =
   | { readonly status: "loading" }
-  | { readonly status: "loaded"; readonly commands: readonly Command[] }
+  | { readonly status: "loaded"; readonly webhookCommands: readonly WebhookCommand[] }
   | Failure;
 
 type ChannelsClient = Pick<CookoutClient, "listChannels">;
 
-type CommandsClient = Pick<CookoutClient, "listCommands">;
+type WebhookCommandsClient = Pick<CookoutClient, "listCommands">;
 
 const LOADING = { status: "loading" } as const;
 
@@ -73,24 +74,24 @@ const channelsSlice: Slice<ChannelsState, ChannelsClient> = {
   },
 };
 
-function commandsApplied(state: CommandsState, event: CookoutEvent): CommandsState {
+function webhookCommandsApplied(state: WebhookCommandsState, event: CookoutEvent): WebhookCommandsState {
   if (event.type !== "command" || state.status !== "loaded") {
     return state;
   }
-  const commands = withNamed(state.commands, event.command);
-  if (commands === state.commands) {
+  const commands = withNamed(state.webhookCommands, event.command);
+  if (commands === state.webhookCommands) {
     return state;
   }
-  return { commands, status: "loaded" };
+  return { status: "loaded", webhookCommands: commands };
 }
 
-const commandsSlice: Slice<CommandsState, CommandsClient> = {
-  apply: commandsApplied,
+const webhookCommandsSlice: Slice<WebhookCommandsState, WebhookCommandsClient> = {
+  apply: webhookCommandsApplied,
   empty: LOADING,
   read: async (client) => {
     try {
       const { commands } = await client.listCommands();
-      return { commands, status: "loaded" };
+      return { status: "loaded", webhookCommands: commands };
     } catch (error: unknown) {
       return failure(error);
     }
@@ -100,8 +101,8 @@ const commandsSlice: Slice<CommandsState, CommandsClient> = {
 export {
   type ChannelsClient,
   type ChannelsState,
-  type CommandsClient,
-  type CommandsState,
+  type WebhookCommandsClient,
+  type WebhookCommandsState,
   channelsSlice,
-  commandsSlice,
+  webhookCommandsSlice,
 };

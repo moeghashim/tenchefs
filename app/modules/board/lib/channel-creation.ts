@@ -22,6 +22,7 @@ interface ChannelCreation {
   readonly snapshot: () => ChannelCreationSnapshot;
   readonly open: () => void;
   readonly close: () => void;
+  readonly settle: () => void;
   readonly editName: (name: string) => void;
   readonly editDescription: (description: string) => void;
   readonly create: (created: (name: ChannelName) => void) => void;
@@ -115,6 +116,9 @@ function createChannelCreation(options: CreationOptions): ChannelCreation {
     },
     open: () => {
       publish({ ...current, cancelled: false, open: true });
+    },
+    settle: () => {
+      publish({ ...current, cancelled: false });
     },
     snapshot: () => current,
     subscribe: (listener) => {

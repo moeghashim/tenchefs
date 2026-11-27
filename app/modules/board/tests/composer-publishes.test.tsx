@@ -8,6 +8,11 @@ import { createComposer } from "../../composer/index.ts";
 import { createTestAgent } from "../../testing/index.ts";
 import { waitFor } from "@testing-library/react";
 
+async function noCrop(): Promise<null> {
+  await Promise.resolve();
+  return null;
+}
+
 const NONE = 0;
 const CARET = 1;
 
@@ -32,6 +37,7 @@ function storesOf({ admin, composer }: Composing): readonly ExternalStore<unknow
     composer.identities.creation,
     composer.identities.deletion,
     composer.displayName(admin),
+    composer.avatar(admin),
     composer.description(admin),
     composer.trigger(admin),
   ];
@@ -40,7 +46,7 @@ function storesOf({ admin, composer }: Composing): readonly ExternalStore<unknow
 async function composing(): Promise<Composing> {
   const { identity } = await adminClient().whoami();
   const { hand, store } = opened();
-  const composer = createComposer({ boardStore: store, storage: memoryStorage() });
+  const composer = createComposer({ boardStore: store, crop: noCrop, storage: memoryStorage() });
   return { admin: identity.name, composer, hand };
 }
 
@@ -101,6 +107,18 @@ it("the profile's stores publish nothing for an edit that changes nothing", { ti
   composer.identities.creation.edit("");
 
   expect(publishes.map((store) => store.count())).toStrictEqual(publishes.map(() => NONE));
+});
+
+it("an avatar's Save with nothing picked sends nothing and publishes nothing", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { admin, composer } = await composing();
+  const avatar = composer.avatar(admin);
+  const publishes = await recordedOnceLoaded([avatar], composer);
+
+  avatar.save();
+
+  expect([publishes.map((store) => store.count()), avatar.snapshot()]).toStrictEqual([[NONE], { status: "empty" }]);
 });
 
 it("an identity deleted while its profile is not open publishes nothing from the identity deletion", {

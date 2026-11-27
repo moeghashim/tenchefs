@@ -1,11 +1,13 @@
 import type { ChannelName, Message, MessageId, ReadReceipt, TopLevelMessage } from "../../sdk/index.ts";
 import type { MenuClosing, Reply } from "./use-message-menu.ts";
 import type { MessageMenu, ThreadNews } from "../../unread/index.ts";
-import { openThreadHref, threadHref, useMarkOf } from "./message-marks.ts";
+import { openThreadHref, threadHref, titleOf, useMarkOf } from "./message-marks.ts";
 import { useMessageMenu, useReplyAction } from "./use-message-menu.ts";
 import { MessageEntryBody } from "./message-entry-body.tsx";
 import { MessageItem } from "../../design-system/messages.tsx";
 import type { ReactNode } from "react";
+import { memo } from "react";
+import { sameProps } from "./same-props.ts";
 import { useAuthor } from "./use-author.ts";
 import { useMessageTime } from "./use-time-ago.ts";
 
@@ -33,9 +35,18 @@ interface MessageEntryProps {
   readonly threadParent: TopLevelMessage | null;
   readonly reply: Reply | null;
   readonly opened: boolean;
+  readonly spaced: boolean;
+  readonly titled: boolean;
 }
 
-export function MessageEntry(props: MessageEntryProps): ReactNode {
+function shownTitle(props: MessageEntryProps): string | null {
+  if (!props.titled) {
+    return null;
+  }
+  return titleOf(props.row.message);
+}
+
+function MessageEntryView(props: MessageEntryProps): ReactNode {
   const { message } = props.row;
   const { agent, displayName, note, presence, profileHref } = useAuthor(message.author);
   const href = threadHref({ channel: props.channel, message });
@@ -62,6 +73,8 @@ export function MessageEntry(props: MessageEntryProps): ReactNode {
       note={note}
       presence={presence}
       onAction={handleReply}
+      spaced={props.spaced}
+      title={shownTitle(props)}
       replyOnHover={message.kind === "top-level" || props.reply !== null}
       threadHref={openThreadHref({ channel: props.channel, message })}
       threadOnHover={message.kind === "top-level"}
@@ -79,3 +92,5 @@ export function MessageEntry(props: MessageEntryProps): ReactNode {
     </MessageItem>
   );
 }
+
+export const MessageEntry = memo(MessageEntryView, sameProps("row"));

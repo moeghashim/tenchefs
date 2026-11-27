@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import type { Screen, Shot, Theme, ThemePass } from "./lib/screenshots.ts";
-import { attachScreenFiles, setScreenPresences } from "./lib/screen-triggers.ts";
+import { attachScreenFiles, setScreenPresences, titleScreenThread } from "./lib/screen-triggers.ts";
 import { field, list, parseJson, text } from "./lib/json.ts";
 import { hillsPng, moveClockForward } from "../app/modules/testing/index.ts";
 import { mkdirSync, mkdtempSync } from "node:fs";
@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 
 interface Board {
   readonly closed: readonly number[];
+  readonly titled: unknown;
   readonly dropped: string;
   readonly owner: string;
   readonly token: string;
@@ -69,7 +70,7 @@ function seed(server: DevCookout): Board {
     owner: tokenOf(identities, TRIGGER_OWNER),
     token: tokenOf(identities, LOGGED_IN_AS),
   };
-  return { closed: closed.filter((id) => typeof id === "number"), ...tokens, server };
+  return { closed: closed.filter((id) => typeof id === "number"), titled: field(seeded, "thread"), ...tokens, server };
 }
 
 function closeThreads({ closed, server, token }: Board): void {
@@ -126,9 +127,11 @@ async function fillAll(page: Page, fills: Required<Screen>["fill"]): Promise<voi
   await fillAll(page, rest);
 }
 
-async function chooseAndFill(page: Page, screen: Screen): Promise<void> {
-  if (typeof screen.choose === "string") {
-    await page.getByRole("menuitem", { exact: true, name: screen.choose }).click({ timeout: RENDER_MS });
+async function sendAndFill(page: Page, screen: Screen): Promise<void> {
+  if (typeof screen.send === "string") {
+    const box = page.getByLabel("Message", { exact: true });
+    await box.fill(screen.send, { timeout: RENDER_MS });
+    await box.press("Enter");
   }
   await fillAll(page, screen.fill ?? []);
 }
@@ -144,7 +147,7 @@ async function interact(page: Page, shot: Shot): Promise<void> {
     const scope = page.locator(shot.screen.clickIn ?? "body");
     await scope.getByRole("button", { exact: true, name: shot.screen.click }).click({ timeout: RENDER_MS });
   }
-  await chooseAndFill(page, shot.screen);
+  await sendAndFill(page, shot.screen);
   await attachScreenFiles({ image: hillsPng(), page, screen: shot.screen, timeout: RENDER_MS });
 }
 
@@ -240,6 +243,7 @@ async function prepared(server: DevCookout): Promise<Board> {
   const board = seed(server);
   closeThreads(board);
   const { adminToken, url } = server;
+  await titleScreenThread({ thread: board.titled, token: board.token, url });
   await setScreenPresences({
     adminToken,
     dropped: DROPPED_AGENT,
@@ -259,7 +263,7 @@ function clockMover(clockUrl: string): ThemePass["moveClock"] {
 
 function freshBoards(browser: Browser, out: string): (theme: Theme) => Promise<ThemePass> {
   return async (theme) => {
-    const server = await startDevCookout({ COOKOUT_PRESENCE_GRACE_SECONDS: "1" });
+    const server = await startDevCookout({ env: { COOKOUT_PRESENCE_GRACE_SECONDS: "1" } });
     try {
       const newPage = await loggedInBoth(browser, await prepared(server), theme);
       return { moveClock: clockMover(server.clockUrl), shoot: shooter(newPage, out), stop: server.stop };

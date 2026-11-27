@@ -11,6 +11,8 @@ import type {
   TopLevelMessage,
   TopLevelMessageResponse,
 } from "../../index.ts";
+import type { DeletedMessageResponse, SetThreadTitleRequest } from "../../client.ts";
+import { Schema, SchemaTransformation } from "effect";
 import {
   attachmentIdPattern,
   imageContentTypes,
@@ -28,9 +30,7 @@ import {
 } from "../../../identities/index.ts";
 import { isMessageId, messageTextLength, pageSize, reactionNames, shownRepliers } from "../../index.ts";
 import type { Attachment } from "../../../attachments/index.ts";
-import type { DeletedMessageResponse } from "../../client.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
-import { Schema } from "effect";
 import { isScheduledMessageId } from "../../../scheduled-messages/index.ts";
 import { matchesWire } from "../../../http/index.ts";
 
@@ -62,6 +62,22 @@ const ScheduledMessageMarkerSchema = Schema.Struct({ deleted: Schema.Boolean, id
 const textRule = Schema.isBetweenLength(messageTextLength.minimum, messageTextLength.maximum);
 const TextSchema = Schema.String.check(textRule);
 const ShownTextSchema = Schema.String.check(Schema.isMaxLength(messageTextLength.maximum));
+
+const LOWEST_TITLE_LENGTH = 1;
+const LONGEST_TITLE_LENGTH = 100;
+const ONE_LINE = /^[^\r\n]*$/u;
+const titleRules = [
+  Schema.isMaxLength(LONGEST_TITLE_LENGTH, { message: "Use at most 100 characters." }),
+  Schema.isPattern(ONE_LINE, { message: "Keep the title on one line." }),
+] as const;
+const ThreadTitleSchema = Schema.String.check(
+  Schema.isTrimmed(),
+  Schema.isMinLength(LOWEST_TITLE_LENGTH),
+  ...titleRules,
+);
+const SentThreadTitleSchema = Schema.String.pipe(
+  Schema.decodeTo(Schema.String.check(...titleRules), SchemaTransformation.trim()),
+);
 
 const AttachmentIdSchema = Schema.String.check(Schema.isPattern(attachmentIdPattern)).pipe(
   Schema.refine(isAttachmentId, { identifier: "AttachmentId" }),
@@ -129,6 +145,9 @@ const TopLevelMessageSchema = matchesWire<TopLevelMessage>()(
     latestReplyId: Schema.NullOr(MessageIdSchema),
     repliers: RepliersSchema,
     replyCount: ReplyCountSchema,
+    title: Schema.optionalKey(ThreadTitleSchema),
+    titleSetAt: Schema.optionalKey(IsoTimeSchema),
+    titleSetBy: Schema.optionalKey(IdentityNameSchema),
   }),
 );
 
@@ -152,6 +171,7 @@ export const PostMessageRequestSchema = Schema.Struct({
   replyTo: Schema.optionalKey(MessageIdSchema),
   seen: Schema.optionalKey(MessageIdSchema),
   text: TextSchema,
+  title: Schema.optionalKey(SentThreadTitleSchema),
 });
 
 export const PostWithAttachmentsRequestSchema = Schema.Struct({
@@ -215,6 +235,10 @@ export const ReactionsResponseSchema = matchesWire<ReactionsResponse>()(
 
 export const TopLevelMessageResponseSchema = matchesWire<TopLevelMessageResponse>()(
   Schema.Struct({ message: TopLevelMessageSchema }),
+);
+
+export const SetThreadTitleRequestSchema = matchesWire<SetThreadTitleRequest>()(
+  Schema.Struct({ title: SentThreadTitleSchema }),
 );
 
 export const DeletedMessageResponseSchema = matchesWire<DeletedMessageResponse>()(

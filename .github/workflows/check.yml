@@ -1,23 +1,27 @@
 name: Check
 
-# Check runs once per commit, on v1 and the merge-ticket-* branches (#605), and on a pull request
-# into v1 (#737): a worker runs `pnpm check` before opening a pull request. It doesn't run on
-# ticket-* pushes, which ran it twice per commit and queued the landing runs behind them. A push to main doesn't run
-# it: main is only fast-forwarded to a commit v1's push run already checked. A Check run has 8 jobs,
-# the static checks and the unit tests on the merged result: `static`, `tests` ×6 and `coverage`.
-# The browser tests, pack smoke, the published client and the e2e suite run in the Release
-# workflow, the gate, on the newest v1 commit whose Check run is green, before it publishes and
-# deploys (#636, docs/adr/0114-release-is-the-gate-on-the-newest-green-v1-commit.md).
+# Check runs on pushes to v1, on a pull request into v1 (#737) and on workflow_dispatch. A worker
+# runs `pnpm check` before it lands its own pull request, waits for the pull request's Check to go
+# green, and v1's push run covers the merged result (#634, ADR 0127). It doesn't run on
+# ticket-* pushes, which ran it twice per commit. A push to main doesn't run it: main is only
+# fast-forwarded to a commit v1's push run already checked. A Check run has 9 jobs, the static
+# checks, the unit tests and the e2e suite on the merged result: `static`, `tests` ×6, `coverage`
+# and `e2e-docker`. The browser tests, pack smoke, the published client and the e2e suite again
+# run in the Release workflow, the gate, on the newest v1 commit whose Check run is green, before
+# it publishes and deploys (#636, docs/adr/0114-release-is-the-gate-on-the-newest-green-v1-commit.md).
+# The e2e suite runs here too so that a pull request that breaks it gets a red Check and never
+# lands (#786, docs/adr/0132-check-runs-the-e2e-suite.md).
 #
 # A pull request into v1 runs the same jobs on its merge with v1, plus `browser` ×6: Release's
 # browser job, each shard running only its share of the browser tests the change reaches (#737).
+# Last, once the others have ended, `adr-numbers` checks its new ADRs' numbers against the latest
+# v1 (#827).
 # A merged pull request ran no Check before it, so a broken browser test, a coverage gap or an
-# unformatted file showed only when Release ran. A merge-ticket-* pull request runs none of it,
-# since its branch's push run already checked the same merge. Every reader of Check runs asks for
-# push runs, so a pull_request run never stands in for one.
+# unformatted file showed only when Release ran. Every reader of Check runs asks for push runs,
+# so a pull_request run never stands in for one.
 on:
   push:
-    branches: [v1, "merge-ticket-*"]
+    branches: [v1]
   pull_request:
     branches: [v1]
   workflow_dispatch:
@@ -35,7 +39,6 @@ jobs:
   # The 8 static checks, one step each, one after another on one runner: the job stops at the first
   # that fails, and its failed step names it. Each step runs the check's own `pnpm check --job=`.
   static:
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'merge-ticket-')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -90,14 +93,14 @@ jobs:
 
   # Split by file count, 3 shards took 288, 177 and 157s of tests on a 4-core runner, and the first
   # was cut off at the 5-minute limit (#707). So 6 jobs each run the test files that give it a sixth
-  # of the test time the newest earlier Check run recorded in its test-timings-tests-* artifacts,
+  # of the time the newest earlier Check run recorded in its test-timings-tests-* artifacts (each
+  # file's whole cost, setup and import included, read from its blob report, #751),
   # falling back to Vitest's --shard by file count when there are none (scripts/lib/timed-shards.ts).
   # A shard whose gh call fails reading them fails instead: the others split by the timings, so a
   # split of its own would leave files to no shard and coverage short (#737).
   # Each uploads its blob report, and the coverage job merges every vitest-blob-* into one run.
   tests:
     name: tests ${{ matrix.shard }}/6
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, 'merge-ticket-')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -122,6 +125,9 @@ jobs:
           path: .vitest/blob
           include-hidden-files: true
           retention-days: 1
+      - name: Record each test file's whole cost from the blob report
+        if: always()
+        run: node scripts/test-file-costs.ts
       - name: Upload the per-file test timings
         if: always()
         uses: actions/upload-artifact@v4
@@ -130,6 +136,7 @@ jobs:
           path: |
             .timings/*.txt
             .timings/tests.json
+            .timings/tests-costs.json
           include-hidden-files: true
           if-no-files-found: ignore
 
@@ -157,9 +164,23 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
 
+  # packages/e2e on the Docker image, both legs (SQLite and Postgres), in parallel with the others,
+  # as Release's e2e-docker job runs it (#786). It took 1 m 44 s in Release run 45804002355, less
+  # than a tests shard's job, so it doesn't lengthen the run.
+  e2e-docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          cache-name: e2e-docker
+      - uses: ./.github/actions/install-chromium
+      - run: pnpm e2e:docker
+
   # Only on a pull request: the browser tests its change reaches, in Release's 6 shards.
   browser:
-    if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'merge-ticket-')
+    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       # To read the timings and the coverage map Release uploaded.
@@ -167,3 +188,27 @@ jobs:
     uses: ./.github/workflows/browser.yml
     with:
       reached: true
+
+  # Only on a pull request, and last: its ADR numbers against v1 as it is now. Hygiene, in
+  # `static`, checks them against v1 as it was when the run began, so two pull requests whose
+  # Checks ran side by side could each add the same number and turn v1 red once both landed
+  # (#824). This job starts once every other job has ended, red or green, and fetches v1 then, so
+  # the second one's Check fails naming the free number. A worker merges as soon as its Check is
+  # green, so what's left is the few seconds between this job and the merge (#827,
+  # docs/adr/0139-a-pull-request-s-check-ends-by-checking-its-adr-numbers-against-the-latest-v1.md).
+  adr-numbers:
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs: [static, tests, coverage, e2e-docker, browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The whole history, for the merge base with v1, but no file contents beyond scripts/.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: node scripts/adr-numbers.ts

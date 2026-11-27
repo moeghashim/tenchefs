@@ -36,9 +36,21 @@ async function startLine(lines: AsyncIterable<string>): Promise<StartLine> {
   throw new Error("app/dev.ts start stopped before printing its start line");
 }
 
-async function startDevCookout(env: Readonly<Record<string, string>>): Promise<DevCookout> {
+function webArguments(webFolder: string): readonly string[] {
+  if (webFolder === "") {
+    return [];
+  }
+  return ["--web", webFolder];
+}
+
+interface DevCookoutOptions {
+  readonly env?: Readonly<Record<string, string>>;
+  readonly webFolder?: string;
+}
+
+async function startDevCookout({ env = {}, webFolder = "" }: DevCookoutOptions = {}): Promise<DevCookout> {
   const variables = Object.entries(env).map(([name, value]: readonly [string, string]) => `${name}=${value}`);
-  const dev = spawn("env", [...variables, process.execPath, "app/dev.ts", "start"], {
+  const dev = spawn("env", [...variables, process.execPath, "app/dev.ts", "start", ...webArguments(webFolder)], {
     stdio: ["ignore", "pipe", "ignore"],
   });
   async function stop(): Promise<void> {

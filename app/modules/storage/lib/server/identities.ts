@@ -1,13 +1,29 @@
 import type { AgentIdentity, Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
-import type { CreateRefusal, DeleteIdentityResult, IdentityDeletesSection } from "./identity-owners.ts";
+import type {
+  AvatarRemovalsSection,
+  AvatarsToRemove,
+  CreateRefusal,
+  DeleteIdentityResult,
+  IdentityDeletesSection,
+} from "./identity-owners.ts";
 import { Effect, Option, Predicate, Schema } from "effect";
-import { IDENTITY_COLUMNS, IdentityRow, toIdentity } from "./identity-row.ts";
 import {
+  IDENTITY_COLUMNS,
+  IdentityRow,
+  insertIdentity,
+  revokeTokensOfName,
+  setOnlyTokenOf,
+  toIdentity,
+} from "./identity-row.ts";
+import {
+  memoryAvatarRemovals,
   memoryCreateRefusal,
   memoryDeactivations,
   memoryRemoveIdentity,
+  sqlAvatarRemovals,
   sqlCreateRefusal,
   sqlDeactivations,
+  sqlIdentityDeletes,
 } from "./identity-owners.ts";
 import { memoryDisplayNames, sqlDisplayNames } from "./display-names.ts";
 import { memorySetAdmin, memoryTransfers, sqlSetAdmin, sqlTransfers } from "./identity-admins.ts";
@@ -17,7 +33,6 @@ import type { FindIdentity } from "./identity-row.ts";
 import type { MemoryState } from "./memory-state.ts";
 import type { PlaceHandler } from "./commands.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
-import { isFalse } from "./adapters/sql-database.ts";
 import { unreadable } from "./errors.ts";
 
 export type TokenLookup =
@@ -31,6 +46,7 @@ type ReplaceTokenResult =
 
 export type IdentitiesSection = DisplayNamesSection &
   IdentityDeletesSection &
+  AvatarRemovalsSection &
   ReturnType<typeof sqlTransfers> &
   ReturnType<typeof sqlDeactivations> & {
     readonly createIdentity: (identity: Identity, hash: TokenHash) => Fails<"created" | CreateRefusal>;
@@ -46,6 +62,7 @@ type MemoryIdentities = {
   readonly identities: Map<IdentityName, Identity>;
   readonly activeTokens: Map<TokenHash, IdentityName>;
   readonly revokedTokens: Set<TokenHash>;
+  readonly avatarsToRemove: AvatarsToRemove;
 };
 
 const byName = (a: Identity, b: Identity) => (a.name < b.name ? -1 : 1);
@@ -109,7 +126,12 @@ interface MemoryIdentitiesSection extends Omit<IdentitiesSection, keyof Identity
 }
 
 export const memoryIdentities = (state: MemoryState): MemoryIdentitiesSection => {
-  const data: MemoryIdentities = { activeTokens: new Map(), identities: new Map(), revokedTokens: new Set() };
+  const data: MemoryIdentities = {
+    activeTokens: new Map(),
+    avatarsToRemove: new Set(),
+    identities: new Map(),
+    revokedTokens: new Set(),
+  };
   const open = <A>(work: () => A): Fails<A> => Effect.andThen(state.ensureOpen, Effect.sync(work));
   const deactivations = memoryDeactivations({
     holdToken: (name, hash) => {
@@ -122,6 +144,7 @@ export const memoryIdentities = (state: MemoryState): MemoryIdentitiesSection =>
   });
   const remove = memoryRemoveIdentity(data);
   return {
+    ...memoryAvatarRemovals({ avatarsToRemove: data.avatarsToRemove, open }),
     createIdentity: (identity, hash) => open(() => createIn(data, identity, hash)),
     deactivateIdentity: (name) => open(() => deactivations.deactivate(name)),
     findIdentity: (name) => data.identities.get(name),
@@ -154,8 +177,6 @@ export const memoryIdentities = (state: MemoryState): MemoryIdentitiesSection =>
 
 const TokenRow = Schema.Struct({ name: Schema.NullOr(Schema.String), revoked: Schema.Literals([0, 1]) });
 
-const CountRow = Schema.Struct({ count: Schema.Int });
-
 const decode =
   <S extends Schema.Decoder<unknown>>(schema: S) =>
   (row: unknown): Fails<S["Type"]> =>
@@ -175,40 +196,12 @@ const toLookup = (row: unknown): Fails<TokenLookup> =>
               })),
       );
 
-function broughtInByOf(identity: Identity): IdentityName | null {
-  if (identity.kind === "agent") {
-    return identity.broughtInBy ?? null;
-  }
-  return null;
-}
-
-export const sqlIdentities = (db: SqlDatabase): Omit<IdentitiesSection, keyof IdentityDeletesSection> => {
-  const count = (sql: string, ...params: readonly string[]) =>
-    db.get(sql, ...params).pipe(
-      Effect.flatMap(decode(CountRow)),
-      Effect.map((row) => row.count),
-    );
+export const sqlIdentities = (db: SqlDatabase): IdentitiesSection => {
   const find = (name: IdentityName) =>
     db
       .get(`SELECT ${IDENTITY_COLUMNS} FROM identities WHERE name = ?`, name)
       .pipe(Effect.flatMap((row) => (row === undefined ? Effect.succeed(undefined) : decode(IdentityRow)(row))));
-  const insert = (identity: Identity, hash: TokenHash) =>
-    Effect.andThen(
-      db.run(
-        `INSERT INTO identities (name, kind, owner, admin, created_at, display_name, brought_in_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        identity.name,
-        identity.kind,
-        identity.kind === "agent" ? identity.owner : null,
-        identity.admin ? 1 : 0,
-        identity.createdAt,
-        identity.displayName ?? null,
-        broughtInByOf(identity),
-      ),
-      db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)", hash, identity.name),
-    );
-  const revokeTokensOfName = (name: IdentityName) =>
-    db.run(`UPDATE tokens SET revoked = TRUE WHERE identity_name = ? AND ${isFalse[db.dialect]("revoked")}`, name);
+  const revokeTokensOfIdentity = revokeTokensOfName(db);
   return {
     createIdentity: (identity, hash) =>
       db.transaction(
@@ -217,11 +210,13 @@ export const sqlIdentities = (db: SqlDatabase): Omit<IdentitiesSection, keyof Id
           if (Option.isSome(refusal)) {
             return refusal.value;
           }
-          yield* insert(identity, hash);
+          yield* insertIdentity(db)(identity, hash);
           return "created" as const;
         }),
       ),
     ...sqlDeactivations(db),
+    ...sqlIdentityDeletes(db),
+    ...sqlAvatarRemovals(db),
     findIdentityByName: (name) =>
       Effect.map(find(name), (row) => Option.getOrUndefined(Option.map(Option.fromUndefinedOr(row), toIdentity))),
     findIdentityByTokenHash: (hash) =>
@@ -244,33 +239,13 @@ export const sqlIdentities = (db: SqlDatabase): Omit<IdentitiesSection, keyof Id
           if (row === undefined) {
             return { status: "not_found" } as const;
           }
-          yield* revokeTokensOfName(name);
+          yield* revokeTokensOfIdentity(name);
           yield* db.run("INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)", hash, name);
           return { identity: toIdentity(row), status: "replaced" } as const;
         }),
       ),
     setAdmin: sqlSetAdmin(db),
-    setOnlyToken: (identity, hash) =>
-      db.transaction(
-        Effect.gen(function* () {
-          const existing = yield* count("SELECT count(*) AS count FROM identities WHERE name = ?", identity.name);
-          if (existing === 0) {
-            yield* Effect.andThen(db.run("DELETE FROM tokens WHERE token_hash = ?", hash), insert(identity, hash));
-            return;
-          }
-          yield* db.run(
-            `UPDATE tokens SET revoked = TRUE WHERE identity_name = ? AND ${isFalse[db.dialect]("revoked")} AND token_hash <> ?`,
-            identity.name,
-            hash,
-          );
-          yield* db.run(
-            `INSERT INTO tokens (token_hash, identity_name, revoked) VALUES (?, ?, FALSE)
-             ON CONFLICT (token_hash) DO UPDATE SET identity_name = excluded.identity_name, revoked = FALSE`,
-            hash,
-            identity.name,
-          );
-        }),
-      ),
+    setOnlyToken: (identity, hash) => db.transaction(setOnlyTokenOf(db)(identity, hash)),
     ...sqlDisplayNames(db),
     ...sqlTransfers(db),
   };

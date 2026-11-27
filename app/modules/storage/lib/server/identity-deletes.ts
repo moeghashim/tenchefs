@@ -1,8 +1,10 @@
 import { Array as Arr, Effect, Option, Predicate, Schema, String as Str } from "effect";
 import { IDENTITY_COLUMNS, IdentityRow, toIdentity } from "./identity-row.ts";
 import type { Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
+import type { AvatarId } from "../../../avatars/index.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
+import { isAvatarId } from "../../../avatars/index.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
 
@@ -20,6 +22,11 @@ interface IdentityDeletesSection {
   readonly countMessagesBy: (name: IdentityName) => Fails<number>;
 }
 
+interface AvatarRemovalsSection {
+  readonly avatarsToRemove: (limit: number) => Fails<readonly AvatarId[]>;
+  readonly avatarsRemoved: (ids: readonly AvatarId[]) => Fails<void>;
+}
+
 interface DeleteCheck {
   readonly identity: Identity;
   readonly activeAdmins: number;
@@ -30,9 +37,12 @@ interface DeleteCheck {
 interface MemoryIdentityDeletesOptions {
   readonly identities: Map<IdentityName, Identity>;
   readonly activeTokens: Map<TokenHash, IdentityName>;
+  readonly avatarsToRemove: AvatarsToRemove;
 }
 
 const LAST_ADMIN_COUNT = 1;
+
+const ONE_AT_A_TIME = { concurrency: 1, discard: true } as const;
 
 const NO_MESSAGES = 0;
 
@@ -43,6 +53,13 @@ const SELECT_OWNED = "SELECT name FROM identities WHERE kind = 'agent' AND owner
 const COUNT_ACTIVE_ADMINS = "SELECT count(*) AS count FROM identities WHERE admin = TRUE AND deactivated = FALSE";
 
 const COUNT_MESSAGES = "SELECT count(*) AS count FROM messages WHERE author_name = ? OR author_owner = ?";
+
+const KEEP_AVATAR_TO_REMOVE =
+  "INSERT INTO avatars_to_remove (id) SELECT avatar FROM identities WHERE name = ? AND avatar IS NOT NULL";
+
+const SELECT_AVATARS_TO_REMOVE = "SELECT id FROM avatars_to_remove ORDER BY id LIMIT ?";
+
+const DROP_AVATAR_TO_REMOVE = "DELETE FROM avatars_to_remove WHERE id = ?";
 
 const DROP_ROWS = [
   "DELETE FROM deliveries WHERE command IN (SELECT name FROM commands WHERE handler_name = ?)",
@@ -67,6 +84,8 @@ const DROP_ROWS = [
 const OwnedRow = Schema.Struct({ name: Schema.String.pipe(Schema.refine(isIdentityName)) });
 
 const CountRow = Schema.Struct({ count: Schema.Int });
+
+const AvatarToRemoveRow = Schema.Struct({ id: Schema.String.pipe(Schema.refine(isAvatarId)) });
 
 function isLastActiveAdmin({ activeAdmins, identity }: DeleteCheck): boolean {
   return identity.admin && identity.deactivated !== true && activeAdmins <= LAST_ADMIN_COUNT;
@@ -105,6 +124,7 @@ function forgetBringer(identities: Map<IdentityName, Identity>, name: IdentityNa
 
 function memoryRemoveIdentity({
   activeTokens,
+  avatarsToRemove,
   identities,
 }: MemoryIdentityDeletesOptions): (name: IdentityName, messages: number) => DeleteIdentityResult {
   return (name, messages) => {
@@ -121,10 +141,32 @@ function memoryRemoveIdentity({
     );
     return Option.getOrElse(deleteRefusal({ activeAdmins, agents, identity, messages }), () => {
       dropTokensOf(activeTokens, name);
+      if (Predicate.isNotUndefined(identity.avatar)) {
+        avatarsToRemove.add(identity.avatar.id);
+      }
       identities.delete(name);
       forgetBringer(identities, name);
       return { identity: { ...identity }, status: "deleted" } as const;
     });
+  };
+}
+
+type AvatarsToRemove = Set<AvatarId>;
+
+interface MemoryAvatarRemovalsOptions {
+  readonly avatarsToRemove: AvatarsToRemove;
+  readonly open: <Value>(work: () => Value) => Fails<Value>;
+}
+
+function memoryAvatarRemovals({ avatarsToRemove, open }: MemoryAvatarRemovalsOptions): AvatarRemovalsSection {
+  return {
+    avatarsRemoved: (ids) =>
+      open(() => {
+        for (const id of ids) {
+          avatarsToRemove.delete(id);
+        }
+      }),
+    avatarsToRemove: (limit) => open(() => Arr.take(Arr.sort([...avatarsToRemove], Str.Order), limit)),
   };
 }
 
@@ -160,9 +202,21 @@ function sqlDeleteFound(db: SqlDatabase, identity: Identity): Fails<DeleteIdenti
     if (Option.isSome(refused)) {
       return refused.value;
     }
+    yield* db.run(KEEP_AVATAR_TO_REMOVE, identity.name);
     yield* Effect.forEach(DROP_ROWS, (sql) => db.run(sql, identity.name), { concurrency: 1, discard: true });
     return { identity, status: "deleted" } as const;
   });
+}
+
+function sqlAvatarRemovals(db: SqlDatabase): AvatarRemovalsSection {
+  return {
+    avatarsRemoved: (ids) => Effect.forEach(ids, (id) => db.run(DROP_AVATAR_TO_REMOVE, id), ONE_AT_A_TIME),
+    avatarsToRemove: (limit) =>
+      db.all(SELECT_AVATARS_TO_REMOVE, limit).pipe(
+        Effect.flatMap((rows) => Effect.forEach(rows, decodeWith(AvatarToRemoveRow), { concurrency: 1 })),
+        Effect.map(Arr.map((row) => row.id)),
+      ),
+  };
 }
 
 function sqlIdentityDeletes(db: SqlDatabase): IdentityDeletesSection {
@@ -180,4 +234,13 @@ function sqlIdentityDeletes(db: SqlDatabase): IdentityDeletesSection {
   };
 }
 
-export { type DeleteIdentityResult, type IdentityDeletesSection, memoryRemoveIdentity, sqlIdentityDeletes };
+export {
+  type AvatarRemovalsSection,
+  type AvatarsToRemove,
+  type DeleteIdentityResult,
+  type IdentityDeletesSection,
+  memoryAvatarRemovals,
+  memoryRemoveIdentity,
+  sqlAvatarRemovals,
+  sqlIdentityDeletes,
+};

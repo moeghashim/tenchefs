@@ -6,15 +6,15 @@
  * sends the session cookie instead. Logging in uses a client with the token.
  * The layout keeps the theme in the browser's local storage and sets it on the
  * page's root element, as `public/assets/theme.js` does before the first paint;
- * the composer keeps each message box's unsent text there too.
+ * the composer keeps each message box's unsent text there too, and crops a picked avatar on a canvas.
  * The Inbox's read rule counts time on the page's timers while the page is
  * visible and focused. The keymap names keys for the browser's platform (⌘ on a Mac).
  */
 import { browserReadingTools, createReading, createUnread } from "./modules/unread/index.ts";
+import { canvasAvatarCrop, createComposer } from "./modules/composer/index.ts";
 import { createAgentJoinApprovals, createBoardStore, createLoginApprovals } from "./modules/board/index.ts";
 import { createLive, eventSourceAdapter } from "./modules/live/index.ts";
 import { CookoutApp } from "./modules/routes/index.tsx";
-import { createComposer } from "./modules/composer/index.ts";
 import { createCookoutClient } from "./modules/sdk/index.ts";
 import { createKeymap } from "./modules/keymap/index.ts";
 import { createLayout } from "./modules/layout/index.ts";
@@ -35,7 +35,7 @@ if (root !== null) {
     <CookoutApp
       agentJoinApprovals={createAgentJoinApprovals(client)}
       boardStore={boardStore}
-      composer={createComposer({ boardStore, storage })}
+      composer={createComposer({ boardStore, crop: canvasAvatarCrop, storage })}
       keymap={createKeymap({ platform: globalThis.navigator.platform })}
       layout={layout}
       loginApprovals={createLoginApprovals(client)}

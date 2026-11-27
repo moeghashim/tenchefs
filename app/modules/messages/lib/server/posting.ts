@@ -10,6 +10,7 @@ import {
   replyInOtherChannel,
   seenWithoutReplyTo,
   threadDeleted,
+  titleOnReply,
 } from "./refusals.ts";
 import type { ChannelName } from "../../../channels/index.ts";
 import type { Refusal } from "./refusals.ts";
@@ -25,6 +26,7 @@ interface PostMessage {
   readonly data?: JsonValue;
   readonly replyTo?: MessageId;
   readonly close?: true;
+  readonly title?: string;
   readonly harness?: Harness;
   readonly seen?: MessageId;
   readonly attachments?: Post["attachments"];
@@ -78,13 +80,18 @@ function withHarness(message: NewMessage, harness: Harness | undefined): NewMess
   return { ...message, harness };
 }
 
+function withTitle(message: NewMessage, title: string | undefined): NewMessage {
+  if (Predicate.isUndefined(title) || Str.isEmpty(title)) {
+    return message;
+  }
+  return { ...message, title };
+}
+
 function newMessage(author: Identity, posting: PostMessage, createdAt: NewMessage["createdAt"]): NewMessage {
-  const { close, harness, channel, data, replyTo, text } = posting;
+  const { close, harness, channel, data, replyTo, text, title } = posting;
   const mentions = Arr.filter(mentionedNames(text), isIdentityName);
-  const fields = withClose(
-    withHarness({ author: authorOf(author), channel, createdAt, mentions, text }, harness),
-    close,
-  );
+  const harnessed = withHarness({ author: authorOf(author), channel, createdAt, mentions, text }, harness);
+  const fields = withTitle(withClose(harnessed, close), title);
   if (Predicate.isUndefined(data)) {
     return withReplyTo(fields, replyTo);
   }
@@ -122,9 +129,9 @@ function withAttachments(message: NewMessage, { attachments }: StoredFiles): New
   return message;
 }
 
-function unfitRefusal({ close, replyTo, seen }: PostMessage): Option.Option<Refusal> {
+function unfitRefusal({ close, replyTo, seen, title }: PostMessage): Option.Option<Refusal> {
   if (Predicate.isNotUndefined(replyTo)) {
-    return Option.none();
+    return Option.map(Option.fromUndefinedOr(title), () => titleOnReply);
   }
   if (Predicate.isNotUndefined(close)) {
     return Option.some(closeWithoutReplyTo);

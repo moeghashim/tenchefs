@@ -1,3 +1,4 @@
+import type { AskedOffer } from "./asked-offer.ts";
 import { ButtonRow } from "../../design-system/controls.tsx";
 import type { DeactivationOffer } from "../../sdk/index.ts";
 import type { DeactivationOffers } from "../../unread/index.ts";
@@ -14,12 +15,21 @@ interface OpenOfferRowProps {
   readonly offer: DeactivationOffer;
   readonly offers: Pick<DeactivationOffers, "keep">;
   readonly identities: Pick<Identities, "actions">;
+  readonly asking: Pick<AskedOffer, "ask" | "closed">;
 }
 
 export function OpenOfferRow(props: OpenOfferRowProps): ReactNode {
-  const { offer, offers } = props;
+  const { asking, offer, offers } = props;
   const actions = props.identities.actions(offer.identity.name);
-  const handleDeactivate = actions.ask.deactivate;
+  const handleDeactivate = useCallback(() => {
+    asking.ask(offer);
+    actions.ask.deactivate();
+  }, [actions, asking, offer]);
+  const handleCloseFocused = useCallback(() => {
+    if (actions.snapshot().confirming === null) {
+      asking.closed(offer.id);
+    }
+  }, [actions, asking, offer]);
   const handleKeep = useCallback(() => {
     offers.keep(offer.id);
   }, [offers, offer]);
@@ -29,7 +39,7 @@ export function OpenOfferRow(props: OpenOfferRowProps): ReactNode {
         <RowButton onClick={handleDeactivate}>{TEXT.deactivate}</RowButton>
         <RowButton onClick={handleKeep}>{TEXT.keep}</RowButton>
       </ButtonRow>
-      <IdentityConfirm actions={actions} identity={offer.identity} />
+      <IdentityConfirm actions={actions} identity={offer.identity} onCloseFocused={handleCloseFocused} />
     </OfferRow>
   );
 }

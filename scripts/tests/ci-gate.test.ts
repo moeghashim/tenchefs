@@ -17,8 +17,6 @@ import {
 import { expect, it } from "vitest";
 import type { Responses } from "./lib/fake-gh.ts";
 
-const LAST_TWO = -2;
-
 it("passes when the latest Check run has every job green", { timeout: 10_000 }, () => {
   expect.hasAssertions();
 
@@ -151,57 +149,6 @@ it.each<Responses & { readonly name: string }>([
   const gh = fake(responses);
 
   expect(reasonOf(gh.gate(["--branch", "v1"]).step)).toMatch(/^Could not read v1's Check run: gh run /u);
-});
-
-const BASE = ["--branch", "v1", "--commit", "base"];
-const BASE_URL = "https://github.com/o/r/actions/runs/41";
-const BASE_RUN = [{ databaseId: 41 }];
-const TICKET = ["--branch", "ticket-7", "--commit", "abc"];
-const TICKET_RED = view({
-  jobs: [done("lint"), ended({ conclusion: "failure", failedStep: "pnpm check", name: "e2e-docker" })],
-  status: COMPLETED,
-});
-
-it("says the base was red when the same jobs failed on v1's run for the merge-base", { timeout: 10_000 }, () => {
-  expect.hasAssertions();
-
-  const gh = fake({
-    list: [RUN, BASE_RUN],
-    view: [
-      TICKET_RED,
-      view({
-        jobs: [ended({ conclusion: "failure", failedStep: "pnpm check", name: "e2e-docker" })],
-        status: COMPLETED,
-        url: BASE_URL,
-      }),
-    ],
-  });
-
-  expect(reasonOf(gh.gate(TICKET, BASE).step)).toBe(
-    `v1's latest Check run is red: e2e-docker (failure).\n${URL}${E2E_STEPS}\nThe same jobs failed on v1's Check run for v1's merge-base: ${BASE_URL}\nYour base was red; merge the current green v1 into v1 (git merge origin/v1), push, and rerun merge-ticket.`,
-  );
-  expect(gh.calls().slice(LAST_TWO)).toStrictEqual([
-    "run list --workflow Check --event push --limit 1 --json databaseId --branch v1 --commit base",
-    "run view 41 --json status,conclusion,url,jobs",
-  ]);
-});
-
-it.each<Responses & { readonly name: string }>([
-  {
-    list: [RUN, BASE_RUN],
-    name: "the base run was green",
-    view: [TICKET_RED, view({ jobs: [done("e2e-docker")], status: COMPLETED })],
-  },
-  { list: [RUN, []], name: "the base has no run", view: [TICKET_RED] },
-  { list: [RUN, BASE_RUN], name: "the base run cannot be read", view: [TICKET_RED, "fail"] },
-])("blames the ticket alone when $name", { timeout: 10_000 }, (responses) => {
-  expect.hasAssertions();
-
-  const gh = fake(responses);
-
-  expect(reasonOf(gh.gate(TICKET, BASE).step)).toBe(
-    `v1's latest Check run is red: e2e-docker (failure).\n${URL}${E2E_STEPS}`,
-  );
 });
 
 it("reads the merge queue's run when asked for merge_group runs", { timeout: 10_000 }, () => {

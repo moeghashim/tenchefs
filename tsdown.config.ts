@@ -9,7 +9,7 @@ export default defineConfig([
     format: "esm",
     outDir: "dist",
     platform: "node",
-    target: "node22.18",
+    target: "node22.19",
   },
   {
     clean: true,
@@ -19,7 +19,7 @@ export default defineConfig([
     format: "esm",
     outDir: "dist",
     platform: "node",
-    target: "node22.18",
+    target: "node22.19",
     tsconfig: "tsconfig.sdk.json",
   },
 ]);

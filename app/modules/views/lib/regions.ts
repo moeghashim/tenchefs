@@ -6,6 +6,7 @@ const ROW = "main a[data-feed-row]";
 const MESSAGES = "section[aria-label]";
 const PANEL = "main aside";
 const MESSAGE_BOX = "main form";
+const MAIN = "main";
 const ENTRIES = [
   'article[tabindex="0"], a[tabindex="0"]',
   'a[data-feed-row][aria-current="page"]',
@@ -37,7 +38,7 @@ function outsidePanel(selector: string): Element | null {
 function messagesRegion(): Element | null {
   const feed = outsidePanel(FEED) ?? outsidePanel(ROW);
   if (feed === null) {
-    return null;
+    return globalThis.document.querySelector(MAIN);
   }
   return feed.closest(MESSAGES) ?? feed;
 }

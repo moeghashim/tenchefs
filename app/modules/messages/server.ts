@@ -19,11 +19,12 @@ import {
   ListMessagesResponseSchema,
   MessageResponseSchema,
   ReactionsResponseSchema,
+  SetThreadTitleRequestSchema,
   ThreadResponseSchema,
   TopLevelMessageResponseSchema,
 } from "./lib/server/wire.ts";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { channelMessagesPath, closedPath, messagePath, reactionPath, threadPath } from "./index.ts";
+import { channelMessagesPath, closedPath, messagePath, reactionPath, threadPath, titlePath } from "./index.ts";
 import { listingResponseSchemas, listingRoutes } from "./lib/server/listings.ts";
 import { Caller } from "../identities/server.ts";
 import { Effect } from "effect";
@@ -98,6 +99,21 @@ const closeRoute: Route<Caller | Messages> = {
   segments: { id: (segment) => DIGITS.test(segment) },
 };
 
+const titleRoute: Route<Caller | Messages> = {
+  handle: (params) =>
+    Effect.gen(function* setThreadTitleRoute() {
+      const id = yield* threadIdOf(String(params["id"]));
+      const { title } = yield* HttpServerRequest.schemaBodyJson(SetThreadTitleRequestSchema, ALL_ERRORS);
+      const caller = yield* Caller;
+      const messages = yield* Messages;
+      const answer = yield* messages.setThreadTitle(caller, id, title);
+      return yield* HttpServerResponse.schemaJson(TopLevelMessageResponseSchema)(answer);
+    }),
+  method: "PUT",
+  path: titlePath,
+  segments: { id: (segment) => DIGITS.test(segment) },
+};
+
 const deleteRoute: Route<Caller | Messages> = {
   handle: (params) =>
     Effect.gen(function* deleteMessageRoute() {
@@ -158,6 +174,7 @@ export const messageRoutes: readonly Route<ListingNeeds>[] = [
   reactionRoute("PUT", (messages) => messages.react),
   reactionRoute("DELETE", (messages) => messages.unreact),
   closeRoute,
+  titleRoute,
   reopenRoute,
   deleteRoute,
   ...listingRoutes,

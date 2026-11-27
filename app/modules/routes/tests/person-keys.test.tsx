@@ -80,6 +80,23 @@ it("in the People list only one row is a Tab stop, and ↑/↓ move between rows
   close();
 });
 
+it("in the People list Home and End move to the first and last rows, and do nothing off a row", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const { close, first, second } = await peopleOf("web-people-keys-ends");
+  rowOf(first).focus();
+  const moves = [pressed("End"), pressed("Home")];
+  inPane()
+    .getByRole("button", { name: `@${second} actions` })
+    .focus();
+
+  expect([...moves, pressed("Home")]).toStrictEqual([`#/people/${second}`, `#/people/${first}`, null]);
+
+  close();
+});
+
 it("when the filter hides the row an arrow moved to, the first row shown takes the Tab stop", {
   timeout: 5000,
 }, async () => {

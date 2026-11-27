@@ -16,7 +16,6 @@ interface MessageBoxProps {
   readonly draft: Draft;
   readonly post: PostState;
   readonly onPost: (outgoing: Outgoing, posted: () => void) => void;
-  readonly onSchedule: (() => void) | null;
   readonly text: MessageBoxText;
   readonly focused: boolean;
 }
@@ -29,7 +28,6 @@ export function MessageBox(props: MessageBoxProps): ReactNode {
         draft={draft}
         focused={props.focused}
         onPost={props.onPost}
-        onSchedule={props.onSchedule}
         posting={post.status === "posting"}
         text={text}
       />
