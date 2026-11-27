@@ -39,6 +39,10 @@ merges only replay what changed since. To take a single fix instead: `git cherry
 - We are free to diverge. If upstream rewrites something we have changed heavily, keep ours and skip
   their change; nothing forces us to stay in step.
 - Upstream-specific CI is disabled in GitHub's Actions settings rather than edited out, so the
-  files merge cleanly: `Deploy` (deploys to cookout's Fly app) and `Release` (publishes
-  `@ai-hero/cookout` with changesets). Re-enable or replace them when tenchefs has its own deploy
-  and package name (`fly.toml`, `package.json`).
+  files merge cleanly: `Deploy` (deploys to cookout's Fly app), `Release` (publishes
+  `@ai-hero/cookout` with changesets) and `Red v1` (opens issues for a red `v1` and reverts its
+  commits). Re-enable or replace them when tenchefs has its own deploy and package name
+  (`fly.toml`, `package.json`). A workflow new in a pull from upstream starts active: read it, and
+  disable it the same way if it acts on cookout's accounts or pushes to our branches.
+- After each merge, push `main` to `v1` as well (upstream's Check runs only on `v1`) and push
+  upstream's newest `deploy/*` tag to origin (the hygiene check needs one).
