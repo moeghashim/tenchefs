@@ -51,12 +51,14 @@ const RUNS = 50;
 const GATE_JOB = "browser ";
 const SKIPPED = "skipped";
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$/u;
-const NOT_USER_FACING_DIRECTORIES = ["scripts/", ".github/"];
+const NOT_USER_FACING_DIRECTORIES = ["scripts/", ".github/", "app/modules/testing/"];
+const TESTS_DIRECTORY = /(?:^|\/)tests\//u;
 
 function isUserFacing(file: string): boolean {
   return (
     !isDocs(file) &&
     !TEST_FILE.test(file) &&
+    !TESTS_DIRECTORY.test(file) &&
     !NOT_USER_FACING_DIRECTORIES.some((directory) => file.startsWith(directory))
   );
 }

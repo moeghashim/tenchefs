@@ -3,10 +3,24 @@ import type { AgentJoinApproval } from "../../board/index.ts";
 import { AgentJoinRequestShown } from "./agent-join-request-shown.tsx";
 import { CardBody } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
+import type { Refusal } from "../../sdk/index.ts";
 import { useSyncExternalStore } from "react";
+
+const NOT_FOUND = "agent_join_request_not_found";
+
+function refusalLine(refusal: Refusal, userCode: string): string {
+  if (refusal.code === NOT_FOUND) {
+    return (
+      `No live request has the code ${userCode}. ` +
+      "Check it against the new device, or start again there: a code lasts 10 minutes."
+    );
+  }
+  return `Couldn't show this agent join request (${refusal.code}): ${refusal.message}`;
+}
 
 interface AgentJoinApprovalBodyProps {
   readonly approval: AgentJoinApproval;
+  readonly userCode: string;
 }
 
 export function AgentJoinApprovalBody(props: AgentJoinApprovalBodyProps): ReactNode {
@@ -22,7 +36,7 @@ export function AgentJoinApprovalBody(props: AgentJoinApprovalBodyProps): ReactN
   if (state.status === "refused") {
     return (
       <CardBody>
-        <Alert>{`Couldn't show this agent join request (${state.refusal.code}): ${state.refusal.message}`}</Alert>
+        <Alert>{refusalLine(state.refusal, props.userCode)}</Alert>
       </CardBody>
     );
   }

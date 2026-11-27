@@ -2,7 +2,7 @@ import { Array as Arr, Duration, Effect, Fiber, Option, Record, Schema, String a
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import type { FileSystem, Path } from "effect";
 import type { RunOutput, RunnerLog } from "./runner-log.ts";
-import { home, proxyEnvironment } from "../../../config/server.ts";
+import { home, proxyEnvironment, wakeRunVariable } from "../../../config/server.ts";
 import { printErrorLine, printLine } from "./output.ts";
 import type { InboxItem } from "../../../sdk/index.ts";
 import type { Registration } from "./registrations.ts";
@@ -47,6 +47,7 @@ function runEnvironment({ place, registration }: Woken): Effect.Effect<Readonly<
     return setOnly([
       ["COOKOUT_STATE_DIR", place.stateFolder],
       ["COOKOUT_URL", registration.url],
+      [wakeRunVariable, "1"],
       ["HOME", homeFolder],
       ["HTTPS_PROXY", proxies.httpsProxy],
       ["HTTP_PROXY", proxies.httpProxy],

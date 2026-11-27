@@ -97,7 +97,7 @@ it.effect.each(storageLayers)(
       );
       const listed = yield* storage.findLiveAgentSession({ identity: AGENT, now: T30 });
 
-      expect(revoked).toStrictEqual([true, false]);
+      expect(revoked).toStrictEqual([[{ hash: FIRST, identity: AGENT, kind: "agent session" }], []]);
       expect(used).toMatchObject([{ status: "revoked" }, { status: "active" }]);
       expect(listed).toStrictEqual(Option.none());
     }),

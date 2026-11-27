@@ -1,9 +1,9 @@
-import { Caller, credentialsOf, issueToken, sentToken } from "./auth.ts";
-import { DateTime, Effect, Option } from "effect";
+import { Caller, CredentialSent, issueToken } from "./auth.ts";
+import { Effect, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
+import type { Identity, Token } from "../../index.ts";
+import { now, webSessionWhere } from "./login-support.ts";
 import { sessionCookieName, sessionPath, token, whoamiPath } from "../../index.ts";
-import type { Cookies } from "effect/http";
-import type { Identity } from "../../index.ts";
 import { IdentityResponseSchema } from "./wire.ts";
 import type { IssuedToken } from "./auth.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -11,17 +11,9 @@ import type { Route } from "../../../http/server.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
 import type { StorageUnavailable } from "../../../storage/server.ts";
-import { isoTimeOf } from "../../../time/server.ts";
+import { siteCookieOptions } from "../../../http/server.ts";
 
 const FORBIDDEN = 403;
-
-const WEB_UI_HOST = "web UI";
-
-const cookieOptions = {
-  httpOnly: true,
-  path: "/",
-  sameSite: "strict",
-} as const satisfies NonNullable<Cookies.Cookie["options"]>;
 
 function humanOnly({ kind, name }: Identity): Refusal {
   return {
@@ -45,45 +37,65 @@ const whoamiRoute: Route<Caller> = {
   path: whoamiPath,
 };
 
-const sentTokenHash = Effect.gen(function* hashSentToken() {
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  const secrets = yield* Secrets;
-  return yield* Effect.flatMap(sentToken(credentialsOf(request)), secrets.hashToken);
-});
-
 function issueWebSession(
   identity: Identity,
 ): Effect.Effect<IssuedToken, Refusal | StorageUnavailable, HttpServerRequest.HttpServerRequest | Secrets | Storage> {
   return Effect.gen(function* issueWebSessionCredential() {
     const storage = yield* Storage;
-    const madeWith = yield* sentTokenHash;
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const sent = yield* CredentialSent;
     const issued = yield* issueToken;
-    const now = yield* DateTime.now;
+    const at = yield* now;
     yield* storage.issueLoginCredential({
       credentialHash: issued.hash,
-      host: WEB_UI_HOST,
+      host: webSessionWhere(request.headers["user-agent"]),
       identity: identity.name,
-      madeWith,
-      now: isoTimeOf(now),
+      now: at,
+      parent: Option.getOrUndefined(sent),
     });
     return issued;
   });
 }
 
-const loginRoute: Route<Caller | Storage | Secrets> = {
-  handle: () =>
-    Effect.gen(function* logIn() {
-      const identity = yield* Caller;
-      if (identity.kind !== "human") {
-        return yield* Effect.fail(humanOnly(identity));
-      }
-      const issued = yield* issueWebSession(identity);
-      const response = yield* identityResponse({ identity });
-      return yield* HttpServerResponse.setCookie(response, sessionCookieName, issued.token, cookieOptions);
-    }),
+interface SignedIn {
+  readonly identity: Identity;
+  readonly token: Token;
+}
+
+type Answering<Needs> = Effect.Services<ReturnType<Route<Needs>["handle"]>>;
+
+interface SignInRoute<Needs, Failure> {
+  readonly method: Route<Needs>["method"];
+  readonly path: string;
+  readonly signIn: Effect.Effect<SignedIn, Failure, Answering<Needs>>;
+}
+
+function signedInRoute<Needs, Failure>({ method, path, signIn }: SignInRoute<Needs, Failure>): Route<Needs> {
+  return {
+    handle: () =>
+      Effect.gen(function* answerSignedIn() {
+        const signedIn = yield* signIn;
+        const response = yield* identityResponse({ identity: signedIn.identity });
+        const options = yield* siteCookieOptions;
+        return yield* HttpServerResponse.setCookie(response, sessionCookieName, signedIn.token, options);
+      }),
+    method,
+    path,
+  };
+}
+
+const loginRoute: Route<Caller | Storage | Secrets> = signedInRoute({
   method: "POST",
   path: sessionPath,
-};
+  signIn: Effect.gen(function* logIn() {
+    const identity = yield* Caller;
+    if (identity.kind !== "human") {
+      return yield* Effect.fail(humanOnly(identity));
+    }
+    const issued = yield* issueWebSession(identity);
+    return { identity, token: issued.token };
+  }),
+});
 
 const revokeSessionCookie = Effect.gen(function* revokeSessionCookie() {
   const request = yield* HttpServerRequest.HttpServerRequest;
@@ -92,7 +104,8 @@ const revokeSessionCookie = Effect.gen(function* revokeSessionCookie() {
     const secrets = yield* Secrets;
     const storage = yield* Storage;
     const hash = yield* secrets.hashToken(token(sent.value));
-    yield* storage.revokeLoginCredential(hash);
+    const at = yield* now;
+    yield* storage.revokeLoginCredential(hash, at);
   }
 });
 
@@ -101,10 +114,13 @@ const logoutRoute: Route<Caller | Storage | Secrets> = {
     Effect.gen(function* logOut() {
       yield* revokeSessionCookie;
       const response = yield* callerResponse;
-      return yield* HttpServerResponse.expireCookie(response, sessionCookieName, cookieOptions);
+      const options = yield* siteCookieOptions;
+      return yield* HttpServerResponse.expireCookie(response, sessionCookieName, options);
     }),
   method: "DELETE",
   path: sessionPath,
 };
 
 export const callerRoutes: readonly Route<Caller | Storage | Secrets>[] = [whoamiRoute, loginRoute, logoutRoute];
+
+export { signedInRoute };

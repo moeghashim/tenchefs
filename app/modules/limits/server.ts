@@ -8,7 +8,12 @@
 import { AddressLimit, Caller } from "../identities/server.ts";
 import { Clock, Context, Effect, Layer, String as Str } from "effect";
 import type { Config, Scope } from "effect";
-import { requestsPerMinute, streamsPerIdentity, webhookCommandCallsPerMinute } from "../config/server.ts";
+import {
+  noTokenRequestsPerMinute,
+  requestsPerMinute,
+  streamsPerIdentity,
+  webhookCommandCallsPerMinute,
+} from "../config/server.ts";
 import type { Bucket } from "./lib/server/bucket.ts";
 import { HttpServerRequest } from "effect/http";
 import type { Identity } from "../identities/index.ts";
@@ -141,10 +146,13 @@ export const holdStreamPlace: Effect.Effect<void, Refusal, Caller | Limits | Sco
   },
 );
 
-/** The per-address request limit of `COOKOUT_REQUESTS_PER_MINUTE`, for the routes that need no token, empty when the server starts. */
+/**
+ * The per-address request limit of `COOKOUT_NO_TOKEN_REQUESTS_PER_MINUTE`, for the routes that need no token, keyed
+ * by the request's client address (ADR 0148) and empty when the server starts.
+ */
 export const addressLimitLayer: Layer.Layer<AddressLimit, Config.ConfigError> = Layer.effect(
   AddressLimit,
-  Effect.map(requestsPerMinute, (perMinute) => ({
+  Effect.map(noTokenRequestsPerMinute, (perMinute) => ({
     admit: keyedBuckets(perMinute, "requests from this address"),
   })),
 );

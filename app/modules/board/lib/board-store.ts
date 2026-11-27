@@ -5,6 +5,7 @@ import type {
   IdentityParts,
   IdentityPartsClient,
   SessionState,
+  WebLogin,
 } from "./identity-parts.ts";
 import type { CalledPart, CalledTriggers } from "./triggers-slice.ts";
 import type { FollowedLive, Linked } from "./live-following.ts";
@@ -65,6 +66,7 @@ interface Session {
   readonly snapshot: () => SessionState;
   readonly logIn: (token: string) => void;
   readonly logOut: () => void;
+  readonly webLogin: WebLogin;
 }
 
 type BoardStoreClient = OwnClient &
@@ -190,8 +192,10 @@ function followOf(parts: Parts, live: FollowedLive): () => void {
   });
 }
 
-function sessionCalls({ logIn, logOut }: Pick<Session, "logIn" | "logOut">): Pick<Session, "logIn" | "logOut"> {
-  return { logIn, logOut };
+type SessionCalls = Pick<Session, "logIn" | "logOut" | "webLogin">;
+
+function sessionCalls({ session: { logIn, logOut }, webLogin }: Pick<Parts, "session" | "webLogin">): SessionCalls {
+  return { logIn, logOut, webLogin };
 }
 
 function createBoardStore(options: BoardStoreOptions): BoardStore {
@@ -233,7 +237,7 @@ function createBoardStore(options: BoardStoreOptions): BoardStore {
     identityCalls,
     inboxCalls: parts.inboxCalls,
     logIn: session.logIn,
-    session: { ...sessionCalls(session), snapshot: () => snapshotOf().session, subscribe: subscribers.session },
+    session: { ...sessionCalls(parts), snapshot: () => snapshotOf().session, subscribe: subscribers.session },
     snapshot: snapshotOf,
     subscribe,
     subscribeShowing: (shown) => subscribers[shown],
@@ -244,4 +248,5 @@ function createBoardStore(options: BoardStoreOptions): BoardStore {
 
 export type { IdentityCalls } from "./identity-parts.ts";
 export { type BoardState, type BoardStore, type Session, createBoardStore };
+export type { SessionState, WebLoginState } from "./identity-parts.ts";
 export type { Presences } from "./presence-slice.ts";

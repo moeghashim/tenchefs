@@ -27,7 +27,10 @@ type WatchedEvent =
 
 type Heard = WatchedEvent | ConnectedEvent;
 
+type OnRetry = (failure: CallFailure) => Effect.Effect<void>;
+
 interface ListenAs {
+  readonly onRetry: OnRetry;
   readonly opened: ClientWithAgentSessionState;
   readonly runner: boolean;
 }
@@ -167,17 +170,27 @@ function sayRetrying({ attempt, input }: Retry): Effect.Effect<Duration.Input> {
   });
 }
 
-const reconnectBackoff = Schedule.forever.pipe(
-  Schedule.setInputType<CallFailure>(),
-  Schedule.while(keepTrying),
-  Schedule.modifyDelay(sayRetrying),
-);
-
-function whileUnavailable<Value, Needs>(
-  call: Effect.Effect<Value, CallFailure, Needs>,
-): Effect.Effect<Value, CallFailure, Needs> {
-  return Effect.retry(call, reconnectBackoff);
+function quietly(): Effect.Effect<void> {
+  return Effect.void;
 }
+
+type Retried = <Value, Needs>(
+  call: Effect.Effect<Value, CallFailure, Needs>,
+) => Effect.Effect<Value, CallFailure, Needs>;
+
+function reconnectBackoff(onRetry: OnRetry): Schedule.Schedule<number, CallFailure> {
+  return Schedule.forever.pipe(
+    Schedule.setInputType<CallFailure>(),
+    Schedule.while(keepTrying),
+    Schedule.modifyDelay((retry: Retry) => Effect.andThen(onRetry(retry.input), sayRetrying(retry))),
+  );
+}
+
+function retriedWhileUnavailable(onRetry: OnRetry): Retried {
+  return (call) => Effect.retry(call, reconnectBackoff(onRetry));
+}
+
+const whileUnavailable = retriedWhileUnavailable(quietly);
 
 interface Starting {
   readonly from: Option.Option<MessageId>;
@@ -188,7 +201,7 @@ function start({
   from,
   listening,
 }: Starting): Effect.Effect<Stream.Stream<readonly Heard[], CallFailure>, CallFailure, Scope.Scope> {
-  return whileUnavailable(connect(listening, from));
+  return retriedWhileUnavailable(listening.onRetry)(connect(listening, from));
 }
 
 function sayWatching(opened: ClientWithAgentSessionState): Effect.Effect<void> {
@@ -254,7 +267,7 @@ function source({ first, from, listening }: Resuming): Stream.Stream<Heard, Call
         }),
       );
       return Stream.unwrap(next).pipe(
-        Stream.retry(reconnectBackoff),
+        Stream.retry(reconnectBackoff(listening.onRetry)),
         Stream.flattenIterable,
         Stream.tap((event) => Ref.update(lastSeen, lastSeenAfter(event))),
         Stream.filterEffect(isUnprinted),
@@ -263,4 +276,16 @@ function source({ first, from, listening }: Resuming): Stream.Stream<Heard, Call
   );
 }
 
-export { type Heard, type WatchedEvent, isWatched, lastSeenAfter, sayWatching, source, start, whileUnavailable };
+export {
+  type Heard,
+  type OnRetry,
+  type WatchedEvent,
+  isWatched,
+  lastSeenAfter,
+  quietly,
+  retriedWhileUnavailable,
+  sayWatching,
+  source,
+  start,
+  whileUnavailable,
+};

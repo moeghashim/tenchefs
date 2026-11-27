@@ -104,3 +104,15 @@ it.effect(
       expect(missing).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "command_not_found" } } });
     }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
+
+it.effect("cookout command add with a Command's name exits 1 with the command_exists refusal", () =>
+  Effect.gen(function* addCommandName() {
+    const cookout = yield* TestCookout;
+    const { file, folder } = yield* schemaFile;
+    const env = { COOKOUT_STATE_DIR: folder, COOKOUT_TOKEN: cookout.adminToken, COOKOUT_URL: cookout.url };
+    const refused = yield* runCookout({ args: ["command", "add", "schedule", "--url", url, "--schema", file], env });
+
+    expect(refused).toMatchObject({ exitCode: 1, stderrJson: { error: { code: "command_exists" } } });
+    expect(refused.stderr).toContain("schedule is a Command's name");
+  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+);

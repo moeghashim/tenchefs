@@ -112,7 +112,7 @@ const noLogin = Effect.gen(function* boxWithNoLogin() {
   return { ada, cookout, env };
 });
 
-it.effect("inside Claude Code with no Login, join prints a link and code, and joins once a person approves", () =>
+it.effect("inside Claude Code with no Login, join prints the approval address and code, and joins once approved", () =>
   Effect.gen(function* joinByBrowser() {
     const { ada, cookout, env } = yield* noLogin;
     const joined = yield* runCookoutWhile({
@@ -123,7 +123,13 @@ it.effect("inside Claude Code with no Login, join prints a link and code, and jo
     });
     const whoami = yield* runCookout({ args: ["whoami"], env });
 
-    expect(joined.stderr).toMatch(new RegExp(`Open ${cookout.url}/#/approve-join/[A-Z0-9-]{9}, check`, "u"));
+    const code = codeIn(joined.stderr);
+
+    expect(joined.stderr).toMatch(
+      new RegExp(`Open ${cookout.url}/#/approve on a device where they're logged in and type the code ${code}`, "u"),
+    );
+    expect(joined.stderr).toContain(`or run \`cookout approve-join ${code}\` there.`);
+    expect(joined.stderr).not.toMatch(new RegExp(`://\\S*${code}`, "u"));
     expect(joined).toMatchObject({
       exitCode: 0,
       stdoutJson: {

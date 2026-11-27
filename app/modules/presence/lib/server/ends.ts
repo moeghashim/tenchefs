@@ -33,6 +33,11 @@ const refusals: Readonly<Record<Cause, Refusal>> = {
     message: "This token was rotated. Use the new one.",
     status: UNAUTHORIZED,
   },
+  "session revoked": {
+    code: "token_unknown",
+    message: "This session was revoked, or what made it was. Log in again.",
+    status: UNAUTHORIZED,
+  },
 };
 
 const reasons: Readonly<Record<Cause, OfflineReason>> = {
@@ -40,6 +45,7 @@ const reasons: Readonly<Record<Cause, OfflineReason>> = {
   left: "left",
   revoked: "session revoked",
   rotated: "token rotated",
+  "session revoked": "session revoked",
 };
 
 function refusalFor(cause: Cause): Refusal {
@@ -76,17 +82,21 @@ function hashOf(sentWith: SentWith): TokenHash | null {
   return null;
 }
 
+function credentialOf(sentWith: SentWith): Option.Option<TokenHash> {
+  if (sentWith.kind === "agent session") {
+    return Option.some(sentWith.hash);
+  }
+  return sentWith.loginCredential;
+}
+
 function madeWithIdentityToken(sentWith: SentWith, loginCredentials: readonly TokenHash[]): boolean {
-  if (sentWith.kind === "identity token") {
-    return true;
+  if (sentWith.kind === "agent session") {
+    return false;
   }
-  if (sentWith.kind === "web") {
-    return Option.match(sentWith.loginCredential, {
-      onNone: () => true,
-      onSome: (hash) => loginCredentials.includes(hash),
-    });
-  }
-  return false;
+  return Option.match(sentWith.loginCredential, {
+    onNone: () => true,
+    onSome: (hash) => loginCredentials.includes(hash),
+  });
 }
 
 function sentWithEnded(tokens: EndedTokens): (connection: Connection) => boolean {
@@ -99,6 +109,9 @@ function sentWithEnded(tokens: EndedTokens): (connection: Connection) => boolean
     }
     if (tokens.kind === "agent sessions") {
       return sentWith.kind === "agent session";
+    }
+    if (tokens.kind === "credentials") {
+      return Option.exists(credentialOf(sentWith), (hash) => tokens.hashes.includes(hash));
     }
     return madeWithIdentityToken(sentWith, tokens.loginCredentials);
   };

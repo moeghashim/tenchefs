@@ -122,3 +122,5 @@ export {
   notYourIdentity,
   onlyAgentsJoin,
 };
+
+export { withParent } from "./parent.ts";

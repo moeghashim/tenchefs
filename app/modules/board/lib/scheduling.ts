@@ -1,14 +1,19 @@
+import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import type { Held, Previews, ScheduleKind, SchedulingOptions, SchedulingSnapshot } from "./scheduling-previews.ts";
 import { closedIn, createPreviews, createSaving } from "./scheduling-previews.ts";
-import type { ChannelName } from "../../sdk/index.ts";
 import type { ScheduledMessage } from "../../scheduled-messages/index.ts";
 import { sameSnapshot } from "./selected.ts";
 import { timingOf } from "./schedule-timing.ts";
 
+interface SchedulePlace {
+  readonly channel: ChannelName;
+  readonly thread: MessageId | null;
+}
+
 interface Scheduling {
   readonly subscribe: (listener: () => void) => () => void;
   readonly snapshot: () => SchedulingSnapshot;
-  readonly open: (channel: ChannelName, text: string) => void;
+  readonly open: (place: SchedulePlace, text: string) => void;
   readonly openEdit: (schedule: ScheduledMessage) => void;
   readonly close: () => void;
   readonly dismiss: () => void;
@@ -51,9 +56,9 @@ function editsOf(held: Held, previews: Previews): Edits {
     editTimeZone: (timeZone) => {
       previews.retimed({ timeZone });
     },
-    open: (channel, text) => {
+    open: ({ channel, thread }, text) => {
       previews.forget();
-      publish({ ...closedIn(options.timeZone), channel, open: true, text });
+      publish({ ...closedIn(options.timeZone), channel, open: true, text, thread });
     },
     openEdit: (schedule) => {
       previews.forget();

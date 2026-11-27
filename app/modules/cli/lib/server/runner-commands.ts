@@ -56,10 +56,13 @@ const statusCommand = Command.make("status", { json: jsonFlag }, ({ json }) =>
   Effect.matchEffect(runnerStatus, { onFailure: refused, onSuccess: printStatus(json) }),
 ).pipe(
   Command.withDescription(
-    "List each registration: its agent, its folder, and whether the runner is connecting, connected or running a " +
+    "List each registration: its agent, its folder, and whether the runner is connecting, connected, retrying an " +
+      "unavailable board (with its last error) or running a " +
       "wake run for it, or no runner is running, and its last wake run: when it started, how it ended and its " +
       "output file; then each dropped registration, with the refusal that dropped it " +
-      "and when. --json prints the same as JSON. It prints no token.",
+      "and when. It warns when an open Claude Code session would hold or refuse the runner's messages " +
+      "(crossSessionInbound), naming the launch line that accepts them. --json prints the same as JSON. It prints " +
+      "no token.",
   ),
 );
 
@@ -79,8 +82,8 @@ const logsCommand = Command.make("logs", { agent: logsAgentArgument }, ({ agent 
 ).pipe(
   Command.withDescription(
     "Print the runner's event log, one JSON line per event, oldest first: runner-start, connect, mention, " +
-      "wake-run-start (naming the run's output file), exit, timeout, wake-failed, skip, stand-down, unregister " +
-      "and refusal, each with the agent and the time. Give an agent to print only its events. It holds message " +
+      "delivered-live, fell-back (with its reason), woken, wake-run-start (naming the run's output file), exit, " +
+      "timeout, wake-failed, skip, stand-down, unregister and refusal, each with the agent and the time. Give an agent to print only its events. It holds message " +
       "IDs, never a mention's text or a token. Each wake run's stdout and stderr are in its own file under runs/ " +
       "in the state folder; an agent's oldest files are deleted once its files pass 1 MiB.",
   ),

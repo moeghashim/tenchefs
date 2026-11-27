@@ -21,11 +21,13 @@ function timeoutArgs(timeoutMinutes: number | undefined): readonly string[] {
 }
 
 function joinWaking({
+  command,
   name,
   on,
   settings,
   timeoutMinutes,
 }: {
+  readonly command?: readonly string[] | undefined;
   readonly name: string;
   readonly on: WakeBoard;
   readonly settings: FakeWakeSettings;
@@ -37,7 +39,10 @@ function joinWaking({
     const joined = yield* boardAgent({ board: on, name });
     const tokenFile = path.join(on.folder, `${name}.token`);
     yield* Effect.orDie(fs.writeFileString(tokenFile, joined.agent.token));
-    const wake = yield* fakeWakeCommand({ ...settings, tokenFile });
+    const wake = yield* Option.match(Option.fromUndefinedOr(command), {
+      onNone: () => fakeWakeCommand({ ...settings, tokenFile }),
+      onSome: Effect.succeed,
+    });
     const { exitCode, stderr } = yield* runCookout({
       args: ["join", "--as", name, "--wake", ...timeoutArgs(timeoutMinutes), "--", ...wake],
       env: joined.env,

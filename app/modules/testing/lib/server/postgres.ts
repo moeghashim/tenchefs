@@ -4,6 +4,7 @@ import { PgClient } from "@effect/sql-pg";
 import { Reactivity } from "effect/reactivity";
 import type { Scope } from "effect";
 import { inject } from "vitest";
+import { testSecretsCipher } from "./secrets-key.ts";
 
 type Run = (statement: string) => Effect.Effect<readonly unknown[], StorageUnavailable>;
 
@@ -62,13 +63,23 @@ function onPostgresDatabase({ statements, url }: DatabaseStatements): Effect.Eff
   );
 }
 
+function postgresRows({
+  statement,
+  url,
+}: {
+  readonly statement: string;
+  readonly url: Redacted.Redacted;
+}): Effect.Effect<readonly unknown[], StorageUnavailable> {
+  return Effect.scoped(Effect.flatMap(connect(url), (run) => run(statement)));
+}
+
 function buildTemplate(run: Run): Effect.Effect<void, StorageUnavailable> {
   return Effect.gen(function* migrateTemplate() {
     yield* run(`DROP DATABASE IF EXISTS ${BUILDING_TEMPLATE} WITH (FORCE)`);
     yield* run(`CREATE DATABASE ${BUILDING_TEMPLATE}`);
     const server = yield* containerUrl;
     const url = databaseUrl(server, BUILDING_TEMPLATE);
-    yield* Effect.scoped(Layer.build(postgresStorage(url)));
+    yield* Effect.scoped(Layer.build(postgresStorage({ cipher: testSecretsCipher, url })));
     yield* onPostgresDatabase({ statements: FORGET_WHEN_NUDGES_AND_ACTIVITY_BEGAN, url });
     yield* run(`ALTER DATABASE ${BUILDING_TEMPLATE} RENAME TO ${TEMPLATE}`);
   });
@@ -124,4 +135,4 @@ const freshPostgresDatabase = scopedDatabase(TEMPLATE);
 
 const emptyPostgresDatabase = scopedDatabase(EMPTY_TEMPLATE);
 
-export { emptyPostgresDatabase, freshPostgresDatabase, onPostgresDatabase };
+export { emptyPostgresDatabase, freshPostgresDatabase, onPostgresDatabase, postgresRows };

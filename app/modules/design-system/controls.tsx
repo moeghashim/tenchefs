@@ -18,7 +18,7 @@
  * - `FilterField` is a labelled box whose text its owner holds.
  * - `Chip` is a button, pressed or not.
  * - `QuietButton` is a muted centred button, naming what it `controls`, such as loading older messages.
- * - `Form` hands one field's value to `onSubmit` without reloading the page.
+ * - `Form` hands one field's value to `onSubmit` without reloading the page. It pads itself, unless `flush`, for a form inside a `ProfileSection`, which lines it up with the section's heading.
  * - `TextField` is a labelled secret input in a `Form`, such as a token. It takes focus when it first appears if `focused`.
  * - `TextArea` is a labelled box to write in, such as a reply, whose text and caret its owner holds, where Enter sends the form and Shift+Enter starts a new line, and, while its owner is `choosing` from suggestions, is a combobox naming the highlighted option as its active descendant, where the arrows move it, Enter or Tab picks it and Escape closes the list. It takes focus when it first appears if `focused`, and puts the caret at the end of any text it appears with. Files pasted into it, whether the clipboard holds them as files or only as items of kind `file`, go to `onPasteFiles` instead of the text; it needs text to send only while `required`.
  * - `SubmitButton` sends a `Form`.

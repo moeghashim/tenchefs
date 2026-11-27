@@ -59,6 +59,7 @@ function switchOff(dialect: SqlDialect): readonly string[] {
     `UPDATE agent_session_tokens SET revoked = TRUE WHERE identity_name = ? AND ${isFalse[dialect]("revoked")}`,
     "DELETE FROM command_tokens WHERE handler_name = ?",
     "DELETE FROM login_credentials WHERE identity_name = ?",
+    "DELETE FROM login_links WHERE identity_name = ?",
     "DELETE FROM login_requests WHERE approved_by = ?",
     PAUSE_SCHEDULES_OF,
   ];

@@ -9,6 +9,7 @@ interface Failing {
 
 interface ServiceHostOptions {
   readonly failing?: Failing;
+  readonly linger?: boolean;
   readonly osRelease?: string;
   readonly platform: string;
   readonly wslConf?: string;
@@ -38,16 +39,29 @@ const TEST_UID = 501;
 const SERVICE_COMMANDS = ["launchctl", "loginctl", "systemctl"] as const;
 const COOKOUT_ARGV = ["/opt/node/bin/node", "/opt/cookout/bin/cookout"];
 
+function lingerAnswer(command: string, options: ServiceHostOptions): string {
+  if (command !== "loginctl") {
+    return "";
+  }
+  let linger = "no";
+  if (options.linger === true) {
+    linger = "yes";
+  }
+  return `if [ "$1" = show-user ]; then echo 'Linger=${linger}'; fi\n`;
+}
+
 function fakeScript(
   command: string,
   { log, options }: { readonly log: string; readonly options: ServiceHostOptions },
 ): string {
   const record = `#!/bin/sh\necho "${command} $*" >> '${log}'\n`;
+  const answered = `${record}${lingerAnswer(command, options)}`;
   return Option.match(
-    Option.filter(Option.fromNullishOr(options.failing), (fails) => fails.command === command),
+    Option.filter(Option.fromNullishOr(options.failing), (fails) => Str.startsWith(command)(fails.command)),
     {
-      onNone: () => record,
-      onSome: ({ stderr }) => `${record}echo '${stderr}' >&2\nexit 1\n`,
+      onNone: () => answered,
+      onSome: (fails) =>
+        `${answered}case "${command} $*" in '${fails.command}'*) echo '${fails.stderr}' >&2; exit 1;; esac\n`,
     },
   );
 }

@@ -142,6 +142,14 @@ export type IdentityResponse = {
 export type IdentityWithTokenResponse = {
   readonly identity: Identity;
   readonly token: Token;
+  /** On creating a person only: a one-time login link for them, shown this once (#912). */
+  readonly loginLink?: LoginLinkResponse;
+};
+
+/** A one-time login link, shown once: it logs its person in once, until `expiresAt`, 15 minutes after it was made. */
+export type LoginLinkResponse = {
+  readonly link: string;
+  readonly expiresAt: IsoTime;
 };
 
 /** The answer to `GET /v1/identities`: every identity, sorted by name. */
@@ -238,28 +246,19 @@ export const identityDisplayNamePath = "/v1/identities/:name/display-name";
 export const sessionPath = "/v1/session";
 
 /**
- * The harness running a client's process, such as `claude-code`: 1–40 lowercase letters, digits or `-`. The CLI
- * and the SDK send it in `cookout-harness` when the process's environment shows such a tool runs it.
+ * The harness running a client's process (`Harness`), such as `claude-code`: 1–40 of `a-z`, `0-9` or `-` (`isHarness`).
+ * The CLI and the SDK send it in `harnessHeader` when such a tool runs the process. A human's token sent with it is
+ * 403 `agent_as_human`, to catch an agent that inherited a person's token; not a security boundary (ADR 0038).
+ * A message posted with it records the tool as `harness`.
  */
 export type Harness = Brand<"Harness">;
 
-/** The rule every harness's name follows, for the backend's Schemas. */
 export const harnessPattern = /^[a-z0-9-]{1,40}$/u;
 
-/**
- * Whether `value` follows the harness rule; if so, it is a `Harness`.
- * @param value The string to check.
- * @returns Whether `value` is a `Harness`.
- */
 export function isHarness(value: string): value is Harness {
   return harnessPattern.test(value);
 }
 
-/**
- * The header a client sends its harness in. A human identity's token sent with it is refused with 403
- * `agent_as_human`, to catch an agent that inherited a person's token by accident; it is not a security boundary
- * (ADR 0038). A message posted with it records the tool as `harness`.
- */
 export const harnessHeader = "cookout-harness";
 
 /** The HttpOnly, SameSite=Strict cookie the web UI's requests carry instead of the bearer header. */
@@ -297,4 +296,5 @@ export const identityErrorCodes = [
   ...identityDeletionErrorCodes,
   ...avatarErrorCodes,
   "login_request_not_found",
+  "login_link_not_found",
 ] as const;

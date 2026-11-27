@@ -105,7 +105,7 @@ it("while suggestions show, the arrows move the highlight and Enter picks it ins
 });
 
 async function twoWebhookCommands(prefix: string): Promise<void> {
-  const schema = { properties: { branch: { type: "string" } }, type: "object" } as const;
+  const schema = { properties: { branch: { type: "string" }, count: { type: "integer" } }, type: "object" } as const;
   await Promise.all(
     [`${prefix}-first`, `${prefix}-second`].map(async (name) => {
       await newIdentity({ kind: "agent", name, owner: "admin" });

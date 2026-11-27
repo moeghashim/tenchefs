@@ -18,7 +18,9 @@ import { isoTimeOf } from "../../../time/server.ts";
 import { messagesLayer } from "../../../messages/server.ts";
 
 type Calling = Pick<Call, "stored" | "data">;
-type Placed = Pick<Call, "channel" | "threadId">;
+interface Placed extends Pick<Call, "channel" | "threadId"> {
+  readonly messageId: Call["threadId"];
+}
 type CallParts = Omit<NewWebhookCommandCall, "message">;
 type DeliveriesNeeds = Secrets | Storage | Layer.Services<typeof messagesLayer>;
 type PostCall<Failure> = (parts: CallParts) => Effect.Effect<Placed, Failure>;
@@ -210,16 +212,6 @@ const newWebhookCommandToken = Effect.fnUntraced(function* issueWebhookCommandTo
   return { stored: { expiresAt, handler: stored.command.handler, hash }, token };
 });
 
-const calledAtOf = Effect.fnUntraced(function* findCallTime(
-  call: Call,
-): Effect.fn.Return<DateTime.Utc, StorageUnavailable, Storage> {
-  const storage = yield* Storage;
-  const thread = yield* Effect.flatMap(storage.getThread(call.threadId), (found) =>
-    Effect.orDie(Effect.fromNullishOr(found)),
-  );
-  return DateTime.makeUnsafe(thread.parent.createdAt);
-});
-
 const newDelivery = Effect.fnUntraced(function* startDelivery({
   data,
   stored,
@@ -261,8 +253,7 @@ function deliveriesWith(
     function resume(pending: StoredDelivery): Effect.Effect<void, StorageUnavailable, Secrets | Storage> {
       return Effect.gen(function* resumeDelivery() {
         const call = yield* callOf(pending);
-        const calledAt = yield* calledAtOf(call);
-        const { stored, token } = yield* newWebhookCommandToken(call, calledAt);
+        const { stored, token } = yield* newWebhookCommandToken(call, DateTime.makeUnsafe(pending.calledAt));
         const storage = yield* Storage;
         yield* storage.addWebhookCommandToken({ ...stored, threadId: call.threadId });
         yield* sendInBackground({ call, progress: pending, token });

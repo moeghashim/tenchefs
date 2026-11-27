@@ -1,4 +1,4 @@
-import { commandLineServices, interruptCookout, silentServer } from "../../../testing/server.ts";
+import { commandLineServices, interruptCookout, silentServer, testSecretsKey } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
@@ -32,7 +32,7 @@ it.effect("cookout serve interrupted, as SIGTERM stops it, exits 0 and prints no
     const stopped = yield* interruptCookout({
       args: ["serve", "--port", ANY_FREE_PORT, "--host", "127.0.0.1"],
       asked: TestClock.withLive(Effect.sleep("200 millis")),
-      env: { COOKOUT_ADMIN_TOKEN: SERVE_ADMIN_TOKEN },
+      env: { COOKOUT_ADMIN_TOKEN: SERVE_ADMIN_TOKEN, COOKOUT_SECRETS_KEY: testSecretsKey },
     });
 
     expect(stopped.exitCode).toBe(EXIT_SUCCESS);

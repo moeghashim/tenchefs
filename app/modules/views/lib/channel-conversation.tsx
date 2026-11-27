@@ -49,6 +49,7 @@ export function ChannelConversation(props: ChannelConversationProps): ReactNode 
       composer={props.composer}
       edge={props.edge}
       first={ends.first}
+      keymap={props.keymap}
       newest={ends.newest}
       me={props.me}
       menu={props.unread.menu}
@@ -59,6 +60,7 @@ export function ChannelConversation(props: ChannelConversationProps): ReactNode 
       })}
       posts={posts}
       reader={reader}
+      scheduling={props.scheduling}
       selection={props.unread.selection({ channel, thread: null })}
     />
   );

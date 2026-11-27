@@ -89,6 +89,28 @@ it.effect("on Fly with no public URL set, the public URL is the app's fly.dev ad
   }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
 );
 
+function hstsOverForwardedHttps(url: string): Effect.Effect<string> {
+  return Effect.gen(function* fetchForwarded() {
+    const response = yield* HttpClient.execute(
+      HttpClientRequest.get(`${url}/v1/health`).pipe(HttpClientRequest.setHeader("x-forwarded-proto", "https")),
+    );
+    return response.headers["strict-transport-security"] ?? "";
+  }).pipe(Effect.provide(FetchHttpClient.layer), Effect.orDie);
+}
+
+it.effect("serve trusts X-Forwarded-Proto only on Fly, and answers a request Fly reports as HTTPS with HSTS", () =>
+  Effect.gen(function* flyForwardedProto() {
+    const database = yield* freshDatabasePath;
+    const fly = yield* startServe({ database, env: { FLY_APP_NAME: "new-app" } });
+    const elsewhere = yield* startServe({ database: `${database}-elsewhere` });
+    const answers = yield* Effect.all([hstsOverForwardedHttps(fly.url), hstsOverForwardedHttps(elsewhere.url)], {
+      concurrency: 1,
+    });
+
+    expect(answers).toStrictEqual(["max-age=31536000", ""]);
+  }).pipe(Effect.provide([NodeServices.layer, secretsLive])),
+);
+
 it.effect("on Render with no public URL set, the public URL is the service's external URL, and a set one wins", () =>
   Effect.gen(function* renderPublicUrl() {
     const web = yield* builtWebFolder;

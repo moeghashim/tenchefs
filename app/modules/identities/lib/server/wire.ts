@@ -6,6 +6,7 @@ import type {
   IdentityWithTokenResponse,
   ListIdentitiesQuery,
   ListIdentitiesResponse,
+  LoginLinkResponse,
 } from "../../index.ts";
 import { Schema, SchemaTransformation } from "effect";
 import { avatarIdPattern, isAvatarId } from "../../../avatars/index.ts";
@@ -91,8 +92,16 @@ export const IdentitySchema = matchesWire<Identity>()(Schema.Union([HumanIdentit
 
 export const IdentityResponseSchema = matchesWire<IdentityResponse>()(Schema.Struct({ identity: IdentitySchema }));
 
+export const LoginLinkResponseSchema = matchesWire<LoginLinkResponse>()(
+  Schema.Struct({ expiresAt: IsoTimeSchema, link: Schema.String }),
+);
+
 export const IdentityWithTokenResponseSchema = matchesWire<IdentityWithTokenResponse>()(
-  Schema.Struct({ identity: IdentitySchema, token: TokenSchema }),
+  Schema.Struct({
+    identity: IdentitySchema,
+    loginLink: Schema.optionalKey(LoginLinkResponseSchema),
+    token: TokenSchema,
+  }),
 );
 
 export const ListIdentitiesResponseSchema = matchesWire<ListIdentitiesResponse>()(

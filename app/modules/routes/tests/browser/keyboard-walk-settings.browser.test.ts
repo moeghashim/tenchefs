@@ -82,8 +82,9 @@ function sessionSteps(page: Page): readonly Step[] {
     { focused: field(page, "New agent's name"), keys: "Tab" },
     { focused: field(page, "Its display name"), keys: "Tab" },
     { focused: button(page, "Create"), keys: "Tab" },
-    { focused: link(page, "Session"), keys: "Tab" },
-    ...sectionSteps(page, "Session"),
+    { focused: link(page, "Sessions"), keys: "Tab" },
+    ...sectionSteps(page, "Sessions"),
+    { focused: button(page, "Revoke"), keys: "Tab" },
     { focused: button(page, "Log out"), keys: "Tab" },
     { focused: page.getByLabel("Token", { exact: true }), keys: "Enter" },
   ];

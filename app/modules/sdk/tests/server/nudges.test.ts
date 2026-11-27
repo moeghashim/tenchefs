@@ -185,23 +185,6 @@ it.effect("a reply at day 2 restarts the clock, so the first nudge comes 3 days 
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("a reply after the first nudge reads it and starts the cycle again", () =>
-  Effect.gen(function* replyReads() {
-    const { ada, bob } = yield* board;
-    const thread = yield* post(ada, "who owns the release notes?");
-    yield* Effect.andThen(quietFor("3 days"), nudgesOnceThere(ada.client, ONE));
-    const afterReply = yield* Effect.andThen(reply(bob, thread), unreadNudges(ada.client));
-    const again = yield* Effect.andThen(quietFor("3 days"), nudgesOnceThere(ada.client, ONE));
-    const history = yield* historyNudges(ada.client);
-
-    expect([afterReply, Arr.map(again, ({ kind }) => kind)]).toStrictEqual([[], ["first"]]);
-    expect(history).toStrictEqual([
-      { kind: "first", read: false },
-      { kind: "first", read: true },
-    ]);
-  }).pipe(Effect.provide(testCookout())),
-);
-
 it.effect("closing a thread reads its unread nudge and raises no more, and a closed thread never gets one", () =>
   Effect.gen(function* closingStops() {
     const { ada, open } = yield* closedEarlyAndLater;

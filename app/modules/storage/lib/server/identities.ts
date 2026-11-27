@@ -61,7 +61,7 @@ export type IdentitiesSection = DisplayNamesSection &
 type MemoryIdentities = {
   readonly identities: Map<IdentityName, Identity>;
   readonly activeTokens: Map<TokenHash, IdentityName>;
-  readonly revokedTokens: Set<TokenHash>;
+  readonly revokedTokens: Map<TokenHash, IdentityName>;
   readonly avatarsToRemove: AvatarsToRemove;
 };
 
@@ -71,7 +71,7 @@ const revokeTokensOf = (data: MemoryIdentities, name: IdentityName) => {
   for (const [hash, holder] of data.activeTokens) {
     if (holder === name) {
       data.activeTokens.delete(hash);
-      data.revokedTokens.add(hash);
+      data.revokedTokens.set(hash, holder);
     }
   }
 };
@@ -130,8 +130,9 @@ export const memoryIdentities = (state: MemoryState): MemoryIdentitiesSection =>
     activeTokens: new Map(),
     avatarsToRemove: new Set(),
     identities: new Map(),
-    revokedTokens: new Set(),
+    revokedTokens: new Map(),
   };
+  state.lineage.useTokens(data);
   const open = <A>(work: () => A): Fails<A> => Effect.andThen(state.ensureOpen, Effect.sync(work));
   const deactivations = memoryDeactivations({
     holdToken: (name, hash) => {

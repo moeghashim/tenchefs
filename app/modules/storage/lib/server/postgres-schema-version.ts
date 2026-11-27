@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Array as Arr, Effect, Option, Schema } from "effect";
 import type { PostgresDatabase } from "./adapters/postgres.ts";
 import { StorageUnavailable } from "./errors.ts";
 
@@ -33,4 +33,41 @@ function tooNew({ current, latest }: { readonly current: number; readonly latest
   });
 }
 
-export { currentVersion, tooNew };
+const NEXT_VERSION = 1;
+
+type Migrations = readonly (readonly string[])[];
+
+interface Migrating {
+  readonly db: PostgresDatabase;
+  readonly migrations: Migrations;
+}
+
+function applyNext({ db, migrations }: Migrating): Effect.Effect<boolean, StorageUnavailable> {
+  return db.migrating(
+    Effect.gen(function* applyNextMigration() {
+      const version = yield* currentVersion(db);
+      if (version > migrations.length) {
+        return yield* tooNew({ current: version, latest: migrations.length });
+      }
+      return yield* Option.match(Arr.get(migrations, version), {
+        onNone: () => Effect.succeed(false),
+        onSome: (statements) =>
+          Effect.as(
+            Effect.andThen(
+              Effect.forEach(statements, (statement) => db.exec(statement), { concurrency: 1, discard: true }),
+              db.run("UPDATE schema_version SET version = ?", version + NEXT_VERSION),
+            ),
+            true,
+          ),
+      });
+    }),
+  );
+}
+
+function migrateInOrder(migrating: Migrating): Effect.Effect<void, StorageUnavailable> {
+  return Effect.flatMap(applyNext(migrating), (applied) =>
+    Effect.asVoid(Effect.when(migrateInOrder(migrating), Effect.succeed(applied))),
+  );
+}
+
+export { migrateInOrder };

@@ -6,13 +6,14 @@ import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { sqlDeliveries } from "./deliveries.ts";
 import { sqlWebhookCommandTokens } from "./command-tokens.ts";
+import { threadIdOf } from "./messages.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
 interface NewWebhookCommandCall {
   readonly message: NewMessage;
   readonly token: Omit<StoredWebhookCommandToken, "threadId">;
-  readonly delivery: Omit<StoredDelivery, "threadId" | "channel">;
+  readonly delivery: Omit<StoredDelivery, "threadId" | "channel" | "calledAt">;
 }
 
 interface WebhookCommandCallsSection {
@@ -34,11 +35,12 @@ function storeCall(parts: CallParts): WebhookCommandCallsSection["appendWebhookC
       if (result.status !== "appended") {
         return Effect.succeed(result);
       }
-      const { channel, id: threadId } = result.message;
+      const { channel, createdAt: calledAt } = result.message;
+      const threadId = threadIdOf(result.message);
       return Effect.as(
         Effect.andThen(
           parts.addWebhookCommandToken({ ...token, threadId }),
-          parts.addDelivery({ ...delivery, channel, threadId }),
+          parts.addDelivery({ ...delivery, calledAt, channel, threadId }),
         ),
         result,
       );

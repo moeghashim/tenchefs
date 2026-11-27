@@ -1,5 +1,5 @@
+import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import { Button } from "../../design-system/controls.tsx";
-import type { ChannelName } from "../../sdk/index.ts";
 import { Notice } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import type { ScheduledMessage } from "../../scheduled-messages/index.ts";
@@ -13,6 +13,7 @@ const TEXT = { dismiss: "Dismiss", scheduled: "Scheduled." } as const;
 
 interface ScheduleConfirmationProps {
   readonly channel: ChannelName;
+  readonly thread: MessageId | null;
   readonly scheduling: Scheduling;
 }
 
@@ -26,9 +27,9 @@ function confirmationOf(scheduled: ScheduledMessage): string {
 
 export function ScheduleConfirmation(props: ScheduleConfirmationProps): ReactNode {
   const { scheduling } = props;
-  const { scheduled } = useSyncExternalStore(scheduling.subscribe, scheduling.snapshot);
+  const { scheduled, thread } = useSyncExternalStore(scheduling.subscribe, scheduling.snapshot);
   const handleDismiss = scheduling.dismiss;
-  if (scheduled === null || scheduled.channel !== props.channel) {
+  if (scheduled === null || scheduled.channel !== props.channel || thread !== props.thread) {
     return null;
   }
   return (

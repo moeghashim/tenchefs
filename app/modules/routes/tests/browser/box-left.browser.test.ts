@@ -1,8 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
-import { inConversation, inPane, inThread, sidebarLink } from "./regions.ts";
-import { logInToChannels, logInWithStream } from "./login.ts";
+import { inPane, inThread, sidebarLink } from "./regions.ts";
+import { logInWithStream } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { unique } from "./names.ts";
 
@@ -38,6 +38,12 @@ function messageBox(page: Page): Locator {
 
 function replyBox(page: Page): Locator {
   return inThread(page).getByRole("textbox", { exact: true, name: "Reply" });
+}
+
+function channelMessage(page: Page, text: string): Locator {
+  return inPane(page).getByRole("feed", { exact: true, name: "Messages" }).getByRole("article").filter({
+    hasText: text,
+  });
 }
 
 async function caretAtStart(box: Locator): Promise<void> {
@@ -97,31 +103,28 @@ test("← at the start of a thread's reply box moves to the thread's channel mes
 
   await page.keyboard.press(LEFT);
 
-  await expect(
-    inPane(page).getByRole("feed", { exact: true, name: "Messages" }).getByRole("article").filter({
-      hasText: "The parent.",
-    }),
-  ).toBeFocused();
+  await expect(channelMessage(page, "The parent.")).toBeFocused();
   await expect(replyBox(page)).toHaveValue(DRAFT);
 });
 
-async function inboxConversationOpened(page: Page): Promise<string> {
-  const channel = unique("browser-box-left-inbox");
-  await adminClient().createChannel({ name: channel });
-  const reader = await newIdentity({ kind: "human", name: `${channel}-reader` });
-  const { message } = await adminClient().createMessage({ channel, text: "Deploy at noon?" });
-  await reader.client.follow(message.id);
-  const { message: reply } = await adminClient().createMessage({ channel, replyTo: message.id, text: "Rolled out." });
-  const address = `#/inbox/${channel}/${String(message.id)}/messages/${String(reply.id)}`;
-  await logInToChannels({ page, token: reader.token, url: `/${address}` });
-  return address;
-}
-
-test("← in the Inbox's empty reply box moves to the selected row", async ({ page }) => {
-  const address = await inboxConversationOpened(page);
-  await inConversation(page).getByRole("textbox", { exact: true, name: "Reply" }).focus();
+test("← in a thread's empty reply box moves to the thread's channel message", async ({ page }) => {
+  const { channel, thread } = await channelOpened(page, "browser-box-left-reply-empty");
+  await page.goto(`/#/channels/${channel}/threads/${String(thread)}`);
+  await replyBox(page).focus();
 
   await page.keyboard.press(LEFT);
 
-  await expect(inPane(page).locator(`a[data-feed-row][href="${address}"]`)).toBeFocused();
+  await expect(channelMessage(page, "The parent.")).toBeFocused();
+});
+
+test("← mid-text in a thread's reply box moves the caret and stays in the box", async ({ page }) => {
+  const { channel, thread } = await channelOpened(page, "browser-box-left-reply-mid");
+  await page.goto(`/#/channels/${channel}/threads/${String(thread)}`);
+  await replyBox(page).fill(DRAFT);
+
+  await page.keyboard.press(LEFT);
+  await page.keyboard.type("|");
+
+  await expect(replyBox(page)).toBeFocused();
+  await expect(replyBox(page)).toHaveValue(`${DRAFT.slice(FIRST, LAST)}|${DRAFT.slice(LAST)}`);
 });

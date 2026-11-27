@@ -3,6 +3,8 @@ import { alertSaying, alertsShown } from "./alerts.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { inPane, inSidebar } from "./regions.ts";
+import type { CookoutClient } from "../../sdk/index.ts";
+import { CookoutError } from "../../sdk/index.ts";
 import { openAt } from "./render.tsx";
 import { unreachableClient } from "../../testing/index.ts";
 
@@ -111,6 +113,39 @@ it("the login view says so when the server can't be reached", { timeout: 5000 },
   const alert = await alertSaying("Couldn't log in");
 
   expect(alert.textContent).toMatch(/^Couldn't log in \(unreachable\)/u);
+
+  close();
+});
+
+function expiredSessionClient(): CookoutClient {
+  const expired = new CookoutError({
+    code: "login_expired",
+    message: "This login ended after 90 days unused. Log in again.",
+    status: 401,
+  });
+  return {
+    ...anonymousClient(),
+    whoami: async () => {
+      await Promise.resolve();
+      throw expired;
+    },
+  };
+}
+
+it("with an expired session cookie, the app shows the login page and a line saying the login ended after 90 days unused", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const close = openAt({ client: expiredSessionClient(), hash: "#/channels/general" });
+
+  const form = await screen.findByRole("form", { name: "Log in" });
+  const alert = await alertSaying("Your login ended");
+
+  expect([form.textContent, alert.textContent]).toStrictEqual([
+    "TokenLog in",
+    "Your login ended after 90 days unused. Log in again.",
+  ]);
 
   close();
 });

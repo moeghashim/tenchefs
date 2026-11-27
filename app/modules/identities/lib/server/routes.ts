@@ -1,5 +1,5 @@
 import { Array as Arr, Effect, Predicate } from "effect";
-import { Caller, announced, issueToken, requireAdmin, requireOwnerOrAdmin, tokensEnded } from "./auth.ts";
+import { Caller, announced, issueToken, requireAdmin, requireOwnerOrAdmin } from "./auth.ts";
 import { CreateIdentityRequestSchema, createAgentByAgent, createIdentity } from "./create.ts";
 import {
   DeactivateIdentityResponseSchema,
@@ -8,17 +8,19 @@ import {
   IdentityWithTokenResponseSchema,
   ListIdentitiesQuerySchema,
   ListIdentitiesResponseSchema,
+  LoginLinkResponseSchema,
 } from "./wire.ts";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import type { Identity, IdentityName, ListIdentitiesQuery, TokenHash } from "../../index.ts";
+import type { Identity, IdentityName, ListIdentitiesQuery } from "../../index.ts";
+import type { IdentityChanges, Secrets } from "./auth.ts";
 import { identitiesPath, identityAdminPath, identityPath, identityTokenPath, isIdentityName } from "../../index.ts";
-import type { IdentityChanges } from "./auth.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { Route } from "../../../http/server.ts";
-import type { Secrets } from "../../../secrets/server.ts";
 import type { SetAdminResult } from "../../../storage/server.ts";
 import { Storage } from "../../../storage/server.ts";
 import { echoed } from "../../../http/index.ts";
+import { endBelowRotated } from "./cascade.ts";
+import { requestOrigin } from "../../../http/server.ts";
 
 const CONFLICT = 409;
 const PATH_BASE = "http://cookout.invalid";
@@ -64,7 +66,8 @@ const createRoute: Route<Caller | Storage | Secrets | IdentityChanges> = {
         yield* announced(brought.identity);
         return yield* HttpServerResponse.schemaJson(IdentityResponseSchema)(brought, { status: CREATED });
       }
-      const created = yield* createIdentity({ body, caller });
+      const origin = yield* requestOrigin;
+      const created = yield* createIdentity({ body, caller, origin });
       yield* announced(created.identity);
       return yield* withToken(created, { status: CREATED });
     }),
@@ -108,15 +111,6 @@ const getRoute: Route<Storage> = {
   path: identityPath,
 };
 
-function rotatedBy(
-  identity: IdentityName,
-  loginCredentials: readonly TokenHash[],
-): Effect.Effect<void, never, Caller | IdentityChanges> {
-  return Effect.flatMap(Caller, (caller) =>
-    tokensEnded({ by: caller.name, cause: "rotated", identity, tokens: { kind: "identity tokens", loginCredentials } }),
-  );
-}
-
 const rotateRoute: Route<Caller | Storage | Secrets | IdentityChanges> = {
   handle: (params) =>
     Effect.gen(function* rotateTokenRoute() {
@@ -128,8 +122,7 @@ const rotateRoute: Route<Caller | Storage | Secrets | IdentityChanges> = {
       if (result.status === "not_found") {
         return yield* Effect.fail(identityNotFound(name));
       }
-      const endedSessions = yield* storage.revokeLoginCredentialsMadeWithRevokedTokens(name);
-      yield* rotatedBy(name, endedSessions);
+      yield* endBelowRotated(name);
       return yield* withToken({ identity: result.identity, token });
     }),
   method: "POST",
@@ -183,6 +176,7 @@ export const responseSchemas = {
   IdentityResponse: IdentityResponseSchema,
   IdentityWithTokenResponse: IdentityWithTokenResponseSchema,
   ListIdentitiesResponse: ListIdentitiesResponseSchema,
+  LoginLinkResponse: LoginLinkResponseSchema,
 };
 
 export const identityAdminRoutes: readonly Route<Caller | Storage | Secrets | IdentityChanges>[] = [
@@ -195,7 +189,11 @@ export const identityAdminRoutes: readonly Route<Caller | Storage | Secrets | Id
 ];
 
 export { identityNotFound, nameParam };
+export { endBelowDeactivated } from "./cascade.ts";
 export { humanAdmin } from "./create.ts";
 
 export { loginResponseSchemas, loginRoutes, openLoginRoutes } from "./logins.ts";
-export { AddressLimit } from "./login-support.ts";
+export { sessionRoutes } from "./sessions.ts";
+export { loginLinkRoutes } from "./login-links.ts";
+export { openLoginLinkRoutes } from "./login-link-redeem.ts";
+export { AddressLimit, now } from "./login-support.ts";

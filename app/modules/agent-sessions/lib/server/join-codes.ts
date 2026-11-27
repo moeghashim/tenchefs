@@ -2,7 +2,7 @@ import type { AgentIdentity, DisplayName, HumanIdentity, IdentityName } from "..
 import { DateTime, Effect, Predicate } from "effect";
 import type { JoinCodeRedemption, StorageUnavailable } from "../../../storage/server.ts";
 import type { JoinCodeResponse, RedeemJoinCodeRequest, RedeemJoinCodeResponse } from "../../join-codes.ts";
-import { agentSessionLive, identityDeactivated } from "./refusals.ts";
+import { agentSessionLive, identityDeactivated, withParent } from "./refusals.ts";
 import type { Description } from "../../../identities/client.ts";
 import type { On } from "./join.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -114,7 +114,7 @@ function creator(on: On): JoinCodes["createJoinCode"] {
       const joinCode = yield* secrets.newToken;
       const codeHash = yield* secrets.hashToken(joinCode);
       const expiresAt = isoTimeOf(DateTime.add(now, { minutes: joinCodeLifetimeMinutes }));
-      yield* storage.addJoinCode({ agent: agent.name, codeHash, createdAt, expiresAt });
+      yield* Effect.flatMap(withParent({ agent: agent.name, codeHash, createdAt, expiresAt }), storage.addJoinCode);
       return { expiresAt, identity: agent, joinCode };
     });
 }

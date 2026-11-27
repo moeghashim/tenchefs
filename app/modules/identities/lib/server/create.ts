@@ -18,6 +18,7 @@ import type { StorageUnavailable } from "../../../storage/server.ts";
 import { identityKinds } from "../../index.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 import { issueToken } from "./auth.ts";
+import { loginLinkFor } from "./login-links.ts";
 
 const humanHasNoOwner = Schema.makeFilter(
   (body: { readonly kind: IdentityKind; readonly owner?: Owner }) =>
@@ -182,11 +183,22 @@ function storeNew(identity: Identity, hash: TokenHash): Effect.Effect<void, Refu
   });
 }
 
+function withLoginLinkIfPerson(
+  created: IdentityWithTokenResponse,
+  origin: string,
+): Effect.Effect<IdentityWithTokenResponse, StorageUnavailable, Storage | Secrets> {
+  if (created.identity.kind !== "human") {
+    return Effect.succeed(created);
+  }
+  return Effect.map(loginLinkFor({ name: created.identity.name, origin }), (loginLink) => ({ ...created, loginLink }));
+}
+
 function createIdentity(request: {
   readonly caller: HumanIdentity;
   readonly body: CreateIdentityBody;
+  readonly origin: string;
 }): Effect.Effect<IdentityWithTokenResponse, Refusal | StorageUnavailable, Storage | Secrets> {
-  const { body, caller } = request;
+  const { body, caller, origin } = request;
   return Effect.gen(function* createRequestedIdentity() {
     const now = yield* DateTime.now;
     const identity = requested(newIdentity(caller, body, isoTimeOf(now)), body);
@@ -194,7 +206,7 @@ function createIdentity(request: {
     yield* requireAgentNamed(identity);
     const { token, hash } = yield* issueToken;
     yield* storeNew(identity, hash);
-    return { identity, token };
+    return yield* withLoginLinkIfPerson({ identity, token }, origin);
   });
 }
 

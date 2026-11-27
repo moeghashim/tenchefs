@@ -4,6 +4,7 @@
  * token, a bearer token that acts as the agent for one session (Matt, 2026-11-23, mattpocock/cookout#114).
  */
 import type { IdentityName, Token } from "../identities/index.ts";
+import type { ApprovalRequestDetails } from "../logins/index.ts";
 import type { IsoTime } from "../time/index.ts";
 
 /** `POST /v1/agent-session` joins (issues an agent session token); `DELETE /v1/agent-session` leaves (revokes it). */
@@ -177,15 +178,6 @@ export const agentJoinRequestApprovalPath = "/v1/agent-join-requests/:code/appro
  */
 export const agentJoinRequestDenialPath = "/v1/agent-join-requests/:code/denial";
 
-/**
- * The approval page's path on the server for an agent join request's user code.
- * @param userCode The request's user code.
- * @returns The path, such as `/#/approve-join/WDJB-MJHT`.
- */
-export function agentJoinApprovalPathOf(userCode: string): string {
-  return `/#/approve-join/${userCode}`;
-}
-
 /** The body of `POST /v1/agent-join-requests`: the agent to join as, the box's host and the idle expiry it asks for. */
 export interface StartAgentJoinRequest {
   /** A name as `join` takes it: the approver's own agent, a free name, or else `<approver>/<name>`. */
@@ -197,6 +189,9 @@ export interface StartAgentJoinRequest {
   /** The session URL of the session the approved join issues, as `join` takes it. */
   readonly sessionUrl?: string;
 }
+
+/** The approval page's path, which an agent join request shares with a login request and which holds no code (#905). */
+export { approvalPath as agentJoinApprovalPath } from "../logins/index.ts";
 
 /** A started agent join request. Only `requestId` collects the agent session token, and it is shown this once. */
 export interface AgentJoinRequestStartedResponse {
@@ -212,7 +207,7 @@ export type AgentJoinCollectedResponse =
   | { readonly status: "approved"; readonly agentSession: AgentSessionResponse };
 
 /** An agent join request as the human viewing it would approve it. */
-export interface AgentJoinRequestView {
+export interface AgentJoinRequestView extends ApprovalRequestDetails {
   readonly userCode: string;
   readonly host: string;
   readonly expiresAt: IsoTime;

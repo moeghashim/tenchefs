@@ -22,6 +22,7 @@ import { devCommandLine } from "../../../dev/server.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
 import { parseLine } from "./cli.ts";
 import { secretsTest } from "./secrets.ts";
+import { testSecretsKey } from "./secrets-key.ts";
 
 interface CliResult {
   readonly exitCode: number;
@@ -177,7 +178,7 @@ function serveCommandLine(options: ServeOptions): Omit<CommandLine, "console"> &
   const db = Option.match(Option.fromNullishOr(database), { onNone: () => [], onSome: (path) => ["--db", path] });
   const args = [...listen, ...db];
   const program = exitCodeAfter(runCommandLine(args, { storage: storageLayer, ...web }));
-  return { adminToken, env: { COOKOUT_ADMIN_TOKEN: adminToken, ...env }, program };
+  return { adminToken, env: { COOKOUT_ADMIN_TOKEN: adminToken, COOKOUT_SECRETS_KEY: testSecretsKey, ...env }, program };
 }
 
 function runServe(options: ServeOptions): Effect.Effect<CliResult, never, Needs> {

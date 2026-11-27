@@ -31,6 +31,8 @@ interface ThreadLoaded {
   readonly replies: readonly MessageId[];
   readonly read: ReadState;
   readonly reply: PostState;
+  readonly call: CallState;
+  readonly callData: string;
   readonly deleted: ReadonlySet<MessageId>;
 }
 

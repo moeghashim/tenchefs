@@ -77,6 +77,7 @@ it.effect.each(storageLayers)(
       const shown = yield* storage.findAgentJoinRequest("WDJB-MJHT", before);
       const shownRequest = {
         agent: agent.name,
+        createdAt: created,
         expiresAt,
         host: "build-box",
         idleExpiry: "30d",
@@ -109,6 +110,7 @@ it.effect.each(storageLayers)(
       expect(shown).toStrictEqual({
         agent: agent.name,
         approved: true,
+        createdAt: created,
         expiresAt,
         host: "build-box",
         userCode: "WDJB-MJHT",

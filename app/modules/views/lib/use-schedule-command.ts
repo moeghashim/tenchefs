@@ -4,7 +4,10 @@ import { useCallback, useContext, useEffect } from "react";
 import type { ChannelName } from "../../sdk/index.ts";
 import type { Draft } from "../../composer/index.ts";
 import type { MenuChoice } from "../../design-system/messages.tsx";
+import type { WebhookCommandCalls } from "./use-board.ts";
+import { useChannelCalls } from "./use-board.ts";
 import { useFooterHandlers } from "./use-footer-handlers.ts";
+import { useWebhookCommandRun } from "./use-webhook-command-run.ts";
 
 const SCHEDULE = "Schedule…";
 
@@ -51,10 +54,14 @@ function scheduledText(draft: Draft): string {
   if (run === null) {
     return text;
   }
-  return run.text;
+  if (run.kind === "command") {
+    return run.text;
+  }
+  return text;
 }
 
 interface Handlers {
+  readonly calls: WebhookCommandCalls;
   readonly post: (outgoing: Outgoing, posted: () => void) => void;
   readonly saved: () => void;
 }
@@ -62,8 +69,10 @@ interface Handlers {
 export function useScheduleCommand(command: ScheduleCommand): Handlers {
   const { channel, draft, scheduling } = command;
   const { post, saved } = useFooterHandlers({ channel, draft, form: command.form });
+  const calls = useChannelCalls(channel);
+  const runWebhookCommand = useWebhookCommandRun({ calls, draft, saved });
   const handleSchedule = useCallback(() => {
-    scheduling.open(channel, scheduledText(draft));
+    scheduling.open({ channel, thread: null }, scheduledText(draft));
   }, [channel, draft, scheduling]);
   useScheduleKey({ form: command.form, onSchedule: handleSchedule, shown: command.shown });
   const handlePost = useCallback(
@@ -71,11 +80,13 @@ export function useScheduleCommand(command: ScheduleCommand): Handlers {
       const run = draft.commandRun(outgoing.text);
       if (run === null) {
         post(outgoing, posted);
-        return;
+      } else if (run.kind === "command") {
+        scheduling.open({ channel, thread: null }, run.text);
+      } else {
+        runWebhookCommand(run);
       }
-      scheduling.open(channel, run.text);
     },
-    [channel, draft, post, scheduling],
+    [channel, draft, post, runWebhookCommand, scheduling],
   );
-  return { post: handlePost, saved };
+  return { calls, post: handlePost, saved };
 }

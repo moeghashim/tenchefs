@@ -1,13 +1,13 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
 import type { ChannelsState, WebhookCommandsState } from "./listed-slices.ts";
 import type { OwnClient, OwnParts, Schedules } from "./own-parts.ts";
+import type { ThreadPlace, Threads } from "./threads-part.ts";
 import type { BoardCalls } from "./board-calls.ts";
 import type { ChannelPages } from "./channel-pages.ts";
 import type { ClosingRefusal } from "./thread-closing.ts";
 import type { MessagesHeld } from "./messages-table.ts";
 import type { ReplyRequest } from "./thread-reads.ts";
 import type { SubscriptionsState } from "./subscriptions-slice.ts";
-import type { ThreadPlace } from "./threads-part.ts";
 import { createOwnParts } from "./own-parts.ts";
 
 type Subscribe = (listener: () => void) => () => void;
@@ -16,7 +16,7 @@ interface ChannelPageCalls extends Omit<ChannelPages, "back" | "heard" | "show">
   readonly subscribeShowing: (name: ChannelName) => Subscribe;
 }
 
-interface ThreadCalls {
+interface ThreadCalls extends Pick<Threads, "call" | "editCallData"> {
   readonly subscribeShowing: (place: ThreadPlace, acking: boolean) => Subscribe;
   readonly reply: (place: ThreadPlace, request: ReplyRequest) => void;
   readonly ack: (place: ThreadPlace, id: MessageId) => void;
@@ -102,6 +102,8 @@ function showingOf(own: OwnParts, following: Following): OwnShowing {
     subscribeShowingBefore: (place) => followedBy(following, () => messages.showBefore(place)),
     threads: {
       ack: threads.ack,
+      call: threads.call,
+      editCallData: threads.editCallData,
       reply: threads.reply,
       subscribeShowing: (place, acking) =>
         followedBy(following, (listener) => threads.show(place, { acking, listener })),

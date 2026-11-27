@@ -8,8 +8,6 @@ const FIRST_CHARACTER = 0;
 const THREAD = 'aside[aria-label="Thread"]';
 const PANEL = "aside";
 const OPEN_LINK = 'nav[aria-label="Sidebar"] a[href][aria-current="page"]';
-const ROW = "main a[data-feed-row]";
-const SELECTED_ROW = `${ROW}[aria-current="page"]`;
 const ATTACH = 'form button[aria-label="Attach files"]';
 
 interface MessageBoxKeys {
@@ -53,15 +51,6 @@ function focusedOn(element: unknown): boolean {
   return globalThis.document.activeElement === element;
 }
 
-function rowOutsidePanel(selector: string): HTMLElement | null {
-  for (const row of globalThis.document.querySelectorAll<HTMLElement>(selector)) {
-    if (row.closest(PANEL) === null) {
-      return row;
-    }
-  }
-  return null;
-}
-
 function leftOf(box: unknown): boolean {
   if (!(box instanceof Element)) {
     return false;
@@ -70,7 +59,7 @@ function leftOf(box: unknown): boolean {
     return focusedOnChannelMessage();
   }
   if (box.closest(PANEL) !== null) {
-    return focusedOn(rowOutsidePanel(SELECTED_ROW) ?? rowOutsidePanel(ROW));
+    return focusedOn(newestNear(box));
   }
   return focusedOn(globalThis.document.querySelector(OPEN_LINK));
 }

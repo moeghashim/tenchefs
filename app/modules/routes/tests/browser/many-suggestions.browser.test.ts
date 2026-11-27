@@ -17,7 +17,7 @@ const FIRST = 0;
 const LAST = MANY - ONE;
 const WHOLLY = 1;
 const nowhere = "http://127.0.0.1:9/command";
-const schema = { properties: { branch: { type: "string" } }, type: "object" } as const;
+const schema = { properties: { branch: { type: "string" }, count: { type: "integer" } }, type: "object" } as const;
 
 function manyNames(prefix: string): readonly string[] {
   return Array.from({ length: MANY }, (_value, at) => `${prefix}-${String(at).padStart(TWO_DIGITS, "0")}`);

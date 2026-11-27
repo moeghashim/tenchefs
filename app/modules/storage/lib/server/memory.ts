@@ -1,4 +1,4 @@
-import { Effect, Predicate } from "effect";
+import { Effect, Predicate, Ref } from "effect";
 import { memoryIdentityLifecycle, memoryIdentitySections } from "./identity-sections.ts";
 import type { MemoryBoard } from "./service.ts";
 import type { Scope } from "effect";
@@ -23,6 +23,18 @@ function subscribingCreator(
     });
 }
 
+function memorySealedSecrets(): Pick<MemoryBoard, "sealSecrets"> {
+  const sealed = Ref.makeUnsafe(false);
+  return {
+    sealSecrets: Effect.map(Ref.getAndSet(sealed, true), (already) => {
+      if (already) {
+        return "unchanged" as const;
+      }
+      return "sealed" as const;
+    }),
+  };
+}
+
 export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> = Effect.map(
   openMemoryState,
   (state) => {
@@ -41,6 +53,7 @@ export const openMemoryStorage: Effect.Effect<MemoryBoard, never, Scope.Scope> =
       });
     return {
       ...memoryHealth(state),
+      ...memorySealedSecrets(),
       ...identities,
       ...channels,
       ...messages,

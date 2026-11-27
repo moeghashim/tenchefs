@@ -6,10 +6,13 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 
 const VERSIONED = "9999aaaa";
+const RELEASED = "012b8400";
 
 interface Landed {
   readonly changed: readonly string[];
+  readonly changedSinceVersioned?: readonly string[];
   readonly pending: Readonly<Record<string, string>>;
+  readonly released: string;
   readonly versioned: string;
 }
 
@@ -18,7 +21,7 @@ interface Added {
   readonly outcome: Outcome<string>;
 }
 
-const LANDED: Landed = { changed: [], pending: {}, versioned: VERSIONED };
+const LANDED: Landed = { changed: [], pending: {}, released: "", versioned: VERSIONED };
 
 function folder(pending: Readonly<Record<string, string>>): string {
   const directory = mkdtempSync(path.join(tmpdir(), "release-changeset-"));
@@ -31,18 +34,19 @@ function folder(pending: Readonly<Record<string, string>>): string {
 }
 
 function added(overrides: Partial<Landed>): Added {
-  const { changed, pending, versioned } = { ...LANDED, ...overrides };
+  const { changed, changedSinceVersioned = changed, pending, released, versioned } = { ...LANDED, ...overrides };
   const directory = folder(pending);
+  const answers: readonly (readonly [string, string])[] = [
+    ["-E", released],
+    ["-G", versioned],
+    [versioned, changedSinceVersioned.join("\n")],
+    ["--format=%s", "Mention suggestions put recent posters first (#666)\nDelete a message (#678)"],
+  ];
   const outcome = addUnreleasedChangeset({
     directory,
     git: (args): Outcome<string> => {
-      if (args.includes("-G")) {
-        return { ok: true, value: `${versioned}\n` };
-      }
-      if (args.includes("--format=%s")) {
-        return { ok: true, value: "Mention suggestions put recent posters first (#666)\nDelete a message (#678)\n" };
-      }
-      return { ok: true, value: `${changed.join("\n")}\n` };
+      const [, value] = answers.find(([flag]) => args.includes(flag)) ?? ["", changed.join("\n")];
+      return { ok: true, value: `${value}\n` };
     },
   });
   return { directory, outcome };
@@ -113,6 +117,68 @@ it("adds nothing when only docs, tests and scripts changed since the last versio
   expect(outcome).toStrictEqual({ ok: true, value: `added nothing: no shipping code landed since ${VERSIONED}` });
 });
 
+it("adds nothing when only a test helper under a tests/ folder changed since the last version", {
+  timeout: 1000,
+}, () => {
+  expect.hasAssertions();
+
+  const { outcome } = added({ changed: ["app/modules/routes/tests/sidebar-keys.ts"] });
+
+  expect(outcome).toStrictEqual({ ok: true, value: `added nothing: no shipping code landed since ${VERSIONED}` });
+});
+
+it("adds nothing when only the shared test utilities under app/modules/testing changed", { timeout: 1000 }, () => {
+  expect.hasAssertions();
+
+  const { outcome } = added({
+    changed: ["app/modules/testing/lib/calls-in-flight.ts", "app/modules/testing/index.ts"],
+  });
+
+  expect(outcome).toStrictEqual({ ok: true, value: `added nothing: no shipping code landed since ${VERSIONED}` });
+});
+
+it("counts from the newest Version Packages merge, even one that left the version unchanged", {
+  timeout: 1000,
+}, () => {
+  expect.hasAssertions();
+
+  const { outcome } = added({
+    changed: ["app/modules/routes/tests/sidebar-keys.ts", "scripts/check.ts"],
+    changedSinceVersioned: ["app/main.ts", "app/modules/routes/tests/sidebar-keys.ts", "scripts/check.ts"],
+    released: RELEASED,
+  });
+
+  expect(outcome).toStrictEqual({ ok: true, value: `added nothing: no shipping code landed since ${RELEASED}` });
+});
+
+it("still adds a patch changeset when shipping code landed after the newest Version Packages merge", {
+  timeout: 1000,
+}, () => {
+  expect.hasAssertions();
+
+  const { outcome } = added({ changed: ["app/main.ts"], changedSinceVersioned: [], released: RELEASED });
+
+  expect(outcome).toStrictEqual({
+    ok: true,
+    value: `added .changeset/unreleased-work.md: app/main.ts landed since ${RELEASED} with no changeset, so this releases a patch`,
+  });
+});
+
+it.each([["app/modules/routes/index.ts"], ["package.json"]])(
+  "still adds a patch changeset when %s, outside any tests/ folder, changed",
+  { timeout: 1000 },
+  (file) => {
+    expect.hasAssertions();
+
+    const { outcome } = added({ changed: ["app/modules/routes/tests/sidebar-keys.ts", file] });
+
+    expect(outcome).toStrictEqual({
+      ok: true,
+      value: `added .changeset/unreleased-work.md: ${file} landed since ${VERSIONED} with no changeset, so this releases a patch`,
+    });
+  },
+);
+
 it("counts every file as landed when no commit has versioned the package yet", { timeout: 1000 }, () => {
   expect.hasAssertions();
 
@@ -125,7 +191,7 @@ it("counts every file as landed when no commit has versioned the package yet", {
   });
 });
 
-it.each([["-G"], ["ls-files"], ["--format=%s"]])(
+it.each([["-E"], ["-G"], ["ls-files"], ["--format=%s"]])(
   "fails, naming the command, when git %s fails",
   { timeout: 1000 },
   (failing) => {

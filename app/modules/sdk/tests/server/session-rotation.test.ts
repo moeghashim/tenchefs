@@ -10,6 +10,7 @@ import type { Scope } from "effect";
 import { createTestAgent } from "../../../testing/index.ts";
 
 const REVOKED = '"code":"token_revoked"';
+const UNAUTHORIZED = 401;
 
 function sessionCookie(url: string, token: string): Effect.Effect<string> {
   return Effect.map(
@@ -114,36 +115,38 @@ function agentSessionWatch(cookout: TestCookoutService, owner: TestIdentity): Ef
   });
 }
 
-it.effect("a session made with another of the human's credentials keeps working when their token is rotated", () =>
-  Effect.gen(function* otherCredentialSurvives() {
+it.effect("rotating the human's token ends the login approved with it and the web session made with that login", () =>
+  Effect.gen(function* belowTokenEnds() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
     const credential = yield* loginCredential(cookout, ada);
     const cookie = yield* sessionCookie(cookout.url, credential);
     yield* answer(() => cookout.client.rotateToken("ada"));
-    const response = yield* answer(() =>
-      request({ baseUrl: cookout.url, headers: { cookie }, method: "GET", path: whoamiPath }),
+    const statuses = yield* Effect.forEach(
+      [{ authorization: `Bearer ${credential}` }, { cookie }],
+      (headers: Readonly<Record<string, string>>) =>
+        Effect.map(
+          answer(() => request({ baseUrl: cookout.url, headers, method: "GET", path: whoamiPath })),
+          ({ status }) => status,
+        ),
+      { concurrency: 1 },
     );
 
-    expect(response.json).toStrictEqual({ identity: ada.identity });
+    expect(statuses).toStrictEqual([UNAUTHORIZED, UNAUTHORIZED]);
   }).pipe(Effect.provide(testCookout())),
 );
 
-it.effect("rotating the human's token closes the event streams of sessions made with it, and only those", () =>
+it.effect("rotating the human's token closes the event streams of every session below it", () =>
   Effect.gen(function* rotatedStreamCloses() {
     const cookout = yield* TestCookout;
     const ada = yield* cookout.createIdentity("ada", { kind: "human" });
-    yield* answer(() => cookout.client.createChannel({ name: "grill" }));
     const { made, other } = yield* twoWebStreams(cookout, ada);
     yield* answer(() => cookout.client.rotateToken("ada"));
-    const ended = yield* eventsUntilEnd(made);
-    yield* answer(() => cookout.client.createMessage({ channel: "grill", text: "@ada still there?" }));
-    const next = yield* nextEvent(other);
+    const ended = yield* Effect.forEach([made, other], (frames) => eventsUntilEnd(frames), { concurrency: 1 });
 
-    expect(Arr.map(ended, ({ data, event }) => [event, Str.includes(REVOKED)(data)])).toStrictEqual([
-      [refusalEvent, true],
-    ]);
-    expect(Option.getOrUndefined(next)).toMatchObject({ event: "inbox-item" });
+    expect(
+      Arr.map(ended, (each) => Arr.map(each, ({ data, event }) => [event, Str.includes(REVOKED)(data)])),
+    ).toStrictEqual([[[refusalEvent, true]], [[refusalEvent, true]]]);
   }).pipe(Effect.scoped, Effect.provide(testCookout())),
 );
 

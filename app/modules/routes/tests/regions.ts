@@ -87,3 +87,4 @@ export function inSearchResults(): Region {
 export function inDialog(): Region {
   return regionOf(() => screen.getByRole("alertdialog"));
 }
+export type { Region };

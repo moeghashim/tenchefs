@@ -1,5 +1,5 @@
 import type { AgentIdentity, IdentityName } from "../../../identities/index.ts";
-import { Array as Arr, Effect, Order, Predicate, Schema } from "effect";
+import { Array as Arr, Effect, Order, Predicate } from "effect";
 import type { DeliveriesSection, MemoryDeliveriesSection } from "./deliveries.ts";
 import type { MemoryWebhookCommandTokensSection, WebhookCommandTokensSection } from "./command-tokens.ts";
 import type {
@@ -7,17 +7,11 @@ import type {
   WebhookCommandName,
   WebhookCommandSecret,
 } from "../../../webhook-commands/index.ts";
-import { isWebhookCommandName, isWebhookCommandSecret } from "../../../webhook-commands/index.ts";
-import { memoryDeliveries, sqlDeliveries } from "./deliveries.ts";
-import { memoryWebhookCommandTokens, sqlWebhookCommandTokens } from "./command-tokens.ts";
-import { FALSE } from "./adapters/sql-database.ts";
 import type { FindIdentity } from "./identity-row.ts";
-import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqlDatabase } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
-import { isIdentityName } from "../../../identities/index.ts";
-import { unreadable } from "./errors.ts";
+import { memoryDeliveries } from "./deliveries.ts";
+import { memoryWebhookCommandTokens } from "./command-tokens.ts";
 
 type Fails<Value> = Effect.Effect<Value, StorageUnavailable>;
 
@@ -107,126 +101,4 @@ function memoryWebhookCommands(options: MemoryWebhookCommandsOptions): MemoryWeb
   };
 }
 
-const JsonSchemaFromText = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json));
-
-const WebhookCommandRow = Schema.Struct({
-  created_at: IsoTimeSchema,
-  description: Schema.NullOr(Schema.String),
-  handler_name: Schema.String.pipe(Schema.refine(isIdentityName)),
-  name: Schema.String.pipe(Schema.refine(isWebhookCommandName)),
-  schema: JsonSchemaFromText,
-  secret: Schema.String.pipe(Schema.refine(isWebhookCommandSecret)),
-  url: Schema.String,
-});
-
-const KindRow = Schema.Struct({ kind: Schema.Literals(["human", "agent"]) });
-
-const WEBHOOK_COMMAND_COLUMNS = "name, url, schema, description, handler_name, secret, created_at";
-
-function fromRow(row: typeof WebhookCommandRow.Type): StoredWebhookCommand {
-  const fields = { createdAt: row.created_at, handler: row.handler_name, name: row.name, schema: row.schema };
-  const withUrl = { ...fields, url: row.url };
-  if (typeof row.description === "string") {
-    return { command: { ...withUrl, description: row.description }, secret: row.secret };
-  }
-  return { command: withUrl, secret: row.secret };
-}
-
-function toStored(row: unknown): Fails<StoredWebhookCommand> {
-  return Schema.decodeUnknownEffect(WebhookCommandRow)(row).pipe(
-    Effect.mapBoth({ onFailure: unreadable, onSuccess: fromRow }),
-  );
-}
-
-const encodeSchema = Schema.encodeEffect(JsonSchemaFromText);
-
-function insertWebhookCommand(db: SqlDatabase, { command, secret }: StoredWebhookCommand): Fails<void> {
-  return Effect.flatMap(Effect.mapError(encodeSchema(command.schema), unreadable), (schema) =>
-    db.run(
-      `INSERT INTO commands (${WEBHOOK_COMMAND_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      command.name,
-      command.url,
-      schema,
-      command.description ?? null,
-      command.handler,
-      secret,
-      command.createdAt,
-    ),
-  );
-}
-
-function kindOf(db: SqlDatabase, name: IdentityName): Fails<"human" | "agent" | undefined> {
-  return db.get("SELECT kind FROM identities WHERE name = ?", name).pipe(
-    Effect.flatMap((row) => {
-      if (typeof row === "object" && row !== null) {
-        return Schema.decodeUnknownEffect(KindRow)(row).pipe(
-          Effect.mapBoth({ onFailure: unreadable, onSuccess: ({ kind }) => kind }),
-        );
-      }
-      return Effect.undefined;
-    }),
-  );
-}
-
-function insertHandler(db: SqlDatabase, handler: AgentIdentity): Fails<void> {
-  return db.run(
-    `INSERT INTO identities (name, kind, owner, admin, created_at) VALUES (?, 'agent', ?, ${FALSE[db.dialect]}, ?)`,
-    handler.name,
-    handler.owner,
-    handler.createdAt,
-  );
-}
-
-function sqlWebhookCommands(db: SqlDatabase): WebhookCommandsSection {
-  function find(name: WebhookCommandName): Fails<StoredWebhookCommand | undefined> {
-    return db.get(`SELECT ${WEBHOOK_COMMAND_COLUMNS} FROM commands WHERE name = ?`, name).pipe(
-      Effect.flatMap((row) => {
-        if (typeof row === "object" && row !== null) {
-          return toStored(row);
-        }
-        return Effect.undefined;
-      }),
-    );
-  }
-  return {
-    ...sqlWebhookCommandTokens(db),
-    ...sqlDeliveries(db),
-    addWebhookCommand: (stored, handler) =>
-      db.transaction(
-        Effect.gen(function* addWebhookCommand() {
-          if (typeof (yield* find(stored.command.name)) === "object") {
-            return "name_taken" as const;
-          }
-          const kind = yield* kindOf(db, handler.name);
-          if (kind === "human") {
-            return "handler_is_human" as const;
-          }
-          if (Predicate.isUndefined(kind)) {
-            yield* insertHandler(db, handler);
-          }
-          yield* insertWebhookCommand(db, stored);
-          return "added" as const;
-        }),
-      ),
-    findWebhookCommand: find,
-    listWebhookCommands: Effect.suspend(() =>
-      db
-        .all(`SELECT ${WEBHOOK_COMMAND_COLUMNS} FROM commands ORDER BY name`)
-        .pipe(
-          Effect.flatMap((rows) =>
-            Effect.forEach(rows, (row) => Effect.map(toStored(row), ({ command }) => command), { concurrency: 1 }),
-          ),
-        ),
-    ),
-    replaceWebhookCommandSecret: (name, secret) =>
-      db.transaction(Effect.andThen(db.run("UPDATE commands SET secret = ? WHERE name = ?", secret, name), find(name))),
-  };
-}
-
-export {
-  type WebhookCommandsSection,
-  type PlaceHandler,
-  type StoredWebhookCommand,
-  memoryWebhookCommands,
-  sqlWebhookCommands,
-};
+export { type WebhookCommandsSection, type PlaceHandler, type StoredWebhookCommand, memoryWebhookCommands };

@@ -250,8 +250,8 @@ export type CookoutClient = CallGroups &
     readonly watch: (options?: WatchOptions) => Promise<EventStream>;
     /**
      * `POST /v1/commands` (admin only): registers a webhook command. Its handler identity is an agent with the
-     * command's name, made unless an agent of that name exists. The secret deliveries are signed with is in the answer
-     * this once. A name in use is 409 `command_exists`; a human's name is 409 `handler_not_agent`.
+     * command's name, made unless an agent of that name exists. The answer shows the delivery-signing secret this once.
+     * A name in use or a Command's is 409 `command_exists`; a human's, 409 `handler_not_agent`.
      */
     readonly addCommand: (request: AddCommandRequest) => Promise<CommandWithSecretResponse>;
     /** `GET /v1/commands`: every command, sorted by name, without its secret. */

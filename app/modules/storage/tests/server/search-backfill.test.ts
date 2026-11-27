@@ -1,6 +1,6 @@
 import { Array as Arr, Effect, FileSystem, Path } from "effect";
 import { expect, it } from "@effect/vitest";
-import { freshDatabasePath, messageId, openStore } from "../../../testing/server.ts";
+import { freshDatabasePath, messageId, openStore, testSecretsCipher } from "../../../testing/server.ts";
 import { NodeServices } from "@effect/platform-node";
 import type { SearchQuery } from "../../server.ts";
 import { parseQuery } from "../../../search/index.ts";
@@ -29,7 +29,7 @@ const copiedDatabase = Effect.gen(function* copyFixture() {
 it.effect("the search migration indexes every message stored before search existed", () =>
   Effect.gen(function* backfill() {
     const path = yield* copiedDatabase;
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
 
     const freeze = yield* storage.searchMessages(wordsOf("deploy freeze"), EVERY);
     const login = yield* storage.searchMessages(wordsOf("login"), EVERY);

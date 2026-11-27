@@ -30,7 +30,7 @@ function openOn(scheduling: Scheduling, channel: string): void {
   if (!isChannelName(channel)) {
     throw new TypeError(`Not a channel name: ${channel}`);
   }
-  scheduling.open(channel, "Standup");
+  scheduling.open({ channel, thread: null }, "Standup");
 }
 
 it("saving before a time or a cron expression is given sends nothing", { timeout: 2000 }, () => {

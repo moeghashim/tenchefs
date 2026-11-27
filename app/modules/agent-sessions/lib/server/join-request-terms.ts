@@ -109,8 +109,22 @@ function lowered(asked: Terms) {
 }
 
 function viewOf({ creates, found, idleExpiry, joins, live }: Shown): AgentJoinRequestView {
-  const { agent, approved, expiresAt, host, userCode } = found;
-  const view = { approved, as: agent, creates, expiresAt, host, idleExpiry, joins, userCode };
+  const { agent, approved, clientIp, createdAt, expiresAt, host, userCode } = found;
+  const details = { createdAt, kind: "agent_join", where: host } as const;
+  let view: AgentJoinRequestView = {
+    ...details,
+    approved,
+    as: agent,
+    creates,
+    expiresAt,
+    host,
+    idleExpiry,
+    joins,
+    userCode,
+  };
+  if (Predicate.isString(clientIp)) {
+    view = { ...view, clientIp };
+  }
   return Option.match(live, {
     onNone: () => view,
     onSome: (liveSessionExpiresAt) => ({ ...view, liveSessionExpiresAt }),

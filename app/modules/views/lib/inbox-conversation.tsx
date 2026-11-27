@@ -7,6 +7,7 @@ import type { InboxSelection } from "../../paths/index.ts";
 import type { Keymap } from "../../keymap/index.ts";
 import type { PanelEdgeParts } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
+import type { Scheduling } from "../../board/index.ts";
 
 const TEXT = { conversation: "Conversation", pick: "Pick a conversation" } as const;
 
@@ -16,6 +17,7 @@ interface InboxConversationProps {
   readonly selected: InboxSelection | null;
   readonly unread: Unread;
   readonly reading: Reading;
+  readonly scheduling: Scheduling;
   readonly me: string;
   readonly keymap: Keymap;
 }
@@ -35,6 +37,7 @@ export function InboxConversation(props: InboxConversationProps): ReactNode {
         keymap={props.keymap}
         me={props.me}
         reading={props.reading}
+        scheduling={props.scheduling}
         unread={props.unread}
       />
     );
@@ -47,6 +50,7 @@ export function InboxConversation(props: InboxConversationProps): ReactNode {
       keymap={props.keymap}
       me={props.me}
       reading={props.reading}
+      scheduling={props.scheduling}
       selected={selected}
       unread={props.unread}
     />

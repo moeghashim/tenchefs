@@ -9,6 +9,7 @@ import {
 } from "../../../testing/server.ts";
 import { Effect } from "effect";
 import type { TokenHash } from "../../../identities/index.ts";
+import { UNKNOWN_ID } from "./lineage-seeds.ts";
 import { tokenHash } from "../../../identities/index.ts";
 
 const created = isoTime("2026-01-01T00:00:00.000Z");
@@ -18,7 +19,7 @@ const after = isoTime("2026-01-01T00:10:00.001Z");
 const requestHash = tokenHash("hash:request");
 const credentialHash = tokenHash("hash:credential");
 const ada = identity("ada", { kind: "human" });
-const FAILING_CALLS = 8;
+const FAILING_CALLS = 11;
 const late = tokenHash("hash:late");
 const adaToken = tokenHash("hash:ada");
 
@@ -38,7 +39,7 @@ function approvedAndCollected(
   const [requested, credential] = hashes;
   return Effect.gen(function* approveAndCollect() {
     yield* storage.addLoginRequest({ ...request, requestHash: requested, userCode }, created);
-    yield* storage.approveLoginRequest(userCode, ada.name, before);
+    yield* storage.approveLoginRequest({ approver: ada.name, now: before, userCode });
     return yield* storage.collectLoginRequest({ credentialHash: credential, now: before, requestHash: requested });
   });
 }
@@ -56,15 +57,15 @@ it.effect.each(storageLayers)(
       const added = yield* storage.addLoginRequest(request, created);
       const found = yield* storage.findLoginRequest("WDJB-MJHT", before);
       const pending = yield* storage.collectLoginRequest({ credentialHash, now: before, requestHash });
-      const approved = yield* storage.approveLoginRequest("WDJB-MJHT", ada.name, before);
+      const approved = yield* storage.approveLoginRequest({ approver: ada.name, now: before, userCode: "WDJB-MJHT" });
       const shown = yield* storage.findLoginRequest("WDJB-MJHT", before);
 
       expect([added, found, pending, approved, shown]).toStrictEqual([
         "added",
-        { approved: false, expiresAt, host: "ada-laptop", userCode: "WDJB-MJHT" },
+        { approved: false, createdAt: created, expiresAt, host: "ada-laptop", userCode: "WDJB-MJHT" },
         { status: "pending" },
         "approved",
-        { approved: true, expiresAt, host: "ada-laptop", userCode: "WDJB-MJHT" },
+        { approved: true, createdAt: created, expiresAt, host: "ada-laptop", userCode: "WDJB-MJHT" },
       ]);
     }),
 );
@@ -99,10 +100,10 @@ it.effect.each(storageLayers)(
       yield* withAda(storage);
       yield* storage.addLoginRequest(request, created);
       const found = yield* storage.findLoginRequest("WDJB-MJHT", after);
-      const approved = yield* storage.approveLoginRequest("WDJB-MJHT", ada.name, after);
+      const approved = yield* storage.approveLoginRequest({ approver: ada.name, now: after, userCode: "WDJB-MJHT" });
       const collected = yield* storage.collectLoginRequest({ credentialHash, now: after, requestHash });
       yield* storage.addLoginRequest({ ...request, requestHash: late, userCode: "LATE-CODE" }, created);
-      yield* storage.approveLoginRequest("LATE-CODE", ada.name, before);
+      yield* storage.approveLoginRequest({ approver: ada.name, now: before, userCode: "LATE-CODE" });
       const lateCollect = yield* storage.collectLoginRequest({ credentialHash, now: after, requestHash: late });
 
       expect([isFound(found), approved, collected, lateCollect]).toStrictEqual([
@@ -137,8 +138,8 @@ it.effect.each(storageLayers)(
       yield* approvedAndCollected(storage, "WDJB-MJHT", [requestHash, credentialHash]);
       const secondCredential = tokenHash("hash:second-credential");
       yield* approvedAndCollected(storage, "SECO-NDXX", [tokenHash("hash:second"), secondCredential]);
-      const revoked = yield* storage.revokeLoginCredential(credentialHash);
-      const again = yield* storage.revokeLoginCredential(credentialHash);
+      const revoked = yield* storage.revokeLoginCredential(credentialHash, before);
+      const again = yield* storage.revokeLoginCredential(credentialHash, before);
       const found = yield* storage.findLoginCredential(credentialHash);
       const kept = yield* storage.findLoginCredential(secondCredential);
 
@@ -156,18 +157,18 @@ it.effect.each(storageLayers)(
         credentialHash,
         host: "web",
         identity: ada.name,
-        madeWith: adaToken,
         now: before,
+        parent: adaToken,
       });
       const found = yield* storage.findLoginCredential(credentialHash);
-      const revoked = yield* storage.revokeLoginCredential(credentialHash);
+      const revoked = yield* storage.revokeLoginCredential(credentialHash, before);
       const gone = yield* storage.findLoginCredential(credentialHash);
       const nobody = yield* storage.issueLoginCredential({
         credentialHash: late,
         host: "web",
         identity: identityName("nobody"),
-        madeWith: adaToken,
         now: before,
+        parent: adaToken,
       });
       const notIssued = yield* storage.findLoginCredential(late);
 
@@ -198,7 +199,7 @@ it.effect.each(storageLayers)(
       const { storage } = yield* openStore(layer);
       yield* withAda(storage);
       yield* storage.addLoginRequest(request, created);
-      yield* storage.approveLoginRequest("WDJB-MJHT", ada.name, before);
+      yield* storage.approveLoginRequest({ approver: ada.name, now: before, userCode: "WDJB-MJHT" });
       yield* storage.deactivateIdentity(identityName("ada"));
       const collected = yield* storage.collectLoginRequest({ credentialHash, now: before, requestHash });
       const credential = yield* storage.findLoginCredential(credentialHash);
@@ -217,8 +218,8 @@ it.effect.each(storageLayers)(
       yield* storage.addLoginRequest(request, created);
       const approvals = yield* Effect.all(
         [
-          storage.approveLoginRequest("WDJB-MJHT", ada.name, before),
-          storage.approveLoginRequest("WDJB-MJHT", identityName("bob"), before),
+          storage.approveLoginRequest({ approver: ada.name, now: before, userCode: "WDJB-MJHT" }),
+          storage.approveLoginRequest({ approver: identityName("bob"), now: before, userCode: "WDJB-MJHT" }),
         ],
         { concurrency: "unbounded" },
       );
@@ -245,20 +246,23 @@ it.effect.each(storageLayers)("storage contract ($adapter): a closed store can't
       [
         Effect.flip(storage.addLoginRequest(request, created)),
         Effect.flip(storage.findLoginRequest("WDJB-MJHT", before)),
-        Effect.flip(storage.approveLoginRequest("WDJB-MJHT", ada.name, before)),
+        Effect.flip(storage.approveLoginRequest({ approver: ada.name, now: before, userCode: "WDJB-MJHT" })),
         Effect.flip(storage.collectLoginRequest({ credentialHash, now: before, requestHash })),
         Effect.flip(storage.findLoginCredential(credentialHash)),
-        Effect.flip(storage.revokeLoginCredential(credentialHash)),
+        Effect.flip(storage.revokeLoginCredential(credentialHash, before)),
         Effect.flip(
           storage.issueLoginCredential({
             credentialHash,
             host: "web",
             identity: ada.name,
-            madeWith: adaToken,
             now: before,
+            parent: adaToken,
           }),
         ),
-        Effect.flip(storage.revokeLoginCredentialsMadeWithRevokedTokens(ada.name)),
+        Effect.flip(storage.revokeBelowRevokedTokens(ada.name, before)),
+        Effect.flip(storage.endCredentialsOf(ada.name, before)),
+        Effect.flip(storage.listSessions({ current: credentialHash, identity: ada.name, now: before })),
+        Effect.flip(storage.revokeSession({ id: UNKNOWN_ID, identity: ada.name, now: before })),
       ],
       { concurrency: 1 },
     );

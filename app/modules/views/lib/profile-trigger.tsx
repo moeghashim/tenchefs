@@ -1,7 +1,11 @@
 import type { Identity, IdentityName } from "../../sdk/index.ts";
 import type { Composer } from "../../composer/index.ts";
+import { ProfileSection } from "../../design-system/content.tsx";
 import type { ReactNode } from "react";
 import { TriggerForm } from "./trigger-form.tsx";
+import { triggerEditableBy } from "./profile-rights.ts";
+
+const TEXT = { section: "Wakes on mention" } as const;
 
 interface ProfileTriggerProps {
   readonly composer: Composer;
@@ -9,14 +13,14 @@ interface ProfileTriggerProps {
   readonly me: IdentityName;
 }
 
-function ownedBy(identity: Identity, me: IdentityName): boolean {
-  return identity.kind === "agent" && identity.owner === String(me);
-}
-
 export function ProfileTrigger(props: ProfileTriggerProps): ReactNode {
   const { identity } = props;
-  if (!ownedBy(identity, props.me)) {
+  if (!triggerEditableBy({ identity, me: props.me })) {
     return null;
   }
-  return <TriggerForm name={identity.name} settings={props.composer.trigger(identity.name)} />;
+  return (
+    <ProfileSection label={TEXT.section}>
+      <TriggerForm name={identity.name} settings={props.composer.trigger(identity.name)} />
+    </ProfileSection>
+  );
 }

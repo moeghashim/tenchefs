@@ -1,4 +1,4 @@
-import { Context, Effect, Exit, FileSystem, Layer, Path, Scope } from "effect";
+import { Context, Effect, Exit, FileSystem, Layer, Option, Path, Scope } from "effect";
 import type { QueryPlan, ScheduledRun } from "../../../storage/server.ts";
 import {
   Storage,
@@ -13,6 +13,7 @@ import {
 import { fixtureOwnerName, identityFixture } from "./identities.ts";
 import { freshPostgresDatabase } from "./postgres.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
+import { testSecretsCipher } from "./secrets-key.ts";
 import { tokenHash } from "../../../identities/index.ts";
 
 interface StorageLayer {
@@ -26,17 +27,25 @@ interface OpenStore {
   readonly storage: Storage["Service"];
 }
 
+const MEMORY_FOLDER = "/dev/shm";
+
 const freshDatabasePath: Effect.Effect<string, never, FileSystem.FileSystem | Path.Path | Scope.Scope> = Effect.gen(
   function* makeDatabasePath() {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const folder = yield* fs.makeTempDirectoryScoped({ prefix: "cookout-sqlite-" });
+    const inMemory = yield* fs.exists(MEMORY_FOLDER);
+    const directory = Option.getOrUndefined(Option.liftPredicate(MEMORY_FOLDER, () => inMemory));
+    const folder = yield* fs.makeTempDirectoryScoped({ directory, prefix: "cookout-sqlite-" });
     return path.join(folder, "cookout.db");
   },
 ).pipe(Effect.orDie);
 
+function testSqliteStorage(path: string): Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem> {
+  return sqliteStorage({ cipher: testSecretsCipher, path });
+}
+
 const freshSqliteStorage: Layer.Layer<Storage, StorageUnavailable> = Layer.unwrap(
-  Effect.map(freshDatabasePath, sqliteStorage),
+  Effect.map(freshDatabasePath, testSqliteStorage),
 ).pipe(Layer.provide(nodeServices));
 
 function withFixtureOwner<Failure>(
@@ -51,7 +60,7 @@ function withFixtureOwner<Failure>(
 }
 
 const freshPostgresStorage: Layer.Layer<Storage, StorageUnavailable> = Layer.unwrap(
-  Effect.map(freshPostgresDatabase, postgresStorage),
+  Effect.map(freshPostgresDatabase, (url) => postgresStorage({ cipher: testSecretsCipher, url })),
 );
 
 const postgresLayer: StorageLayer = {
@@ -122,13 +131,17 @@ const deactivatedMidRunStorage: Layer.Layer<Storage> = Layer.effect(
 function freshSqliteQueryPlans<Failure>(
   work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>,
 ): Effect.Effect<readonly QueryPlan[], Failure | StorageUnavailable, FileSystem.FileSystem | Path.Path> {
-  return Effect.scoped(Effect.flatMap(freshDatabasePath, (path) => sqliteQueryPlans({ path, work })));
+  return Effect.scoped(
+    Effect.flatMap(freshDatabasePath, (path) => sqliteQueryPlans({ cipher: testSecretsCipher, path, work })),
+  );
 }
 
 function freshPostgresQueryPlans<Failure>(
   work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>,
 ): Effect.Effect<readonly QueryPlan[], Failure | StorageUnavailable> {
-  return Effect.scoped(Effect.flatMap(freshPostgresDatabase, (url) => postgresQueryPlans({ url, work })));
+  return Effect.scoped(
+    Effect.flatMap(freshPostgresDatabase, (url) => postgresQueryPlans({ cipher: testSecretsCipher, url, work })),
+  );
 }
 
 function openStore<Failure, Needs>(
@@ -153,5 +166,6 @@ export {
   openStore,
   pausedMidRunStorage,
   storageLayers,
+  testSqliteStorage,
   unusableStorage,
 };

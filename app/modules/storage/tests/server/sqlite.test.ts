@@ -10,6 +10,7 @@ import {
   isoTime,
   newMessageFixture,
   openStore,
+  testSecretsCipher,
   webhookCommandFixture,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
@@ -31,6 +32,7 @@ const SCHEMA_VERSION_OFFSET = 60;
 const SCHEMA_VERSION_BYTES = 4;
 const NEWER_VERSION = 1000;
 const NEGATIVE_VERSION = -1;
+const MEMORY_FOLDER = "/dev/shm";
 const hashA = tokenHash(Str.repeat(HASH_LENGTH)("a"));
 const hashB = tokenHash(Str.repeat(HASH_LENGTH)("b"));
 const hashC = tokenHash(Str.repeat(HASH_LENGTH)("c"));
@@ -43,7 +45,7 @@ function permissions(mode: number): string {
 
 function openAndClose(path: string): OnDisk<void> {
   return Effect.gen(function* openCheckClose() {
-    const { close, storage } = yield* openStore(sqliteStorage(path));
+    const { close, storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     yield* storage.checkHealth();
     yield* close;
   });
@@ -51,7 +53,7 @@ function openAndClose(path: string): OnDisk<void> {
 
 function createThenRotate(path: string): OnDisk<void> {
   return Effect.gen(function* seedAndClose() {
-    const { close, storage } = yield* openStore(sqliteStorage(path));
+    const { close, storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     yield* storage.createIdentity(matt, hashC);
     yield* storage.createIdentity(griller, hashA);
     yield* storage.replaceToken(identityName("auth-griller"), hashB);
@@ -61,7 +63,7 @@ function createThenRotate(path: string): OnDisk<void> {
 
 function postTwo(path: string): OnDisk<MessageId> {
   return Effect.gen(function* postTwoAndClose() {
-    const { close, storage } = yield* openStore(sqliteStorage(path));
+    const { close, storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     yield* storage.createChannel(channelFixture("grill"));
     yield* appendTo(storage)(newMessageFixture("grill", "first"));
     const last = yield* appendTo(storage)(newMessageFixture("grill", "second"));
@@ -105,7 +107,7 @@ function upperCased(word: string): (file: string) => string {
 
 function postThread(path: string): OnDisk<StoredThread | undefined> {
   return Effect.gen(function* postAndClose() {
-    const { close, storage } = yield* openStore(sqliteStorage(path));
+    const { close, storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     yield* storage.createChannel(channelFixture("grill", { description: "d" }));
     const parent = yield* appendTo(storage)(newMessageFixture("grill", "p", { author: { name: "a" }, data: null }));
     yield* appendTo(storage)(
@@ -121,7 +123,7 @@ it.effect("a new database, its WAL and its shared-memory file are readable by th
   Effect.gen(function* ownerOnlyFiles() {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* freshDatabasePath;
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     yield* storage.createChannel(channelFixture("grill"));
     const files = [path, `${path}-wal`, `${path}-shm`];
     const infos = yield* Effect.forEach(files, (file) => fs.stat(file), { concurrency: 1 });
@@ -130,10 +132,24 @@ it.effect("a new database, its WAL and its shared-memory file are readable by th
   }).pipe(Effect.provide(NodeServices.layer)),
 );
 
+it.effect(
+  "a test's database is made in memory, under /dev/shm, wherever the machine has it, so a busy disk can't stall it",
+  () =>
+    Effect.gen(function* inMemoryFolder() {
+      const fs = yield* FileSystem.FileSystem;
+      const machineHasIt = yield* fs.exists(MEMORY_FOLDER);
+      const path = yield* freshDatabasePath;
+
+      expect(Str.startsWith(`${MEMORY_FOLDER}/`)(path)).toBe(machineHasIt);
+    }).pipe(Effect.provide(NodeServices.layer)),
+);
+
 it.effect("a database file that can't be created fails with StorageUnavailable", () =>
   Effect.gen(function* uncreatable() {
     const path = yield* freshDatabasePath;
-    const error = yield* Effect.flip(openStore(sqliteStorage(`${path}/missing-folder/cookout.db`)));
+    const error = yield* Effect.flip(
+      openStore(sqliteStorage({ cipher: testSecretsCipher, path: `${path}/missing-folder/cookout.db` })),
+    );
 
     expect(error).toBeInstanceOf(StorageUnavailable);
   }).pipe(Effect.provide(NodeServices.layer)),
@@ -144,7 +160,7 @@ it.effect("a database at a newer schema version than this cookout fails with Sto
     const path = yield* freshDatabasePath;
     yield* openAndClose(path);
     yield* damage(path, schemaVersion(NEWER_VERSION));
-    const error = yield* Effect.flip(openStore(sqliteStorage(path)));
+    const error = yield* Effect.flip(openStore(sqliteStorage({ cipher: testSecretsCipher, path })));
 
     expect(error).toStrictEqual(
       StorageUnavailable.make({
@@ -159,7 +175,7 @@ it.effect("a database with a negative schema version fails with StorageUnavailab
     const path = yield* freshDatabasePath;
     yield* openAndClose(path);
     yield* damage(path, schemaVersion(NEGATIVE_VERSION));
-    const error = yield* Effect.flip(openStore(sqliteStorage(path)));
+    const error = yield* Effect.flip(openStore(sqliteStorage({ cipher: testSecretsCipher, path })));
 
     expect(error).toStrictEqual(StorageUnavailable.make({ message: "The database has no readable schema version." }));
   }).pipe(Effect.provide(NodeServices.layer)),
@@ -170,7 +186,7 @@ it.effect("a damaged channel row fails with StorageUnavailable when it is read",
     const path = yield* freshDatabasePath;
     yield* postTwo(path);
     yield* damage(path, upperCased("grill"));
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const error = yield* Effect.flip(storage.listChannels());
 
     expect(error).toStrictEqual(
@@ -184,7 +200,7 @@ it.effect("a damaged identity row fails with StorageUnavailable when it is read"
     const path = yield* freshDatabasePath;
     yield* createThenRotate(path);
     yield* damage(path, upperCased("auth-griller"));
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const error = yield* Effect.flip(storage.listIdentities());
 
     expect(error).toStrictEqual(
@@ -197,7 +213,7 @@ it.effect("message IDs keep increasing after the database is reopened", () =>
   Effect.gen(function* idsAfterReopen() {
     const path = yield* freshDatabasePath;
     const lastBeforeClose = yield* postTwo(path);
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const next = yield* appendTo(storage)(newMessageFixture("grill", "third"));
 
     expect(next.id).toBeGreaterThan(lastBeforeClose);
@@ -208,7 +224,7 @@ it.effect("a message is stamped after the latest one, even after the database is
   Effect.gen(function* timesAfterReopen() {
     const path = yield* freshDatabasePath;
     yield* postTwo(path);
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const earlier = { ...newMessageFixture("grill", "third"), createdAt: isoTime("2025-12-31T23:59:59.000Z") };
     const next = yield* appendTo(storage)(earlier);
 
@@ -220,7 +236,7 @@ it.effect("channels, messages and threads are kept after the database is reopene
   Effect.gen(function* threadsAfterReopen() {
     const path = yield* freshDatabasePath;
     const before = yield* postThread(path);
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const channels = yield* storage.listChannels();
     const after = yield* storage.getThread(Option.getOrThrow(Option.fromNullishOr(before)).parent.id);
 
@@ -237,7 +253,7 @@ it.effect("an existing database opens again without losing its data", () =>
       Arr.makeBy(REOPENS, () => path),
       Effect.forEach(openAndClose, { concurrency: 1 }),
     );
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const health = yield* Effect.exit(storage.checkHealth());
 
     expect(Exit.isSuccess(health)).toBe(true);
@@ -248,7 +264,7 @@ it.effect("identities and token hashes are kept after the database is reopened",
   Effect.gen(function* keptAfterReopen() {
     const path = yield* freshDatabasePath;
     yield* createThenRotate(path);
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const identities = yield* storage.listIdentities();
     const oldHash = yield* storage.findIdentityByTokenHash(hashA);
     const newHash = yield* storage.findIdentityByTokenHash(hashB);
@@ -262,7 +278,7 @@ it.effect("identities and token hashes are kept after the database is reopened",
 it.effect("an agent without an owner is refused by the database, and nothing is stored", () =>
   Effect.gen(function* ownerless() {
     const path = yield* freshDatabasePath;
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
     const handler = handlerFixture("ownerless");
     Reflect.set(handler, "owner", null);
     const error = yield* Effect.flip(storage.addWebhookCommand(webhookCommandFixture("ownerless"), handler));

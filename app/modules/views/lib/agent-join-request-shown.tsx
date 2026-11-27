@@ -2,11 +2,11 @@ import type { AgentJoinApproval, AgentJoinApprovalState } from "../../board/inde
 import { Alert, Muted } from "../../design-system/content.tsx";
 import { CheckField, InputField } from "../../design-system/controls.tsx";
 import { AgentJoinRequestAnswers } from "./agent-join-request-answers.tsx";
+import { ApprovalRequestDetailsView } from "./approval-request-details.tsx";
 import { CardBody } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
 
 const TEXT = {
-  code: "Code",
   idleExpiry: "Idle expiry",
   replace: "Replace its live session",
 } as const;
@@ -52,10 +52,8 @@ export function AgentJoinRequestShown(props: AgentJoinRequestShownProps): ReactN
   const handleReplace = approval.editReplace;
   return (
     <CardBody>
-      <p aria-label={TEXT.code} className="font-mono text-2xl font-semibold tracking-widest">
-        {agentJoinRequest.userCode}
-      </p>
-      <Muted>{`${agentJoinRequest.as} asks to join from ${agentJoinRequest.host}, until ${agentJoinRequest.expiresAt}.`}</Muted>
+      <ApprovalRequestDetailsView details={agentJoinRequest} />
+      <Muted>{`${agentJoinRequest.as} asks to join, until ${agentJoinRequest.expiresAt}.`}</Muted>
       <Muted>{becomes(state)}</Muted>
       <InputField
         error={null}

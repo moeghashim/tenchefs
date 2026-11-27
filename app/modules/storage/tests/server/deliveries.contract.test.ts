@@ -31,6 +31,7 @@ function delivery(id: CallId, threadId: MessageId): StoredDelivery {
   return {
     attempts: 0,
     callId: id,
+    calledAt: startedAt,
     channel: channelName("grill"),
     command: webhookCommandName("deploy"),
     data: { branch: "main", tags: ["blue", true, null] },

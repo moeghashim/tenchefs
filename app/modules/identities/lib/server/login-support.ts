@@ -1,7 +1,10 @@
-import { Context, DateTime, Effect } from "effect";
+import type { ApprovalRequestDetails, ApprovalRequestKind } from "../../../logins/index.ts";
+import { Context, DateTime, Effect, Predicate, String as Str } from "effect";
 import { Caller } from "./auth.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { Refusal } from "../../../http/index.ts";
+import type { RequestOrigin } from "../../../storage/server.ts";
+import { browserOn } from "./user-agent.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 
 const FORBIDDEN = 403;
@@ -48,4 +51,50 @@ function lifetimeOf(seconds: number): Effect.Effect<Lifetime> {
   }));
 }
 
-export { AddressLimit, lifetimeOf, loginRequestNotFound, now, requireHuman };
+const USER_AGENT_LIMIT = 500;
+const START = 0;
+const BROWSER = "Mozilla/";
+
+interface Sent {
+  readonly clientIp: string;
+  readonly headers: Readonly<Record<string, string | undefined>>;
+}
+
+function requestOriginOf({ clientIp, headers }: Sent): RequestOrigin {
+  const sent = headers["user-agent"];
+  if (Predicate.isUndefined(sent) || Str.isEmpty(sent)) {
+    return { clientIp };
+  }
+  return { clientIp, userAgent: Str.slice(START, USER_AGENT_LIMIT)(sent) };
+}
+
+interface Started extends RequestOrigin {
+  readonly host: string;
+  readonly createdAt: IsoTime;
+}
+
+function kindOf(userAgent: string | undefined): Exclude<ApprovalRequestKind, "agent_join"> {
+  if (Predicate.isString(userAgent) && Str.startsWith(BROWSER)(userAgent)) {
+    return "browser";
+  }
+  return "terminal";
+}
+
+function whereOf({ host, userAgent }: Started): string {
+  if (Predicate.isUndefined(userAgent) || kindOf(userAgent) === "terminal") {
+    return host;
+  }
+  return browserOn(userAgent);
+}
+
+function loginRequestDetails(started: Started): ApprovalRequestDetails {
+  const { clientIp, createdAt, userAgent } = started;
+  let shown: ApprovalRequestDetails = { createdAt, kind: kindOf(userAgent), where: whereOf(started) };
+  if (Predicate.isString(clientIp)) {
+    shown = { ...shown, clientIp };
+  }
+  return shown;
+}
+
+export { AddressLimit, lifetimeOf, loginRequestDetails, loginRequestNotFound, now, requestOriginOf, requireHuman };
+export { webSessionWhere } from "./user-agent.ts";

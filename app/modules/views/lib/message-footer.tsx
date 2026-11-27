@@ -51,16 +51,23 @@ export function MessageFooter(props: MessageFooterProps): ReactNode {
         <WebhookCommandPrompt
           call={state.call}
           callData={state.callData}
-          channel={channel}
+          calls={handlers.calls}
           webhookCommand={command}
           keymap={props.keymap}
           onBack={handleBack}
+          onCancel={handleSaved}
           onDone={handleSaved}
         />
       )}
       <WebhookCommandsRefusal />
-      <ScheduleConfirmation channel={channel} scheduling={scheduling} />
-      <ScheduleDialog cancelled={MESSAGE_FIELD} channel={channel} onSaved={handleSaved} scheduling={scheduling} />
+      <ScheduleConfirmation channel={channel} scheduling={scheduling} thread={null} />
+      <ScheduleDialog
+        cancelled={MESSAGE_FIELD}
+        channel={channel}
+        onSaved={handleSaved}
+        scheduling={scheduling}
+        thread={null}
+      />
     </>
   );
 }

@@ -22,6 +22,7 @@ interface CallRequest {
   readonly webhookCommand: string;
   readonly data: string;
   readonly called: () => void;
+  readonly refused: (() => void) | null;
 }
 
 interface Refused {

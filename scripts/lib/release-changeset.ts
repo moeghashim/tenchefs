@@ -26,6 +26,7 @@ const PACKAGE = "@ai-hero/cookout";
 const FILE = "unreleased-work.md";
 const FIRST_COMMIT = "the first commit";
 const FENCE = "---\n";
+const VERSION_PACKAGES = String.raw`^Version Packages( \(#[0-9]+\))?$`;
 const NAMES_PACKAGE = /^\s*["']?@ai-hero\/cookout["']?\s*:/mu;
 
 function linesOf(output: string): readonly string[] {
@@ -68,13 +69,29 @@ function inRange(git: Command, range: Range): Outcome<Since> {
   return { ok: true, value: { changed: linesOf(changed.value), from: range.from, subjects: linesOf(subjects.value) } };
 }
 
-function landedSince(git: Command): Outcome<Since> {
-  const versioned = git(["log", "-1", "--format=%H", "-G", '"version":', "--", "package.json"]);
-  if (!versioned.ok) {
-    return versioned;
+function newestCommit(git: Command, args: readonly string[]): Outcome<string> {
+  const found = git(["log", "-1", "--format=%H", ...args]);
+  if (!found.ok) {
+    return found;
   }
-  const [base = ""] = linesOf(versioned.value);
-  return inRange(git, rangeFrom(base));
+  const [commit = ""] = linesOf(found.value);
+  return { ok: true, value: commit };
+}
+
+function releasedAt(git: Command): Outcome<string> {
+  const merged = newestCommit(git, ["--first-parent", "-E", `--grep=${VERSION_PACKAGES}`, "HEAD"]);
+  if (!merged.ok || merged.value !== "") {
+    return merged;
+  }
+  return newestCommit(git, ["-G", '"version":', "--", "package.json"]);
+}
+
+function landedSince(git: Command): Outcome<Since> {
+  const base = releasedAt(git);
+  if (!base.ok) {
+    return base;
+  }
+  return inRange(git, rangeFrom(base.value));
 }
 
 function changesetOf(subjects: readonly string[]): string {

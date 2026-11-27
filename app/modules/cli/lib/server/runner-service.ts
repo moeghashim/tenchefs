@@ -10,9 +10,17 @@ import type { HostKind } from "./runner-host.ts";
 import type { RunnerHost } from "./host.ts";
 import type { ServiceSettings } from "./service-files.ts";
 
+type Argv = readonly [string, ...string[]];
+
+interface Done {
+  readonly argv: Argv;
+  readonly prints: string;
+}
+
 interface Step {
-  readonly argv: readonly [string, ...string[]];
+  readonly argv: Argv;
   readonly mayFail: boolean;
+  readonly skipWhen?: Done;
 }
 
 interface Service {
@@ -52,6 +60,7 @@ interface Finished {
   readonly command: string;
   readonly exitCode: number;
   readonly stderr: string;
+  readonly stdout: string;
 }
 
 type Spawner = ChildProcessSpawner.ChildProcessSpawner;
@@ -62,7 +71,8 @@ const SERVICE_FILE = 0o644;
 const PRIVATE_FOLDER = 0o700;
 const EXIT_SUCCESS = 0;
 const BUS_ERROR = "Failed to connect to bus";
-const LOGON_TASK = 'schtasks /create /tn "cookout runner" /sc onlogon /tr "wsl.exe --exec sleep infinity"';
+const KEEP_WSL_RUNNING = "wsl.exe --exec sleep infinity";
+const LOGON_TASK = `In a Windows terminal opened with Run as administrator, run: schtasks /create /tn "cookout runner" /sc onlogon /tr "${KEEP_WSL_RUNNING}". Without administrator rights, add a shortcut to shell:startup whose target is ${KEEP_WSL_RUNNING} instead.`;
 const NO_LOGON_TASK = {};
 
 const noHome: CallFailure = {
@@ -84,16 +94,21 @@ function commandFailed(command: string, detail: string): CallFailure {
   return { code: "service_command_failed", message: `${command} failed: ${detail}` };
 }
 
-function must(...argv: readonly [string, ...string[]]): Step {
+function must(...argv: Argv): Step {
   return { argv, mayFail: false };
 }
 
-function systemdService({ folders, kind, settings }: Placed, path: Path.Path): Service {
+function enableLinger(uid: number): Step {
+  const lingerOn = { argv: ["loginctl", "show-user", String(uid), "-p", "Linger"] as const, prints: "Linger=yes" };
+  return { ...must("loginctl", "enable-linger"), skipWhen: lingerOn };
+}
+
+function systemdService({ folders, host, kind, settings }: Placed, path: Path.Path): Service {
   return {
     afterRemove: [must("systemctl", "--user", "daemon-reload")],
     file: path.join(folders.config, "systemd", "user", UNIT),
     install: [
-      must("loginctl", "enable-linger"),
+      enableLinger(host.uid),
       must("systemctl", "--user", "daemon-reload"),
       must("systemctl", "--user", "enable", "--now", UNIT),
     ],
@@ -154,18 +169,24 @@ function failedWith(command: string) {
   return (error: { readonly message: string }): CallFailure => commandFailed(command, error.message);
 }
 
-function finished(argv: Step["argv"]): Effect.Effect<Finished, CallFailure, Spawner> {
+function textOf<Failure>(stream: Stream.Stream<Uint8Array, Failure>): Effect.Effect<string> {
+  return Effect.orElseSucceed(Stream.mkString(Stream.decodeText(stream)), Function.constant(""));
+}
+
+function finished(argv: Argv): Effect.Effect<Finished, CallFailure, Spawner> {
   const command = Arr.join(argv, " ");
   return Effect.scoped(
     Effect.gen(function* runServiceCommand() {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const path = yield* Effect.orDie(pathVariable);
       const [program, ...args] = argv;
-      const run = ChildProcess.make(program, args, { env: { PATH: path }, extendEnv: true, stdout: "ignore" });
+      const run = ChildProcess.make(program, args, { env: { PATH: path }, extendEnv: true });
       const handle = yield* spawner.spawn(run);
-      const stderrText = Effect.orElseSucceed(Stream.mkString(Stream.decodeText(handle.stderr)), Function.constant(""));
-      const [stderr, exitCode] = yield* Effect.all([stderrText, handle.exitCode], { concurrency: "unbounded" });
-      return { command, exitCode, stderr: Str.trim(stderr) };
+      const [stdout, stderr, exitCode] = yield* Effect.all(
+        [textOf(handle.stdout), textOf(handle.stderr), handle.exitCode],
+        { concurrency: "unbounded" },
+      );
+      return { command, exitCode, stderr: Str.trim(stderr), stdout };
     }),
   ).pipe(Effect.mapError(failedWith(command)));
 }
@@ -180,7 +201,7 @@ function judged({ command, exitCode, stderr }: Finished): Effect.Effect<string, 
   return Effect.fail(commandFailed(command, `exit code ${String(exitCode)}: ${stderr}`));
 }
 
-function runStep({ argv, mayFail }: Step): Effect.Effect<string, CallFailure, Spawner> {
+function ranStep({ argv, mayFail }: Step): Effect.Effect<string, CallFailure, Spawner> {
   const ran = Effect.flatMap(finished(argv), judged);
   if (mayFail) {
     return Effect.orElseSucceed(ran, () => Arr.join(argv, " "));
@@ -188,8 +209,30 @@ function runStep({ argv, mayFail }: Step): Effect.Effect<string, CallFailure, Sp
   return ran;
 }
 
+function alreadyDone({ argv, prints }: Done): Effect.Effect<boolean, never, Spawner> {
+  const said = Effect.map(finished(argv), ({ exitCode, stdout }) => {
+    const lines = Arr.map(Str.split("\n")(stdout), Str.trim);
+    return exitCode === EXIT_SUCCESS && Arr.contains(lines, prints);
+  });
+  return Effect.orElseSucceed(said, Function.constFalse);
+}
+
+function runStep(step: Step): Effect.Effect<readonly string[], CallFailure, Spawner> {
+  return Option.match(Option.fromNullishOr(step.skipWhen), {
+    onNone: () => Effect.map(ranStep(step), Arr.of),
+    onSome: (done) =>
+      Effect.flatMap(alreadyDone(done), (skip) => {
+        const checked = Arr.join(done.argv, " ");
+        if (skip) {
+          return Effect.succeed([checked]);
+        }
+        return Effect.map(ranStep(step), (ran) => [checked, ran]);
+      }),
+  });
+}
+
 function runSteps(steps: readonly Step[]): Effect.Effect<readonly string[], CallFailure, Spawner> {
-  return Effect.forEach(steps, runStep, { concurrency: 1 });
+  return Effect.map(Effect.forEach(steps, runStep, { concurrency: 1 }), Arr.flatten);
 }
 
 function ensureStateFolder(folder: string): Effect.Effect<void, CallFailure, FileSystem.FileSystem> {

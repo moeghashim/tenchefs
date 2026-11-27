@@ -2,6 +2,13 @@ import type { FormParts } from "./parts.ts";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 
+function classOf(flush: boolean): string {
+  if (flush) {
+    return "flex flex-col gap-3";
+  }
+  return "flex flex-col gap-3 p-4";
+}
+
 export function Form(parts: FormParts): ReactNode {
   const { field, onSubmit } = parts;
   const submitted = useCallback(
@@ -14,7 +21,7 @@ export function Form(parts: FormParts): ReactNode {
     [field, onSubmit],
   );
   return (
-    <form action={submitted} aria-label={parts.label} className="flex flex-col gap-3 p-4">
+    <form action={submitted} aria-label={parts.label} className={classOf(parts.flush === true)}>
       {parts.children}
     </form>
   );

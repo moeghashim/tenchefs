@@ -1,16 +1,12 @@
-import { Array as Arr, Deferred, Effect, Fiber, Option } from "effect";
-import { printErrorLine, refused } from "./output.ts";
+import { Array as Arr, Effect, Option } from "effect";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
 import type { CallFailure } from "./adapters/sdk.ts";
 import { Command } from "effect/cli";
-import type { Listening } from "./runner-agent.ts";
-import type { RegisteredSession } from "./registrations.ts";
-import type { RunPlace } from "./wake-run.ts";
-import type { Scope } from "effect";
 import type { Spawner } from "./wake-queue.ts";
+import { listenAll } from "./runner-registrations.ts";
+import { refused } from "./output.ts";
 import { registeredSessions } from "./registrations.ts";
 import { runPlace } from "./wake-run.ts";
-import { wakeAgent } from "./runner-agent.ts";
 
 const noRegistrations: CallFailure = {
   code: "not_registered",
@@ -20,34 +16,6 @@ const noRegistrations: CallFailure = {
 };
 
 const runnerStopped: CallFailure = { code: "cli_error", message: "Every registered agent's live connection ended." };
-
-interface Opening {
-  readonly listening: Listening;
-  readonly open: Effect.Effect<boolean>;
-}
-
-function openingFor(place: RunPlace) {
-  return (registered: RegisteredSession): Effect.Effect<Opening> =>
-    Effect.gen(function* openingOfAgent() {
-      const done = yield* Deferred.make<boolean>();
-      return { listening: { connected: Deferred.succeed(done, true), place, registered }, open: Deferred.await(done) };
-    });
-}
-
-function listenAll(
-  registered: Arr.NonEmptyReadonlyArray<RegisteredSession>,
-  place: RunPlace,
-): Effect.Effect<void, never, Scope.Scope | Spawner> {
-  return Effect.gen(function* listenToEveryAgent() {
-    const openings = yield* Effect.forEach(registered, openingFor(place), { concurrency: 1 });
-    const running = yield* Effect.forkScoped(
-      Effect.forEach(openings, ({ listening }) => wakeAgent(listening), { concurrency: "unbounded", discard: true }),
-    );
-    yield* Effect.forEach(openings, ({ open }) => open, { concurrency: "unbounded", discard: true });
-    yield* printErrorLine({ waking: Arr.map(registered, ({ registration }) => registration.agent) });
-    yield* Fiber.join(running);
-  });
-}
 
 const runAll: Effect.Effect<never, CallFailure, AgentSessionStateNeeds | Spawner> = Effect.scoped(
   Effect.gen(function* runRegistrations() {
@@ -64,7 +32,7 @@ const runAll: Effect.Effect<never, CallFailure, AgentSessionStateNeeds | Spawner
         discard: true,
       },
     );
-    yield* listenAll(registered, place.value);
+    yield* listenAll({ place: place.value, registered });
     return yield* Effect.fail(runnerStopped);
   }),
 );
@@ -78,9 +46,13 @@ const startCommand = Command.make("start", {}, () =>
       "waiting mentions on stdin. On start, an agent's unread mentions go to one run. One agent's runs never " +
       "overlap: mentions heard during a run wait, with a stdout line each, and go to the next run together, less " +
       "any the agent acked meanwhile; a mention left unacked goes to one more run. It prints one stderr line once " +
-      "every connection is open, and one stdout line as each run exits or is skipped. It never acks. When a " +
+      "every connection is open, and one stdout line as each run exits or is skipped. It never acks. A registration " +
+      "made while it runs gets its own connection and catch-up, and a registration made again takes effect at that " +
+      "agent's next run. When a " +
       "cookout watch for an agent replaces its connection, it stands down for that agent, dropping its waiting " +
-      "mentions, until the agent is offline; then it reconnects and its unread mentions go to one run.",
+      "mentions, until the agent is offline; then it reconnects and its unread mentions go to one run. When a " +
+      "Claude Code agent's session is open, it writes the mentions into that session's inbox socket instead, as " +
+      "one line of untrusted board data, and starts a wake run only if they aren't acked within 10 minutes.",
   ),
 );
 

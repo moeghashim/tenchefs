@@ -10,7 +10,7 @@ import { unique } from "./names.ts";
 const test = playwrightTest.extend(probeFixtures);
 
 const nowhere = "http://127.0.0.1:9/command";
-const schema = { properties: { branch: { type: "string" } }, type: "object" } as const;
+const schema = { properties: { branch: { type: "string" }, count: { type: "integer" } }, type: "object" } as const;
 
 async function messageBoxIn(page: Page, channel: string): Promise<Locator> {
   await adminClient().createChannel({ name: channel });

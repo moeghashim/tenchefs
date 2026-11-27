@@ -6,9 +6,10 @@ name: Release
 # unit tests. On that commit it runs every browser test (6 shards, moved from Check),
 # pack smoke, the published client and the e2e suite on the Docker image. Only when all of them
 # pass does it fast-forward main to that commit, call Deploy, and run changesets: it opens or
-# updates the Version Packages pull request against v1, and once that is merged and no changesets
-# are left, publishes @ai-hero/cookout to npm by trusted publishing (OIDC), with provenance and no
-# npm token (docs/adr/0050-the-cli-is-published-to-npm.md). A failing gate job publishes nothing,
+# updates the Version Packages pull request against v1 for any pending changesets, and whenever the
+# chosen commit's version isn't on npm yet, even with changesets pending, publishes @ai-hero/cookout
+# to npm by trusted publishing (OIDC), with provenance and no npm token
+# (docs/adr/0050-the-cli-is-published-to-npm.md, docs/adr/0151). A failing gate job publishes nothing,
 # deploys nothing, and the verdict job names it in the run summary. `dry-run` runs the choice and
 # the gate, then only prints what it would publish and deploy.
 #
@@ -215,12 +216,13 @@ jobs:
             echo "### Dry run: nothing was published or deployed"
             echo "- would fast-forward main from ${main::12} to ${SHA::12}"
             echo "- would call Deploy on ${SHA::12}: the cookout and the example handler to Fly, the deployed checks, then tag deploy/${SHA::8}"
-            if [ "$changesets" -gt 0 ]; then
-              echo "- would open or update the Version Packages pull request against v1 from $changesets changesets"
-            elif npm view "@ai-hero/cookout@$version" version > /dev/null 2>&1; then
+            if [ "$(npm view "@ai-hero/cookout@$version" version 2> /dev/null)" = "$version" ]; then
               echo "- would publish nothing to npm: @ai-hero/cookout@$version is already there"
             else
               echo "- would publish @ai-hero/cookout@$version to npm"
+            fi
+            if [ "$changesets" -gt 0 ]; then
+              echo "- would open or update the Version Packages pull request against v1 from $changesets changesets"
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
@@ -299,24 +301,32 @@ jobs:
       # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@^11.5.1
+      # Keyed on the chosen commit's version not being on npm, not on there being no pending
+      # changesets: a changeset that lands between a Version Packages merge and the run that would
+      # publish it no longer puts the publish off (#936, docs/adr/0151). It runs before the action,
+      # which leaves the tree on changeset-release/v1 with the next version. `changeset publish`
+      # also publishes only a version npm doesn't have yet. This step is the only publisher:
+      # passing `publish:` to the action as well would publish twice.
+      - name: Decide whether to publish
+        id: publish
+        run: node scripts/release-publish.ts --ci >> "$GITHUB_OUTPUT"
+      - name: Publish to npm
+        if: steps.publish.outputs.publish == 'true'
+        run: pnpm release
       - name: Add a patch changeset for shipping code that landed without one
         run: node scripts/release-changeset.ts
       # With `branch: v1` (an automatic run starts on the default branch, main), the action opens the
       # Version Packages pull request from changeset-release/v1 against v1: the version bump lands on
-      # v1 like any other change, and main can always fast-forward to v1.
+      # v1 like any other change, and main can always fast-forward to v1. The action resets that branch to
+      # github.sha, the triggering commit, which is older than the chosen one when a newer v1 commit went
+      # green first, and a step's env can't override GITHUB_SHA for an action: the version command resets
+      # it to the chosen commit before running `pnpm run version` (docs/adr/0146-release-versions-the-chosen-commit-not-the-triggering-one.md).
       - name: Open or update the Version Packages pull request
-        id: changesets
         uses: changesets/action@v1
         with:
-          version: pnpm run version
+          version: node scripts/release-version.ts ${{ needs.choose.outputs.sha }}
           title: Version Packages
           commit: Version Packages
           branch: v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Runs once no changesets are left, that is once a merged Version Packages pull request is on
-      # the chosen commit. `changeset publish` publishes only a version npm doesn't have yet. This
-      # step is the only publisher: passing `publish:` to the action as well would publish twice.
-      - name: Publish to npm
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        run: pnpm release

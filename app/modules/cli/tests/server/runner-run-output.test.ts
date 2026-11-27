@@ -1,12 +1,12 @@
 import { Array as Arr, Effect, FileSystem, Option, Order } from "effect";
-import type { CommandLineNeeds, RunnerEvent, TestCookout, WakeBoard } from "../../../testing/server.ts";
+import type { RunnerEvent, WakeBoard } from "../../../testing/server.ts";
 import {
   commandLineServices,
   eventsOfKind,
   joinWaking,
   mention,
+  printingWakeCommand,
   runCookout,
-  runnerEventsIn,
   runnerEventsOf,
   testCookout,
   untilRunnerEvents,
@@ -14,18 +14,16 @@ import {
   wakingAgents,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
-import type { Scope } from "effect";
-
-type Needs = CommandLineNeeds | TestCookout | Scope.Scope;
 
 const SOME_TIME: unknown = expect.stringMatching(/^\d{4}-\d\d-\d\dT/u);
 const STARTED_AT = "2026-11-26T10:00:00.000Z";
 const ANYTHING: unknown = expect.anything();
 const PRINTED = "printed-by-the-wake-run";
-const BIG_PRINT_REPEAT = 200_000;
 const RUN_OUTPUT_LIMIT = 1_048_576;
+const OVER_HALF_THE_LIMIT = 600_000;
 const NO_BYTES = 0;
 const ONE = 1;
+const TWO = 2;
 const THREE = 3;
 const SEQUENTIAL = { concurrency: 1 } as const;
 
@@ -46,18 +44,6 @@ function outputsOf(events: readonly RunnerEvent[]): readonly string[] {
     Arr.map(eventsOfKind({ agent: "brigid", type: "wake-run-start" })(events), ({ output }) =>
       Option.fromUndefinedOr(output),
     ),
-  );
-}
-
-function threeRuns(on: WakeBoard): Effect.Effect<void, never, Needs> {
-  return Effect.forEach(
-    Arr.range(ONE, THREE),
-    (run) =>
-      Effect.andThen(
-        mention({ ada: on.ada, text: `@brigid run ${String(run)}` }),
-        untilRunnerEvents({ agent: "brigid", count: run, on, type: "exit" }),
-      ),
-    { concurrency: 1, discard: true },
   );
 }
 
@@ -84,18 +70,20 @@ it.effect("a wake run's stdout and stderr land in its own output file", () =>
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("an agent's oldest output files rotate out once its files pass the size limit", () =>
-  Effect.gen(function* rotated() {
-    const { on } = yield* wakingAgents([{ name: "brigid", settings: { print: "x", printRepeat: BIG_PRINT_REPEAT } }]);
-    yield* threeRuns(on);
-    const events = yield* runnerEventsIn(on);
-    const files = yield* outputFiles(on, "brigid");
-    const total = yield* totalSize(files);
+it.effect(
+  "an agent's oldest output files rotate out once its files pass the size limit, over an unacked mention's two runs",
+  () =>
+    Effect.gen(function* rotated() {
+      const { on } = yield* wakingAgents([{ command: printingWakeCommand(OVER_HALF_THE_LIMIT), name: "brigid" }]);
+      yield* mention({ ada: on.ada, text: "@brigid print" });
+      const events = yield* untilRunnerEvents({ agent: "brigid", count: TWO, on, type: "exit" });
+      const files = yield* outputFiles(on, "brigid");
+      const total = yield* totalSize(files);
 
-    expect(outputsOf(events)).toHaveLength(THREE);
-    expect(files).toStrictEqual(Arr.drop(outputsOf(events), ONE));
-    expect(total).toBeLessThanOrEqual(RUN_OUTPUT_LIMIT);
-  }).pipe(Effect.provide([testCookout(), commandLineServices])),
+      expect(outputsOf(events)).toHaveLength(TWO);
+      expect(files).toStrictEqual(Arr.drop(outputsOf(events), ONE));
+      expect(total).toBeLessThanOrEqual(RUN_OUTPUT_LIMIT);
+    }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
 it.effect("runner logs <agent> prints only that agent's events", () =>

@@ -6,7 +6,7 @@ Run it with `COOKOUT_COMMAND_SECRET=<the command's secret> COOKOUT_URL=<the cook
 
 ## Its secret
 
-`cookout command add <name> --url <handler URL>/webhook --schema <file>` shows the Webhook command's secret once. Pass it to the handler as `COOKOUT_COMMAND_SECRET`; on Fly, pipe it in so it never sits on a command line: `cookout command add … | jq -r '"COOKOUT_COMMAND_SECRET=\(.secret)"' | flyctl secrets import -a <app>`. If the handler loses it, `cookout command rotate <name>` issues a new one (shown once) and the old one stops signing. The handler has no default secret: without one it doesn't start.
+`cookout command add <name> --url <handler URL>/webhook --schema <file>` shows the Webhook command's secret once; a Command's name, such as `schedule`, is refused with 409 `command_exists`. Pass it to the handler as `COOKOUT_COMMAND_SECRET`; on Fly, pipe it in so it never sits on a command line: `cookout command add … | jq -r '"COOKOUT_COMMAND_SECRET=\(.secret)"' | flyctl secrets import -a <app>`. If the handler loses it, `cookout command rotate <name>` issues a new one (shown once) and the old one stops signing. The handler has no default secret: without one it doesn't start.
 
 It runs on Fly as `cookout-handler-example` with [its Dockerfile](Dockerfile) and [fly.toml](fly.toml). See "Deploy the example handler to Fly" in [docs/verification.md](../../docs/verification.md#deploy-the-example-handler-to-fly).
 

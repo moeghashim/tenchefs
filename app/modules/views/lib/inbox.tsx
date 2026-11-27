@@ -1,3 +1,4 @@
+import type { ComponentProps, ReactNode } from "react";
 import type { Reading, Unread } from "../../unread/index.ts";
 import { useContext, useMemo, useSyncExternalStore } from "react";
 import type { Composer } from "../../composer/index.ts";
@@ -7,7 +8,6 @@ import { InboxList } from "./inbox-list.tsx";
 import type { InboxSelection } from "../../paths/index.ts";
 import { LandingContext } from "../../landing/index.ts";
 import type { PanelEdgeParts } from "../../design-system/layout.tsx";
-import type { ReactNode } from "react";
 import { useInboxKeys } from "./use-inbox-keys.ts";
 import { useInboxRows } from "./use-inbox-rows.ts";
 
@@ -20,6 +20,7 @@ interface InboxProps {
   readonly unread: Unread;
   readonly me: string;
   readonly reading: Reading;
+  readonly scheduling: ComponentProps<typeof InboxConversation>["scheduling"];
   readonly selected: InboxSelection | null;
 }
 
@@ -53,6 +54,7 @@ export function InboxView(props: InboxProps): ReactNode {
           keymap={keymap}
           me={me}
           reading={props.reading}
+          scheduling={props.scheduling}
           selected={selected}
           unread={unread}
         />

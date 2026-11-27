@@ -1,11 +1,5 @@
 import { Array as Arr, Context, Effect, Layer, Ref } from "effect";
-import {
-  AssetStore,
-  StorageUnavailable,
-  diskAssetStore,
-  memoryStorage,
-  sqliteStorage,
-} from "../../../storage/server.ts";
+import { AssetStore, StorageUnavailable, diskAssetStore, memoryStorage } from "../../../storage/server.ts";
 import type { FileSystem, Path, Scope } from "effect";
 import {
   ScriptedTriggers,
@@ -19,13 +13,16 @@ import {
   freshDatabasePath,
   memoryAssets,
   pausedMidRunStorage,
+  testSqliteStorage,
   unusableStorage,
 } from "./storage.ts";
+import type { AgedLogins } from "./aged-logins.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import type { Storage } from "../../../storage/server.ts";
 import type { Token } from "../../../identities/index.ts";
 import type { TriggerCaller } from "../../../triggers/server.ts";
 import type { WebhookFake } from "../../../webhook-fake/server.ts";
+import { agedLoginsOn } from "./aged-logins.ts";
 import { layer as nodeServices } from "@effect/platform-node/NodeServices";
 import { secretsOf } from "./secrets.ts";
 import { triggerCallerLive } from "../../../triggers/server.ts";
@@ -49,7 +46,7 @@ function sharedStore(layer: Layer.Layer<Storage>): StorageFactory {
 
 function sqliteStores(database: string): Layer.Layer<Stores> {
   const assets = diskAssetStore(`${database}-assets`);
-  return Layer.merge(sqliteStorage(database), assets).pipe(Layer.provide(nodeServices), Layer.orDie);
+  return Layer.merge(testSqliteStorage(database), assets).pipe(Layer.provide(nodeServices), Layer.orDie);
 }
 
 const sharedLayers: Readonly<Record<Exclude<StorageKind, "sqlite">, Layer.Layer<Storage>>> = {
@@ -112,6 +109,10 @@ function storageFor(options: BackingOptions): Effect.Effect<Layer.Layer<Stores>,
   );
 }
 
+function agedStorageFor(options: BackingOptions): Effect.Effect<AgedLogins, never, Scope.Scope | Secrets> {
+  return Effect.flatMap(storageFor(options), agedLoginsOn);
+}
+
 type Backing = Secrets | WebhookFake | TriggerCaller | ScriptedTriggers;
 
 function triggersOf(kind: BackingOptions["triggers"]): Layer.Layer<TriggerCaller | ScriptedTriggers> {
@@ -133,4 +134,4 @@ function scriptedTriggersIn(store: Context.Context<ScriptedTriggers>): ScriptedT
   return Context.get(store, ScriptedTriggers);
 }
 
-export { type StorageKind, backingServices, newToken, scriptedTriggersIn, storageFor };
+export { type StorageKind, agedStorageFor, backingServices, newToken, scriptedTriggersIn, storageFor };

@@ -7,14 +7,15 @@ import type {
   PendingAgentJoinRequest,
 } from "./agent-join-requests.ts";
 import { Array as Arr, Effect, Option, Predicate, Schema } from "effect";
-import { DENIED, GONE, PENDING, collectionOf, sessionToIssue } from "./agent-join-requests.ts";
+import { DENIED, GONE, PENDING, collectionOf, originColumns, originOf, sessionToIssue } from "./agent-join-requests.ts";
 import { agentSessionIssuer, sqlAgentSessions } from "./agent-sessions-sqlite.ts";
+import { isIdentityName, tokenHash } from "../../../identities/index.ts";
 import type { AgentSessionsSection } from "./agent-sessions.ts";
 import type { Fails } from "./errors.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
-import { isIdentityName } from "../../../identities/index.ts";
+import type { TokenHash } from "../../../identities/index.ts";
 import { sqlJoinCodes } from "./join-codes-sqlite.ts";
 import { unreadable } from "./errors.ts";
 
@@ -24,7 +25,10 @@ const YES = 1;
 
 const RequestRow = Schema.Struct({
   agent: NameColumn,
+  approved_with: Schema.NullOr(Schema.String),
+  client_ip: Schema.NullOr(Schema.String),
   created: Schema.NullOr(Schema.Literals([NO, YES])),
+  created_at: IsoTimeSchema,
   denied_at: Schema.NullOr(IsoTimeSchema),
   expires_at: IsoTimeSchema,
   force: Schema.NullOr(Schema.Literals([NO, YES])),
@@ -33,6 +37,7 @@ const RequestRow = Schema.Struct({
   idle_seconds: Schema.NullOr(Schema.Int),
   joins: Schema.NullOr(NameColumn),
   session_url: Schema.NullOr(Schema.String),
+  user_agent: Schema.NullOr(Schema.String),
   user_code: Schema.String,
 });
 
@@ -51,18 +56,18 @@ const LIST_PENDING = `SELECT agent, created_at, expires_at, host, user_code FROM
 
 const decodePendingRows = Schema.decodeUnknownEffect(Schema.Array(PendingRow));
 
-const COLUMNS =
-  "agent, created, denied_at, expires_at, force, host, idle_expiry, idle_seconds, joins, session_url, user_code";
+const COLUMNS = `agent, approved_with, client_ip, created, created_at, denied_at, expires_at, force, host, idle_expiry,
+  idle_seconds, joins, session_url, user_agent, user_code`;
 
 const FIND_LIVE_BY_HASH = `SELECT ${COLUMNS} FROM agent_join_requests WHERE request_hash = ? AND expires_at > ?`;
 
 const FIND_LIVE_BY_CODE = `SELECT ${COLUMNS} FROM agent_join_requests WHERE user_code = ? AND expires_at > ?`;
 
 const INSERT_REQUEST = `INSERT INTO agent_join_requests
-  (request_hash, user_code, agent, host, idle_expiry, session_url, created_at, expires_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+  (request_hash, user_code, agent, host, idle_expiry, session_url, created_at, expires_at, client_ip, user_agent)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-const APPROVE = `UPDATE agent_join_requests SET joins = ?, created = ?, idle_seconds = ?, force = ?
+const APPROVE = `UPDATE agent_join_requests SET joins = ?, created = ?, idle_seconds = ?, force = ?, approved_with = ?
   WHERE user_code = ? AND joins IS NULL`;
 
 const DENY = "UPDATE agent_join_requests SET denied_at = ? WHERE user_code = ?";
@@ -78,8 +83,10 @@ function requestRow(row: unknown): Fails<Option.Option<RequestRowType>> {
 
 function shown(row: RequestRowType): AgentJoinRequest {
   const view = {
+    ...originOf({ clientIp: row.client_ip, userAgent: row.user_agent }),
     agent: row.agent,
     approved: row.joins !== null,
+    createdAt: row.created_at,
     expiresAt: row.expires_at,
     host: row.host,
     userCode: row.user_code,
@@ -137,21 +144,34 @@ function addIn(db: SqlDatabase): AgentJoinRequestsSection["addAgentJoinRequest"]
           sessionUrl = null,
           userCode,
         } = request;
-        yield* db.run(INSERT_REQUEST, requestHash, userCode, agent, host, idleExpiry, sessionUrl, createdAt, expiresAt);
+        const [clientIp, userAgent] = originColumns(request);
+        yield* db.run(
+          INSERT_REQUEST,
+          requestHash,
+          userCode,
+          agent,
+          host,
+          idleExpiry,
+          sessionUrl,
+          createdAt,
+          expiresAt,
+          clientIp,
+          userAgent,
+        );
         return "added" as const;
       }),
     );
 }
 
 function approveIn(db: SqlDatabase): AgentJoinRequestsSection["approveAgentJoinRequest"] {
-  return (userCode, { created, force, idleSeconds, identity }, now) =>
+  return (userCode, { created, force, idleSeconds, identity, parent }, now) =>
     db.transaction(
       Effect.gen(function* approveRequest() {
         const found = yield* undeniedByCode(db, userCode, now);
         if (Option.isNone(found)) {
           return "not_found" as const;
         }
-        yield* db.run(APPROVE, identity, Number(created), idleSeconds, Number(force), userCode);
+        yield* db.run(APPROVE, identity, Number(created), idleSeconds, Number(force), parent ?? null, userCode);
         return "approved" as const;
       }),
     );
@@ -171,12 +191,25 @@ function denyIn(db: SqlDatabase): AgentJoinRequestsSection["denyAgentJoinRequest
     );
 }
 
+function approvedWithOf(approvedWith: string | null): { readonly parent?: TokenHash } {
+  if (Predicate.isNull(approvedWith)) {
+    return {};
+  }
+  return { parent: tokenHash(approvedWith) };
+}
+
 function issueIn(db: SqlDatabase, collect: CollectAgentJoinRequest) {
   return (row: RequestRowType, identity: NonNullable<RequestRowType["joins"]>): Fails<AgentJoinCollection> =>
     Effect.gen(function* issueAgentSession() {
       yield* db.run("DELETE FROM agent_join_requests WHERE request_hash = ?", collect.requestHash);
       const created = row.created === YES;
-      const approval = { created, force: row.force === YES, identity, idleSeconds: Number(row.idle_seconds) };
+      const approval = {
+        created,
+        force: row.force === YES,
+        identity,
+        idleSeconds: Number(row.idle_seconds),
+        ...approvedWithOf(row.approved_with),
+      };
       const issue = sessionToIssue({ approval, collect, host: row.host, sessionUrl: row.session_url });
       const result = yield* agentSessionIssuer(db)(issue);
       return collectionOf({ created, issue, result });

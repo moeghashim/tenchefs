@@ -100,13 +100,14 @@ run_leg() {
   local store=$1
   local name="$run-$store"
   local handler="$name-handler"
-  local port url admin_token logs suite left
+  local port url admin_token secrets_key logs suite left
   local store_flags=()
   database_url=""
   database_password=""
   port=$(node -e 'const s = require("node:net").createServer().listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });')
   url="http://127.0.0.1:$port"
   admin_token=$(node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))')
+  secrets_key=$(node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))')
   if [ "$store" = postgres ]; then
     start_postgres "$name"
     store_flags=(--network "$name" --env DATABASE_URL)
@@ -115,13 +116,18 @@ run_leg() {
   echo "e2e:docker: [$store] starting the cookout"
   containers+=("$name")
   volumes+=("$name")
-  COOKOUT_ADMIN_TOKEN="$admin_token" DATABASE_URL="$database_url" docker run --detach --name "$name" \
-    --publish "127.0.0.1:$port:8080" --volume "$name:/data" --env COOKOUT_ADMIN_TOKEN "${env_flags[@]}" \
+  COOKOUT_ADMIN_TOKEN="$admin_token" COOKOUT_SECRETS_KEY="$secrets_key" DATABASE_URL="$database_url" \
+    docker run --detach --name "$name" --publish "127.0.0.1:$port:8080" --volume "$name:/data" \
+    --env COOKOUT_ADMIN_TOKEN --env COOKOUT_SECRETS_KEY "${env_flags[@]}" \
     --env "COOKOUT_PUBLIC_URL=$url" ${store_flags[@]+"${store_flags[@]}"} "$image" > /dev/null
   wait_until 60 "the cookout container listening" "$name" logs_say "$name" '"listening"'
   logs=$(docker logs "$name" 2>&1)
   if grep -qF "$admin_token" <<< "$logs"; then
     echo "e2e:docker: [$store] the container's logs show COOKOUT_ADMIN_TOKEN." >&2
+    exit 1
+  fi
+  if grep -qF "$secrets_key" <<< "$logs"; then
+    echo "e2e:docker: [$store] the container's logs show COOKOUT_SECRETS_KEY." >&2
     exit 1
   fi
   if [ -n "$database_password" ] && grep -qF "$database_password" <<< "$logs"; then

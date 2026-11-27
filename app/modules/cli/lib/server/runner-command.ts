@@ -23,7 +23,12 @@ const uninstallCommand = Command.make("uninstall", {}, () => answered(uninstall)
 
 const runnerCommand: Command.Command<"runner", object, object, CommandFailed, AgentSessionStateNeeds | Spawner> =
   Command.make("runner").pipe(
-    Command.withDescription("Wake registered agents on mentions while their harness sessions are closed."),
+    Command.withDescription(
+      "Wake registered agents on mentions while their harness sessions are closed, and deliver mentions into " +
+        "an open Claude Code session's inbox. Launch Claude Code with " +
+        `claude --settings '{"crossSessionInbound":"accept"}' so it takes them: then any process running as your ` +
+        "OS user can post into that session.",
+    ),
     Command.withSubcommands([
       registerCommand,
       startCommand,

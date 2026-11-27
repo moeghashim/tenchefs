@@ -3,6 +3,7 @@ import { adminClient, newIdentity } from "./people.ts";
 import { test as base, expect } from "@playwright/test";
 import { createTestAgent, testClient } from "../../../testing/index.ts";
 import type { CookoutClient } from "../../../sdk/index.ts";
+import type { JsonSchema } from "../../../webhook-commands/index.ts";
 import { logInToChannels } from "./login.ts";
 import { probeFixtures } from "./probe.ts";
 import { sidebarLink } from "./regions.ts";
@@ -11,14 +12,19 @@ import { unique } from "./names.ts";
 const test = base.extend(probeFixtures);
 
 const schema = {
-  properties: { branch: { description: "The branch to ship", minLength: 3, type: "string" } },
+  properties: {
+    branch: { description: "The branch to ship", minLength: 3, type: "string" },
+    count: { type: "integer" },
+  },
   required: ["branch"],
   type: "object",
 } as const;
+const inlineSchema = { properties: { branch: { type: "string" } }, required: ["branch"], type: "object" } as const;
 const nowhere = "http://127.0.0.1:9/command";
 interface InChannel {
   readonly channel: string;
   readonly webhookCommand: string;
+  readonly shape?: JsonSchema;
 }
 
 interface Opened {
@@ -26,11 +32,15 @@ interface Opened {
   readonly channel: string;
 }
 
-async function channelWithWebhookCommand({ channel, webhookCommand: command }: InChannel): Promise<CookoutClient> {
+async function channelWithWebhookCommand({
+  channel,
+  shape = schema,
+  webhookCommand: command,
+}: InChannel): Promise<CookoutClient> {
   const admin = adminClient();
   await admin.createChannel({ name: channel });
   const { token } = await createTestAgent({ by: admin, name: command, owner: "admin" });
-  await admin.addCommand({ description: "Ship a branch", name: command, schema, url: nowhere });
+  await admin.addCommand({ description: "Ship a branch", name: command, schema: shape, url: nowhere });
   return testClient({ token });
 }
 
@@ -115,4 +125,37 @@ test("a person calls a Webhook command from the message box by keyboard, and a r
     `/${unique("browser-call-box")}${JSON.stringify({ branch: "x-main" })}`,
   ]);
   await expect(page.getByRole("textbox", { exact: true, name: "Message" })).toHaveValue("");
+});
+
+async function inlineBoxOf(page: Page, command: string): Promise<Locator> {
+  const channel = unique("browser-command-inline");
+  await channelWithWebhookCommand({ channel, shape: inlineSchema, webhookCommand: command });
+  const { token } = await newIdentity({ kind: "human", name: unique("browser-inline-caller") });
+  await logInToChannels({ page, token });
+  await sidebarLink({ label: `#${channel}`, page }).click();
+  const box = page.getByLabel("Message", { exact: true });
+  await box.pressSequentially(`/${command}`);
+  return box;
+}
+
+test("a person calls a one-text-field Webhook command inline: /name, Tab, the text and Enter", async ({ page }) => {
+  const command = unique("browser-inline-deploy");
+  const box = await inlineBoxOf(page, command);
+
+  await expect(page.getByRole("listbox", { exact: true, name: "Command suggestions" }).getByRole("option")).toHaveText([
+    `/${command}Ship a branch`,
+  ]);
+  await expect(page.getByRole("combobox", { exact: true, name: "Message" })).toBeFocused();
+
+  await page.keyboard.press("Tab");
+
+  await expect(box).toHaveValue(`/${command} `);
+  await expect(box).toBeFocused();
+
+  await typeAndSend({ page, text: "main" });
+
+  await expect(page.getByRole("feed", { exact: true, name: "Messages" }).getByRole("article")).toContainText([
+    `/${command}${JSON.stringify({ branch: "main" })}`,
+  ]);
+  await expect(box).toHaveValue("");
 });

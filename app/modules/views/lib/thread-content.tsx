@@ -1,6 +1,7 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
-import type { ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
+import type { Scheduling, ThreadClosing, ThreadMessagesState } from "../../board/index.ts";
 import type { Draft } from "../../composer/index.ts";
+import type { Keymap } from "../../keymap/index.ts";
 import type { ReactNode } from "react";
 import { ReplyFooter } from "./reply-footer.tsx";
 import { ThreadClosingBar } from "./thread-closing-bar.tsx";
@@ -14,9 +15,11 @@ interface ThreadContentProps {
   readonly thread: MessageId;
   readonly closing: ThreadClosing;
   readonly draft: Draft;
+  readonly keymap: Keymap;
   readonly linked: MessageId | null;
   readonly me: string;
   readonly readPosition: number | null;
+  readonly scheduling: Scheduling;
   readonly state: ThreadMessagesState;
   readonly unread: Unread;
 }
@@ -40,8 +43,10 @@ export function ThreadContent(props: ThreadContentProps): ReactNode {
         draft={draft}
         field={TEXT.reply}
         focused={props.linked !== thread}
+        keymap={props.keymap}
         channel={channel}
         replied={null}
+        scheduling={props.scheduling}
         state={state}
         thread={thread}
       />

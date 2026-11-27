@@ -66,6 +66,37 @@ function wakeLog(file: string): Effect.Effect<readonly WakeLogLine[], never, Fil
   }).pipe(Effect.orDie);
 }
 
+interface CookoutRunLine {
+  readonly args: readonly string[];
+  readonly exitCode: number;
+  readonly stderr: unknown;
+  readonly stdout: unknown;
+}
+
+const isCookoutRun = Schema.is(
+  Schema.Struct({
+    args: Words,
+    event: Schema.Literal("cookout"),
+    exitCode: Schema.Int,
+    stderr: Schema.Unknown,
+    stdout: Schema.Unknown,
+  }),
+);
+
+function cookoutRunsIn(file: string): Effect.Effect<readonly CookoutRunLine[], never, FileSystem.FileSystem> {
+  return Effect.gen(function* readCookoutRuns() {
+    const fs = yield* FileSystem.FileSystem;
+    const text = yield* fs.readFileString(file);
+    const parsed = Arr.map(Arr.filter(Str.split(text, "\n"), Str.isNonEmpty), parseLine);
+    return Arr.map(Arr.filter(parsed, isCookoutRun), ({ args, exitCode, stderr, stdout }) => ({
+      args,
+      exitCode,
+      stderr,
+      stdout,
+    }));
+  }).pipe(Effect.orDie);
+}
+
 function wakeEvents(
   file: string,
 ): Effect.Effect<readonly (readonly [string, readonly number[]])[], never, FileSystem.FileSystem> {
@@ -170,7 +201,9 @@ function runnerWritten(stateFolder: string): Effect.Effect<string, never, Files>
 
 export {
   type RegistrationFile,
+  type CookoutRunLine,
   type WakeLogLine,
+  cookoutRunsIn,
   agentSessionTokenIn,
   agentSessionTokensIn,
   registeredAgentsIn,

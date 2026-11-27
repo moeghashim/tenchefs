@@ -5,6 +5,8 @@ import type { Fails } from "./errors.ts";
 import type { SqlDatabase } from "./adapters/sql-database.ts";
 import { agentSessionIssuer } from "./agent-sessions-sqlite.ts";
 import { isIdentityName } from "../../../identities/index.ts";
+import { lineageIn } from "./credential-lineage-sql.ts";
+import { newPublicId } from "./credential-lineage.ts";
 import { unreadable } from "./errors.ts";
 
 const ACTIVE = 0;
@@ -40,6 +42,7 @@ function redeemFound(db: SqlDatabase, redeem: RedeemJoinCode) {
       const result = yield* agentSessionIssuer(db)(issue);
       if (result.status === "issued") {
         yield* db.run("DELETE FROM join_codes WHERE code_hash = ?", redeem.codeHash);
+        yield* lineageIn(db).markEnded({ hash: redeem.codeHash, now: redeem.now, why: "redeemed" });
       }
       return redemptionOf({ issue, result });
     });
@@ -47,13 +50,27 @@ function redeemFound(db: SqlDatabase, redeem: RedeemJoinCode) {
 
 function sqlJoinCodes(db: SqlDatabase): JoinCodesSection {
   return {
-    addJoinCode: ({ agent, codeHash, createdAt, expiresAt }) =>
-      db.run(
-        "INSERT INTO join_codes (code_hash, agent, created_at, expires_at) VALUES (?, ?, ?, ?)",
-        codeHash,
-        agent,
-        createdAt,
-        expiresAt,
+    addJoinCode: ({ agent, codeHash, createdAt, expiresAt, parent }) =>
+      Effect.flatMap(newPublicId, (publicId) =>
+        db.transaction(
+          Effect.andThen(
+            db.run(
+              "INSERT INTO join_codes (code_hash, agent, created_at, expires_at) VALUES (?, ?, ?, ?)",
+              codeHash,
+              agent,
+              createdAt,
+              expiresAt,
+            ),
+            lineageIn(db).record({
+              hash: codeHash,
+              identity: agent,
+              kind: "join code",
+              madeAt: createdAt,
+              parent,
+              publicId,
+            }),
+          ),
+        ),
       ),
     redeemJoinCode: (redeem) =>
       db.transaction(

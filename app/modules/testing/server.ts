@@ -28,8 +28,10 @@
  * does, and wait until it has answered 502 so many times, or freeze, so it stops answering: open streams send
  * nothing more and every later request waits for ever.
  * `pastOwnPresence` reads an all-channels feed past its own caller coming online, and `watchingAllChannels` opens one so.
- * `wakingAgents` joins agents with the fake wake command and starts a runner for them, and `runnerEventsIn` and
- * `untilRunnerEvents` read its event log through `cookout runner logs`.
+ * `wakingAgents` joins agents with the fake wake command, or a command of their own such as `printingWakeCommand`'s
+ * (a shell that prints so many bytes and acks nothing, with no Node cold start), and starts a runner for them, and `runnerEventsIn` and
+ * `untilRunnerEvents` read its event log through `cookout runner logs`. `claudeCodeHome` makes a fake Claude Code
+ * config folder: a session file and a real inbox socket the test reads from, and `sentLine` and `inboxJson` read a line it got.
  * `silentConnection` connects to a server and sends nothing. `cuttableRelay`,
  * from the http module, is a link a test can cut and restore, from another
  * process too, as the browser tests do.
@@ -64,11 +66,19 @@ export {
 } from "./lib/server/process.ts";
 export { signalWatchBinary, type StoppedWatch } from "./lib/server/cli-signal.ts";
 export { runCookoutWhile } from "./lib/server/cli-clock.ts";
-export { type FakeWakeSettings, type StartedRunner, fakeWakeCommand, startRunner } from "./lib/server/runner.ts";
 export {
+  type FakeWakeSettings,
+  type StartedRunner,
+  fakeWakeCommand,
+  printingWakeCommand,
+  startRunner,
+} from "./lib/server/runner.ts";
+export {
+  type CookoutRunLine,
   type RegistrationFile,
   type WakeLogLine,
   agentSessionTokenIn,
+  cookoutRunsIn,
   agentSessionTokensIn,
   registeredAgentsIn,
   registrationIn,
@@ -90,6 +100,14 @@ export {
 } from "./lib/server/runner-events.ts";
 export { type BoardAgent, type WakeBoard, WAKE_CHANNEL, boardAgent, wakeBoard } from "./lib/server/wake-board.ts";
 export { joinWaking, mention, mentions, repliesTo, startsIn } from "./lib/server/wake-agents.ts";
+export {
+  type ClaudeCodeHome,
+  type FakeClaudeSession,
+  type SentLine,
+  claudeCodeHome,
+  inboxJson,
+  sentLine,
+} from "./lib/server/claude-code-home.ts";
 export { type IdentityFixtureOptions, identityFixture, identityName } from "./lib/server/identities.ts";
 export { type CuttableLink, cuttableLink } from "./lib/server/cuttable-link.ts";
 export { cuttableRelay } from "../http/server.ts";
@@ -105,6 +123,13 @@ export {
   writeAgentSessionStates,
 } from "./lib/server/agent-sessions.ts";
 export { callId, secretsTest } from "./lib/server/secrets.ts";
+export {
+  otherSecretsCipher,
+  otherSecretsKey,
+  plaintextCipher,
+  testSecretsCipher,
+  testSecretsKey,
+} from "./lib/server/secrets-key.ts";
 export { type NewMessageOptions, appendTo, messageId, newMessageFixture } from "./lib/server/messages.ts";
 export {
   freshDatabasePath,
@@ -113,7 +138,7 @@ export {
   openStore,
   storageLayers,
 } from "./lib/server/storage.ts";
-export { emptyPostgresDatabase, onPostgresDatabase } from "./lib/server/postgres.ts";
+export { emptyPostgresDatabase, onPostgresDatabase, postgresRows } from "./lib/server/postgres.ts";
 export { assetStoreLayers, freshS3Bucket, s3ServeSettings } from "./lib/server/s3.ts";
 
 export {

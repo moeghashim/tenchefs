@@ -3,6 +3,7 @@ import type { Redacted, Scope } from "effect";
 import type { FullStorage } from "./memory-store.ts";
 import type { PostgresDatabase } from "./adapters/postgres.ts";
 import type { QueryPlan } from "./query-plans-sqlite.ts";
+import type { SecretsCipher } from "../../../secrets/server.ts";
 import type { SqlValue } from "./adapters/sql-database.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { openPostgresStore } from "./postgres-store.ts";
@@ -32,10 +33,12 @@ function planOf(db: PostgresDatabase, [sql, params]: Ran): Effect.Effect<QueryPl
 
 interface Planning<Failure> {
   readonly url: Redacted.Redacted;
+  readonly cipher: SecretsCipher;
   readonly work: (storage: FullStorage) => Effect.Effect<unknown, Failure>;
 }
 
 function postgresQueryPlans<Failure>({
+  cipher,
   url,
   work,
 }: Planning<Failure>): Effect.Effect<readonly QueryPlan[], Failure | StorageUnavailable, Scope.Scope> {
@@ -49,7 +52,7 @@ function postgresQueryPlans<Failure>({
       planners.push((ran) => planOf(db, ran));
       return { ...db, all: spied(note, db.all), get: spied(note, db.get), run: spied(note, db.run) };
     }
-    const storage = yield* openPostgresStore({ url, watch });
+    const storage = yield* openPostgresStore({ cipher, url, watch });
     yield* work(storage);
     const statements = Arr.fromIterable(seen);
     const plansPerDatabase = yield* Effect.forEach(

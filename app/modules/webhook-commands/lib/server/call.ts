@@ -96,27 +96,43 @@ type CallMessage = Parameters<Messages["Service"]["postWebhookCommandCall"]>[typ
 
 function callMessageOf(
   name: WebhookCommandName,
-  { channel, data }: Pick<WebhookCommandCall, "channel" | "data">,
+  { channel, data, replyTo }: Pick<WebhookCommandCall, "channel" | "data" | "replyTo">,
 ): Effect.Effect<CallMessage> {
-  return Effect.map(sentHarness, (tool) => ({ ...tool, channel, data: { command: name, data }, text: `/${name}` }));
+  return Effect.map(sentHarness, (tool) => {
+    const message = { ...tool, channel, data: { command: name, data }, text: `/${name}` };
+    if (Predicate.isUndefined(replyTo)) {
+      return message;
+    }
+    return { ...message, replyTo };
+  });
+}
+
+type Posted = Effect.Success<ReturnType<Messages["Service"]["postWebhookCommandCall"]>>["message"];
+
+function threadOf(message: Posted): CallCommandResponse["threadId"] {
+  if (message.kind === "reply") {
+    return message.replyTo;
+  }
+  return message.id;
 }
 
 function callWebhookCommand(call: WebhookCommandCall): Effect.Effect<CallCommandResponse, Refused, CallNeeds> {
-  const { caller, channel, data, name } = call;
+  const { caller, data, name } = call;
   return Effect.gen(function* postCall() {
     const stored = yield* storedWebhookCommand(name);
     const { command } = stored;
     yield* requireData(command, data);
     const messages = yield* Messages;
     const deliveries = yield* Deliveries;
-    const callMessage = yield* callMessageOf(command.name, { channel, data });
-    const { threadId } = yield* deliveries.deliver({ data, stored }, (parts) =>
+    const callMessage = yield* callMessageOf(command.name, call);
+    const { messageId, threadId } = yield* deliveries.deliver({ data, stored }, (parts) =>
       Effect.map(messages.postWebhookCommandCall(caller, callMessage, parts), ({ message }) => ({
         channel: message.channel,
-        threadId: message.id,
+        messageId: message.id,
+        threadId: threadOf(message),
       })),
     );
-    return { messageId: threadId, threadId };
+    return { messageId, threadId };
   });
 }
 

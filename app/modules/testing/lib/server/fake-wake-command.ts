@@ -13,6 +13,7 @@ import {
   Stream,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { CookoutRunSchema, recorded } from "./fake-wake-runs.ts";
 import type { CookoutClient } from "../../../sdk/index.ts";
 import type { MessageId } from "../../../messages/index.ts";
 import { createCookoutClient } from "../../../sdk/index.ts";
@@ -22,6 +23,7 @@ import { parseLine } from "./cli.ts";
 import { runMain } from "@effect/platform-node/NodeRuntime";
 
 const FIRST_ARGUMENT = 2;
+const ONE_AT_A_TIME = { concurrency: 1, discard: true } as const;
 const SUCCESS = 0;
 const POLL = "10 millis";
 const CHILD_SECONDS = "600";
@@ -34,8 +36,8 @@ const SettingsSchema = Schema.Struct({
   hang: Schema.optionalKey(Schema.Boolean),
   log: Schema.String,
   print: Schema.optionalKey(Schema.String),
-  printRepeat: Schema.optionalKey(Schema.Int),
   reply: Schema.optionalKey(Schema.String),
+  runs: Schema.optionalKey(Schema.Array(CookoutRunSchema)),
   sdkReply: Schema.optionalKey(Schema.String),
   succeedAfter: Schema.optionalKey(Schema.String),
   tokenFile: Schema.optionalKey(Schema.String),
@@ -200,6 +202,7 @@ function answerAll(inbox: Inbox, settings: Settings): Effect.Effect<void, never,
     const messages = Arr.join(Arr.map(messagesOf(inbox), String), " ");
     yield* ifSet(settings.touch, (file) => Effect.orDie(fs.writeFileString(file, messages)));
     yield* ifSet(settings.waitFor, waitUntilExists);
+    yield* Effect.forEach(settings.runs ?? [], recorded({ log: settings.log, session: sessionId }), ONE_AT_A_TIME);
     const replies = Arr.map(inbox.items, (item) => reply({ item, settings }));
     const sdk = ifSet(settings.tokenFile, throughSdk(inbox, settings));
     yield* Effect.all([...replies, sdk], { concurrency: "unbounded", discard: true });
@@ -217,15 +220,11 @@ function childOf(pidFile: string): Effect.Effect<void, never, Needs> {
   }).pipe(Effect.orDie);
 }
 
-const ONCE = 1;
-
-function printed(settings: Settings) {
-  return (text: string): Effect.Effect<void> =>
-    Effect.sync(() => {
-      const repeated = Str.repeat(settings.printRepeat ?? ONCE)(text);
-      process.stdout.write(`${repeated}\n`);
-      process.stderr.write(`${repeated}\n`);
-    });
+function printed(text: string): Effect.Effect<void> {
+  return Effect.sync(() => {
+    process.stdout.write(`${text}\n`);
+    process.stderr.write(`${text}\n`);
+  });
 }
 
 function exitCodeOf(settings: Settings): Effect.Effect<number, never, FileSystem.FileSystem> {
@@ -258,7 +257,7 @@ function wake(settings: Settings): Effect.Effect<void, never, Needs | Stdio.Stdi
     const stdin = yield* Effect.orDie(stdio.stdin.pipe(Stream.decodeText, Stream.mkString));
     const inbox = yield* inboxOf(stdin);
     yield* started(inbox, settings, stdin);
-    yield* ifSet(settings.print, printed(settings));
+    yield* ifSet(settings.print, printed);
     yield* ifSet(settings.childPidFile, childOf);
     yield* answerAll(inbox, settings);
     yield* Effect.when(Effect.never, Effect.succeed(settings.hang === true));

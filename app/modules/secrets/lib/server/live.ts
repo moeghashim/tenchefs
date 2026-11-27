@@ -1,7 +1,7 @@
 import { Array as Arr, Effect, Option, String as Str } from "effect";
 import type { CallId, WebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import type { Token, TokenHash } from "../../../identities/index.ts";
-import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { isCallId, isWebhookCommandSecret } from "../../../webhook-commands/index.ts";
 import { token, tokenHash } from "../../../identities/index.ts";
 import type { AttachmentId } from "../../../attachments/index.ts";
@@ -12,6 +12,7 @@ import { isAvatarId } from "../../../avatars/index.ts";
 interface LiveSecrets {
   readonly digest: (text: string) => Effect.Effect<string>;
   readonly newCallId: Effect.Effect<CallId>;
+  readonly newInboxMessageId: Effect.Effect<string>;
   readonly newAttachmentId: Effect.Effect<AttachmentId>;
   readonly newAvatarId: Effect.Effect<AvatarId>;
   readonly newUserCode: Effect.Effect<string>;
@@ -72,6 +73,7 @@ const liveSecrets: LiveSecrets = {
   newAttachmentId: Effect.sync(() => asAttachmentId(randomBytes(ATTACHMENT_ID_BYTES).toString("hex"))),
   newAvatarId: Effect.sync(() => asAvatarId(randomBytes(ATTACHMENT_ID_BYTES).toString("hex"))),
   newCallId: Effect.sync(() => asCallId(`call_${randomBytes(CALL_ID_BYTES).toString("base64url")}`)),
+  newInboxMessageId: Effect.sync(() => randomUUID()),
   newToken: Effect.sync(newToken),
   newUserCode: Effect.sync(newUserCode),
   newWebhookCommandSecret: Effect.sync(() =>

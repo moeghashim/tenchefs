@@ -19,8 +19,7 @@ const APP = "cookout";
 const NONE = 0;
 
 const FIXED: Readonly<Record<Exclude<Route["name"], "channel" | "profile" | "thread">, string>> = {
-  approve: "Approve a login",
-  "approve-join": "Approve an agent",
+  approve: "Approve a device",
   inbox: "Inbox",
   login: "Logged in",
   missing: "Nothing here",

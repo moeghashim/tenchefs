@@ -28,6 +28,15 @@ async function threadStarted(cookout: OwnCookout, channel: string): Promise<Star
   return { parent: message, starter };
 }
 
+async function everyNudgeRead(starter: Person): Promise<void> {
+  const { nudges } = await starter.client.inbox();
+  await Promise.all(
+    nudges.map(async ({ id }) => {
+      await starter.client.markNudgeRead(id);
+    }),
+  );
+}
+
 test("a nudge row's link opens its thread", async ({ ownCookout, page }) => {
   const started = await threadStarted(ownCookout, unique("browser-nudges"));
   await ownCookout.daysPass(QUIET_DAYS);
@@ -43,4 +52,18 @@ test("a nudge row's link opens its thread", async ({ ownCookout, page }) => {
     new RegExp(`#/channels/${unique("browser-nudges")}/threads/${String(started.parent.id)}$`, "u"),
   );
   await expect(inThread(page)).toContainText("Who owns the release notes?");
+});
+
+test("closing a thread takes its read nudge out of Earlier, live", async ({ ownCookout, page }) => {
+  const started = await threadStarted(ownCookout, unique("browser-nudges-closed"));
+  await ownCookout.daysPass(QUIET_DAYS);
+  await logIn({ page, token: started.starter.token, url: "/#/inbox" });
+  await everyNudgeRead(started.starter);
+  const earlier = inPane(page).getByRole("list", { exact: true, name: "Earlier nudges" });
+
+  await expect(earlier.getByText(NUDGE, { exact: true })).toBeVisible();
+
+  await started.starter.client.closeThread(started.parent.id);
+
+  await expect(earlier).toBeHidden();
 });

@@ -4,6 +4,7 @@ import { Alert } from "../../design-system/content.tsx";
 import { Button } from "../../design-system/controls.tsx";
 import type { Identities } from "../../composer/index.ts";
 import type { ReactNode } from "react";
+import { adminChangeableBy } from "./profile-rights.ts";
 
 const TEXT = { make: "Make admin", remove: "Remove admin" } as const;
 
@@ -22,11 +23,6 @@ function labelOf(admin: boolean): string {
   return TEXT.make;
 }
 
-function canChange(identities: readonly Identity[], props: AdminToggleProps): boolean {
-  const viewerIsAdmin = identities.some((each) => each.name === props.me && each.admin);
-  return viewerIsAdmin && props.identity.kind === "human";
-}
-
 function refusalOf(change: AdminChange, name: IdentityName): string | null {
   if (change.status === "failed" && change.name === name) {
     return `Couldn't change admin (${change.code}): ${change.message}`;
@@ -41,7 +37,7 @@ export function AdminToggle(props: AdminToggleProps): ReactNode {
   const handleClick = useCallback(() => {
     identities.setAdmin(identity.name, !identity.admin);
   }, [identities, identity]);
-  if (!canChange(listed, props)) {
+  if (!adminChangeableBy({ identity, listed, me: props.me })) {
     return null;
   }
   const refusal = refusalOf(change, identity.name);

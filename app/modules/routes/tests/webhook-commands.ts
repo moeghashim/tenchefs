@@ -1,10 +1,17 @@
+import type { JsonSchema, RegisteredWebhookCommand } from "../../webhook-commands/index.ts";
 import { adminClient, newIdentity } from "./identities.ts";
 import { fireEvent, screen, within } from "@testing-library/react";
 import type { CookoutClient } from "../../sdk/index.ts";
-import type { JsonSchema } from "../../webhook-commands/index.ts";
+import { isIdentityName } from "../../identities/index.ts";
+import { isIsoTime } from "../../time/index.ts";
+import { isWebhookCommandName } from "../../webhook-commands/index.ts";
 import { openAt } from "./render.tsx";
 
-const branchSchema = { properties: { branch: { type: "string" } }, required: ["branch"], type: "object" } as const;
+const formSchema = {
+  properties: { branch: { type: "string" }, count: { type: "integer" } },
+  required: ["branch"],
+  type: "object",
+} as const;
 const noProperties = { required: ["branch"], type: "object" } as const;
 const nowhere = "http://127.0.0.1:9/command";
 const INDENT = 2;
@@ -44,8 +51,42 @@ function pretty(value: unknown): string {
 async function addWebhookCommand(command: Registered): Promise<CookoutClient> {
   const { name } = command;
   const handler = await newIdentity({ kind: "agent", name, owner: "admin" });
-  await adminClient().addCommand({ ...command, schema: command.schema ?? branchSchema, url: nowhere });
+  await adminClient().addCommand({ ...command, schema: command.schema ?? formSchema, url: nowhere });
   return handler.client;
+}
+
+interface Stored {
+  readonly client: CookoutClient;
+  readonly name: string;
+}
+
+const storedAt = "2026-01-01T00:00:00.000Z";
+
+function storedUnder(name: string): RegisteredWebhookCommand {
+  if (isWebhookCommandName(name) && isIdentityName(name) && isIsoTime(storedAt)) {
+    return { createdAt: storedAt, handler: name, name, schema: formSchema, url: nowhere };
+  }
+  throw new Error(`${name} is not a Webhook command name`);
+}
+
+function withStoredWebhookCommand({ client, name }: Stored): CookoutClient {
+  const stored = storedUnder(name);
+  return new Proxy(client, {
+    get: (target, key): unknown => {
+      const value: unknown = Reflect.get(target, key);
+      if (typeof value !== "function") {
+        return value;
+      }
+      return async (...args: readonly unknown[]): Promise<unknown> => {
+        const answer: unknown = await Reflect.apply(value, target, args);
+        if (key !== "listCommands") {
+          return answer;
+        }
+        const listed = await target.listCommands();
+        return { commands: [...listed.commands, stored] };
+      };
+    },
+  });
 }
 
 async function channelWithWebhookCommand({ channel, webhookCommand: command }: InChannel): Promise<CookoutClient> {
@@ -121,4 +162,6 @@ export {
   pretty,
   suggestedFor,
   type,
+  type InChannel,
+  withStoredWebhookCommand,
 };

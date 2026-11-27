@@ -1,5 +1,5 @@
 import { Clock, Context, Effect, FileSystem, Layer, Option, Path } from "effect";
-import { Secrets, secretsLive } from "../../../secrets/server.ts";
+import { Secrets, newSecretsKey, secretsCipher, secretsLive } from "../../../secrets/server.ts";
 import { WebhookFake, webhookFake } from "../../../webhook-fake/server.ts";
 import { cuttableRelay, serverUrl } from "../../../http/server.ts";
 import { diskAssetStore, sqliteStorage } from "../../../storage/server.ts";
@@ -60,11 +60,20 @@ function servingOf(adminToken: Token, { port, web }: DevCookoutOptions): Serving
   });
 }
 
+const devSecretsCipher = Effect.flatMap(newSecretsKey, (key) => Effect.fromOption(secretsCipher(key))).pipe(
+  Effect.orDie,
+);
+
 function devCookoutOn(options: DevCookoutOptions): Effect.Effect<Omit<DevCookout, "clockUrl">, never, Needs> {
   return Effect.gen(function* startDevCookout() {
     const database = yield* databaseInTempFolder();
     const live = yield* Layer.build(
-      Layer.mergeAll(sqliteStorage(database), diskAssetStore(`${database}-assets`), secretsLive, triggerCallerLive),
+      Layer.mergeAll(
+        sqliteStorage({ cipher: yield* devSecretsCipher, path: database }),
+        diskAssetStore(`${database}-assets`),
+        secretsLive,
+        triggerCallerLive,
+      ),
     );
     const adminToken = yield* Context.get(live, Secrets).newToken;
     const backing = Layer.succeedContext(live);

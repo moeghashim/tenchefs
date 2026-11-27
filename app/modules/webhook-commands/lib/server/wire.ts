@@ -78,7 +78,11 @@ export const ListCommandsResponseSchema = matchesWire<ListCommandsResponse>()(
   Schema.Struct({ commands: Schema.Array(ListedWebhookCommandSchema) }),
 );
 
-export const CallCommandRequestSchema = Schema.Struct({ channel: ChannelNameSchema, data: Schema.Json });
+export const CallCommandRequestSchema = Schema.Struct({
+  channel: ChannelNameSchema,
+  data: Schema.Json,
+  replyTo: Schema.optionalKey(MessageIdSchema),
+});
 
 export const CallCommandResponseSchema = matchesWire<CallCommandResponse>()(
   Schema.Struct({ messageId: MessageIdSchema, threadId: MessageIdSchema }),

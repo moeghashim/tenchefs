@@ -1,5 +1,12 @@
 import { Array as Arr, Effect, Path, Record as Rec, Redacted, String as Str } from "effect";
-import type { AssetStore, S3Bucket, Storage, StorageSetting, StorageUnavailable } from "../../../storage/server.ts";
+import type {
+  AssetStore,
+  S3Bucket,
+  Storage,
+  StorageOpening,
+  StorageSetting,
+  StorageUnavailable,
+} from "../../../storage/server.ts";
 import type { Config, FileSystem, Layer } from "effect";
 import {
   assetStoreKind,
@@ -8,6 +15,8 @@ import {
   databaseUrl,
   s3SettingNames,
   s3Settings,
+  secretsKey,
+  secretsKeyRule,
 } from "../../../config/server.ts";
 import {
   diskAssetStore,
@@ -18,9 +27,11 @@ import {
 } from "../../../storage/server.ts";
 import type { CommandFailed } from "./output.ts";
 import type { RunnerHost } from "./host.ts";
+import type { SecretsCipher } from "../../../secrets/server.ts";
 import { refused } from "./output.ts";
+import { secretsCipher } from "../../../secrets/server.ts";
 
-type ServeStorage = (setting: StorageSetting) => Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem>;
+type ServeStorage = (opening: StorageOpening) => Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem>;
 
 interface ServedStorage {
   readonly database: string;
@@ -105,11 +116,31 @@ function servedStorage(path: string): Effect.Effect<ServedStorage, Config.Config
   });
 }
 
+const invalidSecretsKey = { code: "secrets_key_invalid", message: secretsKeyRule };
+
+const secretsCipherOrRefuse: Effect.Effect<SecretsCipher, CommandFailed> = Effect.flatMap(secretsKey, (key) =>
+  Effect.fromOption(secretsCipher(key)),
+).pipe(
+  Effect.catchTags({
+    ConfigError: () => refused(invalidSecretsKey),
+    NoSuchElementError: () => refused(invalidSecretsKey),
+  }),
+);
+
+const mismatchedKey = {
+  code: "secrets_key_mismatch",
+  message:
+    "COOKOUT_SECRETS_KEY is not the key this board's trigger tokens and Webhook command secrets were encrypted with. Set it back to that key.",
+};
+
+const otherSecretsKey: Effect.Effect<never, CommandFailed> = refused(mismatchedKey);
+
 interface ServeLayers {
   readonly runnerHost?: RunnerHost;
   readonly storage: ServeStorage;
   readonly webFolder?: string;
 }
 
-export { chosenAssetStore, servedStorage };
+export { chosenAssetStore, otherSecretsKey, secretsCipherOrRefuse, servedStorage };
+export { secretsSealed } from "../../../storage/server.ts";
 export type { ServeLayers, ServedStorage };

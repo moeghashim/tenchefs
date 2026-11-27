@@ -1,9 +1,9 @@
 import type { InboxThreadSelection, LinkedRoute } from "../../paths/index.ts";
 import type { PanelAction, PanelEdgeParts, ShortcutLinkParts } from "../../design-system/layout.tsx";
 import type { Reader, Reading, Unread } from "../../unread/index.ts";
+import type { Scheduling, ThreadMessagesState } from "../../board/index.ts";
 import type { Composer } from "../../composer/index.ts";
 import type { Keymap } from "../../keymap/index.ts";
-import type { ThreadMessagesState } from "../../board/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 import { isThreadDeleted } from "./thread-deleted.ts";
 import { threadHeading } from "./thread-heading.ts";
@@ -20,6 +20,7 @@ interface ConversationProps {
   readonly selected: InboxThreadSelection;
   readonly unread: Unread;
   readonly reading: Reading;
+  readonly scheduling: Scheduling;
   readonly me: string;
   readonly keymap: Keymap;
 }

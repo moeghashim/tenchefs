@@ -1,9 +1,9 @@
 import { Array as Arr, Effect, Option, Order, Ref, Stream } from "effect";
 import type { CallFailure, ClientWithAgentSessionState } from "./adapters/sdk.ts";
+import type { Heard, OnRetry } from "./watch-connection.ts";
 import type { InboxItem, MessageId } from "../../../sdk/index.ts";
-import { lastSeenAfter, source, start, whileUnavailable } from "./watch-connection.ts";
+import { lastSeenAfter, retriedWhileUnavailable, source, start } from "./watch-connection.ts";
 import type { EventToLog } from "./runner-log.ts";
-import type { Heard } from "./watch-connection.ts";
 import type { PresenceResponse } from "../../../presence/index.ts";
 import type { WakeQueue } from "./wake-queue.ts";
 import { callClient } from "./adapters/sdk.ts";
@@ -23,6 +23,7 @@ interface Heeding {
   readonly queue: WakeQueue;
   readonly record: (event: EventToLog) => Effect.Effect<void>;
   readonly replaced: Effect.Effect<void>;
+  readonly retrying: OnRetry;
 }
 
 interface Holding extends Heeding {
@@ -37,13 +38,13 @@ interface Hearing {
 }
 
 function heardUntilReplaced({ from, holding, onConnected }: Hearing): Effect.Effect<void, CallFailure> {
-  const { asAgent, connected, queue, saw } = holding;
-  const runnerOf = { opened: asAgent, runner: true };
+  const { asAgent, connected, queue, retrying, saw } = holding;
+  const runnerOf = { onRetry: retrying, opened: asAgent, runner: true };
   return Effect.scoped(
     Effect.gen(function* listenAsRunner() {
       const first = yield* start({ from, listening: runnerOf });
       yield* holding.record({ type: "connect" });
-      yield* onConnected;
+      yield* retriedWhileUnavailable(retrying)(onConnected);
       yield* source({ first, from, listening: runnerOf }).pipe(
         Stream.tap(saw),
         Stream.tap((event) => Effect.when(connected, Effect.succeed(event.type === "connected"))),
@@ -58,8 +59,9 @@ function isOffline(agent: string): (answer: PresenceResponse) => boolean {
   return ({ presence }) => !Arr.some(presence, ({ identity, online }) => identity === agent && online);
 }
 
-function untilOffline({ agent, asAgent }: Holding): Effect.Effect<void, CallFailure> {
-  const offline = Effect.map(whileUnavailable(callClient((client) => client.presence())(asAgent)), isOffline(agent));
+function untilOffline({ agent, asAgent, retrying }: Holding): Effect.Effect<void, CallFailure> {
+  const presence = retriedWhileUnavailable(retrying)(callClient((client) => client.presence())(asAgent));
+  const offline = Effect.map(presence, isOffline(agent));
   const afterAPause = Effect.andThen(Effect.sleep(PRESENCE_POLL), offline);
   return Effect.asVoid(Effect.repeat(afterAPause, { until: Boolean }));
 }
@@ -71,7 +73,8 @@ function newestOf(items: readonly InboxItem[], seen: Option.Option<MessageId>): 
 
 function takenBack(holding: Holding): Effect.Effect<void, CallFailure> {
   return Effect.gen(function* takeAgentBack() {
-    const { items } = yield* whileUnavailable(callClient((client) => client.inbox())(holding.asAgent));
+    const inbox = callClient((client) => client.inbox())(holding.asAgent);
+    const { items } = yield* retriedWhileUnavailable(holding.retrying)(inbox);
     const seen = yield* holding.seen;
     const onConnected = Effect.andThen(printLine({ agent: holding.agent, type: "reconnected" }), holding.queue.catchUp);
     yield* heardUntilReplaced({ from: newestOf(items, seen), holding, onConnected });

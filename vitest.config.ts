@@ -4,6 +4,8 @@ const postgresFiles = [
   "app/modules/storage/tests/server/*.contract.test.ts",
   "app/modules/storage/tests/server/postgres.test.ts",
   "app/modules/storage/tests/server/postgres-query-plans.test.ts",
+  "app/modules/storage/tests/server/postgres-sealed-secrets.test.ts",
+  "app/modules/storage/tests/server/postgres-request-origins.test.ts",
   "app/modules/cli/tests/server/serve-postgres.test.ts",
 ];
 
@@ -23,6 +25,7 @@ export default defineConfig({
         "app/main.ts",
         "app/dev.ts",
         "app/modules/testing/lib/server/fake-wake-command.ts",
+        "app/modules/testing/lib/server/fake-wake-runs.ts",
         "app/web.tsx",
         "app/modules/live/lib/event-source.ts",
         "app/modules/probe/web.ts",

@@ -25,6 +25,7 @@ interface StoredDelivery extends DeliveryProgress {
   readonly channel: ChannelName;
   readonly threadId: MessageId;
   readonly data: JsonValue;
+  readonly calledAt: IsoTime;
 }
 
 interface DeliveriesSection {
@@ -80,6 +81,7 @@ const JsonText = Schema.fromJsonString(Schema.Json);
 const DeliveryRow = Schema.Struct({
   attempts: Schema.Int,
   call_id: Schema.String.pipe(Schema.refine(isCallId)),
+  called_at: IsoTimeSchema,
   channel: Schema.String.pipe(Schema.refine(isChannelName)),
   command: Schema.String.pipe(Schema.refine(isWebhookCommandName)),
   data: JsonText,
@@ -92,6 +94,7 @@ function fromRow(row: typeof DeliveryRow.Type): StoredDelivery {
   return {
     attempts: row.attempts,
     callId: row.call_id,
+    calledAt: row.called_at,
     channel: row.channel,
     command: row.command,
     data: row.data,
@@ -104,7 +107,7 @@ function fromRow(row: typeof DeliveryRow.Type): StoredDelivery {
 const decodeRow = Schema.decodeUnknownEffect(DeliveryRow);
 const encodeData = Schema.encodeEffect(JsonText);
 
-const DELIVERY_COLUMNS = "call_id, command, channel, thread_id, data, attempts, next_attempt_at, outcome";
+const DELIVERY_COLUMNS = "call_id, command, channel, thread_id, data, attempts, next_attempt_at, outcome, called_at";
 
 const PENDING: DialectForms<string> = {
   postgres: `SELECT ${DELIVERY_COLUMNS} FROM deliveries WHERE outcome = 'pending' ORDER BY added_order`,
@@ -116,7 +119,7 @@ function sqlDeliveries(db: SqlDatabase): DeliveriesSection {
     addDelivery: (delivery) =>
       Effect.flatMap(Effect.mapError(encodeData(delivery.data), unreadable), (data) =>
         db.run(
-          `INSERT INTO deliveries (${DELIVERY_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO deliveries (${DELIVERY_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           delivery.callId,
           delivery.command,
           delivery.channel,
@@ -125,6 +128,7 @@ function sqlDeliveries(db: SqlDatabase): DeliveriesSection {
           delivery.attempts,
           delivery.nextAttemptAt,
           delivery.outcome,
+          delivery.calledAt,
         ),
       ),
     listPendingDeliveries: Effect.suspend(() =>
@@ -147,7 +151,20 @@ function sqlDeliveries(db: SqlDatabase): DeliveriesSection {
   };
 }
 
+const CALL_TIMES_BACKFILL =
+  "UPDATE deliveries SET called_at = (SELECT created_at FROM messages WHERE messages.id = deliveries.thread_id)";
+
+const CALL_TIMES_MIGRATION = `ALTER TABLE deliveries ADD COLUMN called_at TEXT;
+   ${CALL_TIMES_BACKFILL};`;
+
+const POSTGRES_CALL_TIMES_MIGRATION: readonly string[] = [
+  'ALTER TABLE deliveries ADD COLUMN called_at text COLLATE "C"',
+  CALL_TIMES_BACKFILL,
+];
+
 export {
+  CALL_TIMES_MIGRATION,
+  POSTGRES_CALL_TIMES_MIGRATION,
   type DeliveriesSection,
   type DeliveryOutcome,
   type MemoryDeliveriesSection,

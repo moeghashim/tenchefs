@@ -8,6 +8,7 @@ interface StateFolderFailure {
   readonly message: string;
 }
 
+const AGENT_SESSIONS = "agent-sessions";
 const PRIVATE_FOLDER = 0o700;
 
 const currentUser: Effect.Effect<Option.Option<number>> = Effect.sync(() =>
@@ -77,4 +78,4 @@ function checkFolder({
 
 const stateFolderPath: Effect.Effect<Option.Option<string>, never, Path.Path> = Effect.flatMap(Path.Path, stateFolder);
 
-export { type StateFolderFailure, checkFolder, failure, stateFolder, stateFolderPath };
+export { AGENT_SESSIONS, type StateFolderFailure, checkFolder, failure, stateFolder, stateFolderPath };

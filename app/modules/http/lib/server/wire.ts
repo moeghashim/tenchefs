@@ -36,6 +36,29 @@ const securityHeaders = {
   "x-frame-options": "DENY",
 };
 
+const YEAR_SECONDS = 31_536_000;
+
+const strictTransportSecurity = { "strict-transport-security": `max-age=${String(YEAR_SECONDS)}` };
+
+interface ProxyReport {
+  readonly address: string;
+  readonly protocol: "http" | "https";
+}
+
+function protocolOf(scheme: string): ProxyReport["protocol"] {
+  if (scheme === "https") {
+    return "https";
+  }
+  return "http";
+}
+
+function flyReportOf({
+  "fly-client-ip": address = "",
+  "x-forwarded-proto": scheme = "",
+}: Readonly<Record<string, string | undefined>>): ProxyReport {
+  return { address, protocol: protocolOf(scheme) };
+}
+
 export const HealthResponseSchema = matchesWire<HealthResponse>()(
   Schema.Struct({ status: Schema.Literal("ok"), time: IsoTimeSchema }),
 );
@@ -44,4 +67,4 @@ export const ErrorResponseSchema = matchesWire<ErrorResponse>()(Schema.Struct({ 
 
 export const SchemaProblemsSchema = matchesWire<SchemaProblems>()(Schema.Array(SchemaProblemSchema));
 
-export { contentSecurityPolicy, securityHeaders };
+export { contentSecurityPolicy, flyReportOf, securityHeaders, strictTransportSecurity };

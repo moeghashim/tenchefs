@@ -36,7 +36,12 @@ function nudgesRead(entries: InboxEntries, read: (nudge: InboxHistoryNudge) => b
   return withPart({ entries, key: "nudges", value });
 }
 
-function threadRead(event: CookoutEvent): MessageId | null {
+function withoutNudgesOf(entries: InboxEntries, thread: MessageId): InboxEntries {
+  const value = withoutWhere({ gone: ({ parent }) => parent.id === thread, held: entries.nudges });
+  return withPart({ entries, key: "nudges", value });
+}
+
+function threadMet(event: CookoutEvent): MessageId | null {
   if (event.type === "thread" && typeof event.parent.closedAt === "string") {
     return event.parent.id;
   }
@@ -46,15 +51,15 @@ function threadRead(event: CookoutEvent): MessageId | null {
   return null;
 }
 
-function readByThread(entries: InboxEntries, change: Change): InboxEntries {
+function metByThread(entries: InboxEntries, change: Change): InboxEntries {
   if (change.type !== "thread" && change.type !== "message") {
     return entries;
   }
-  const thread = threadRead(change);
+  const thread = threadMet(change);
   if (thread === null) {
     return entries;
   }
-  return nudgesRead(entries, ({ parent }) => parent.id === thread);
+  return withoutNudgesOf(entries, thread);
 }
 
 function withoutNudgesIn(entries: InboxEntries, name: ChannelName): InboxEntries {
@@ -67,10 +72,9 @@ function nudgesGone({ change, entries }: Applying): InboxEntries {
     return withoutNudgesIn(entries, change.channel.name);
   }
   if (change.type === "message-deleted") {
-    const value = withoutWhere({ gone: ({ parent }) => parent.id === change.message.id, held: entries.nudges });
-    return withPart({ entries, key: "nudges", value });
+    return withoutNudgesOf(entries, change.message.id);
   }
-  return readByThread(entries, change);
+  return metByThread(entries, change);
 }
 
 function nudgesApplied(applying: Applying): InboxEntries {

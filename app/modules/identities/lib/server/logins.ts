@@ -1,18 +1,40 @@
-import { AddressLimit, lifetimeOf, loginRequestNotFound, now, requireHuman } from "./login-support.ts";
-import { Caller, credentialsOf, sentToken } from "./auth.ts";
+import {
+  AddressLimit,
+  lifetimeOf,
+  loginRequestDetails,
+  loginRequestNotFound,
+  now,
+  requestOriginOf,
+  requireHuman,
+  webSessionWhere,
+} from "./login-support.ts";
+import { Caller, CredentialSent, credentialsOf, sentToken } from "./auth.ts";
 import {
   CollectLoginRequestSchema,
+  ListSessionsResponseSchema,
+  LogOutEverywherePreviewSchema,
+  LogOutEverywhereResponseSchema,
   LoginCollectedResponseSchema,
   LoginRequestResponseSchema,
   LoginRequestStartedResponseSchema,
   LogoutResponseSchema,
+  RevokeSessionResponseSchema,
   StartLoginRequestSchema,
+  WebLoginCollectedResponseSchema,
 } from "./login-wire.ts";
 import { Effect, Function, Option, Predicate } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import type { LoginCollection, LoginRequest, NewLoginRequest, StorageUnavailable } from "../../../storage/server.ts";
+import type { Identity, Token } from "../../index.ts";
+import type {
+  LoginCollection,
+  LoginRequest,
+  LoginRequestKind,
+  NewLoginRequest,
+  StorageUnavailable,
+} from "../../../storage/server.ts";
+import type { LoginRequestStartedResponse, LoginRequestView } from "../../../logins/index.ts";
 import {
-  approvalPathOf,
+  approvalPath,
   collectLoginRequestPath,
   isUserCode,
   loginPath,
@@ -21,12 +43,11 @@ import {
   loginRequestSeconds,
   loginRequestsPath,
 } from "../../../logins/index.ts";
-import type { LoginRequestStartedResponse } from "../../../logins/index.ts";
+import { clientAddress, siteCookieOptions } from "../../../http/server.ts";
+import { sessionCookieName, token } from "../../index.ts";
 import type { Route } from "../../../http/server.ts";
 import { Secrets } from "../../../secrets/server.ts";
 import { Storage } from "../../../storage/server.ts";
-import type { Token } from "../../index.ts";
-import { token } from "../../index.ts";
 
 type Answer = HttpServerResponse.HttpServerResponse;
 
@@ -42,8 +63,8 @@ function withinAddressLimit<Value, Failure, Needs>(
 > {
   return Effect.gen(function* admitAddressThenRun() {
     const limit = yield* AddressLimit;
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    yield* limit.admit(Option.getOrElse(request.remoteAddress, Function.constant("unknown")));
+    const address = yield* clientAddress;
+    yield* limit.admit(address);
     return yield* effect;
   });
 }
@@ -63,13 +84,30 @@ function addWithCode(request: UnnamedRequest): Effect.Effect<string, StorageUnav
   });
 }
 
+interface KindAndHost {
+  readonly kind: LoginRequestKind;
+  readonly host: string;
+}
+
+function kindAndHost(
+  body: typeof StartLoginRequestSchema.Type,
+  headers: Readonly<Record<string, string | undefined>>,
+): KindAndHost {
+  if ("kind" in body) {
+    return { host: webSessionWhere(headers["user-agent"]), kind: body.kind };
+  }
+  return { host: body.host, kind: "cli" };
+}
+
 const newRequest = Effect.gen(function* newLoginRequest() {
-  const { host } = yield* HttpServerRequest.schemaBodyJson(StartLoginRequestSchema);
+  const body = yield* HttpServerRequest.schemaBodyJson(StartLoginRequestSchema);
+  const { headers } = yield* HttpServerRequest.HttpServerRequest;
+  const origin = requestOriginOf({ clientIp: yield* clientAddress, headers });
   const secrets = yield* Secrets;
   const requestId = yield* secrets.newToken;
   const requestHash = yield* secrets.hashToken(requestId);
   const { createdAt, expiresAt } = yield* lifetimeOf(loginRequestSeconds);
-  return { request: { createdAt, expiresAt, host, requestHash }, requestId };
+  return { request: { ...origin, ...kindAndHost(body, headers), createdAt, expiresAt, requestHash }, requestId };
 });
 
 const startRoute: Route<Storage | Secrets | AddressLimit> = {
@@ -80,7 +118,7 @@ const startRoute: Route<Storage | Secrets | AddressLimit> = {
         const userCode = yield* addWithCode(request);
         const { expiresAt } = request;
         const started: LoginRequestStartedResponse = {
-          approvalPath: approvalPathOf(userCode),
+          approvalPath,
           expiresAt,
           requestId,
           userCode,
@@ -94,32 +132,54 @@ const startRoute: Route<Storage | Secrets | AddressLimit> = {
 
 const collectedResponse = HttpServerResponse.schemaJson(LoginCollectedResponseSchema);
 
+const webCollectedResponse = HttpServerResponse.schemaJson(WebLoginCollectedResponseSchema);
+
+interface Collected {
+  readonly collection: LoginCollection;
+  readonly issued: Token;
+  readonly kind: LoginRequestKind;
+}
+
+function approvedAnswer(
+  identity: Identity,
+  { issued, kind }: Omit<Collected, "collection">,
+): Effect.Effect<Answer, never, HttpServerRequest.HttpServerRequest> {
+  if (kind === "web") {
+    return Effect.gen(function* setSessionCookie() {
+      const response = yield* webCollectedResponse({ identity, status: "approved" });
+      const options = yield* siteCookieOptions;
+      return yield* HttpServerResponse.setCookie(response, sessionCookieName, issued, options);
+    }).pipe(Effect.orDie);
+  }
+  return Effect.orDie(collectedResponse({ identity, status: "approved", token: issued }));
+}
+
 function collectionAnswer(
-  collection: LoginCollection,
-  issued: Token,
-): Effect.Effect<Answer, typeof loginRequestNotFound> {
+  collected: Collected,
+): Effect.Effect<Answer, typeof loginRequestNotFound, HttpServerRequest.HttpServerRequest> {
+  const { collection } = collected;
   if (collection.status === "pending") {
     return Effect.orDie(collectedResponse({ status: "pending" }, { status: ACCEPTED }));
   }
   if (collection.status === "gone") {
     return Effect.fail(loginRequestNotFound);
   }
-  return Effect.orDie(collectedResponse({ identity: collection.identity, status: "approved", token: issued }));
+  return approvedAnswer(collection.identity, collected);
 }
 
 const collectRoute: Route<Storage | Secrets | AddressLimit> = {
   handle: () =>
     withinAddressLimit(
       Effect.gen(function* collectLoginRequest() {
-        const { requestId } = yield* HttpServerRequest.schemaBodyJson(CollectLoginRequestSchema);
+        const { kind = "cli", requestId } = yield* HttpServerRequest.schemaBodyJson(CollectLoginRequestSchema);
         const secrets = yield* Secrets;
         const storage = yield* Storage;
         const requestHash = yield* secrets.hashToken(token(requestId));
         const issued = yield* secrets.newToken;
         const credentialHash = yield* secrets.hashToken(issued);
         const at = yield* now;
-        const collection = yield* storage.collectLoginRequest({ credentialHash, now: at, requestHash });
-        return yield* collectionAnswer(collection, issued);
+        const collection = yield* storage.collectLoginRequest({ credentialHash, kind, now: at, requestHash });
+        return yield* collectionAnswer({ collection, issued, kind });
       }),
     ),
   method: "POST",
@@ -130,11 +190,15 @@ function codeParam(params: Readonly<Record<string, string>>): string {
   return String(params["code"]);
 }
 
+function viewOf({ approved, expiresAt, host, userCode, ...started }: LoginRequest): LoginRequestView {
+  return { ...loginRequestDetails({ ...started, host }), approved, expiresAt, host, userCode };
+}
+
 function requestAnswer(found: LoginRequest | undefined): Effect.Effect<Answer, typeof loginRequestNotFound> {
   if (Predicate.isUndefined(found)) {
     return Effect.fail(loginRequestNotFound);
   }
-  return Effect.orDie(HttpServerResponse.schemaJson(LoginRequestResponseSchema)({ loginRequest: found }));
+  return Effect.orDie(HttpServerResponse.schemaJson(LoginRequestResponseSchema)({ loginRequest: viewOf(found) }));
 }
 
 const userCodeSegments = { code: isUserCode };
@@ -160,7 +224,13 @@ const approveRoute: Route<Caller | Storage> = {
       const caller = yield* Caller;
       const storage = yield* Storage;
       const at = yield* now;
-      yield* storage.approveLoginRequest(codeParam(params), caller.name, at);
+      const approvedWith = yield* CredentialSent;
+      yield* storage.approveLoginRequest({
+        approvedWith: Option.getOrUndefined(approvedWith),
+        approver: caller.name,
+        now: at,
+        userCode: codeParam(params),
+      });
       const found = yield* storage.findLoginRequest(codeParam(params), at);
       return yield* requestAnswer(found);
     }),
@@ -177,7 +247,8 @@ const logoutRoute: Route<Storage | Secrets> = {
       const secrets = yield* Secrets;
       const storage = yield* Storage;
       const hash = yield* secrets.hashToken(sent);
-      const revoked = yield* storage.revokeLoginCredential(hash);
+      const at = yield* now;
+      const revoked = yield* storage.revokeLoginCredential(hash, at);
       return yield* HttpServerResponse.schemaJson(LogoutResponseSchema)({ revoked });
     }),
   method: "DELETE",
@@ -189,8 +260,13 @@ export const openLoginRoutes: readonly Route<Storage | Secrets | AddressLimit>[]
 export const loginRoutes: readonly Route<Caller | Storage | Secrets>[] = [showRoute, approveRoute, logoutRoute];
 
 export const loginResponseSchemas = {
+  ListSessionsResponse: ListSessionsResponseSchema,
+  LogOutEverywherePreview: LogOutEverywherePreviewSchema,
+  LogOutEverywhereResponse: LogOutEverywhereResponseSchema,
   LoginCollectedResponse: LoginCollectedResponseSchema,
   LoginRequestResponse: LoginRequestResponseSchema,
   LoginRequestStartedResponse: LoginRequestStartedResponseSchema,
   LogoutResponse: LogoutResponseSchema,
+  RevokeSessionResponse: RevokeSessionResponseSchema,
+  WebLoginCollectedResponse: WebLoginCollectedResponseSchema,
 };

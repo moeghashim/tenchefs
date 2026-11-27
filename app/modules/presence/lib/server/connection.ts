@@ -36,13 +36,13 @@ const connectionOf = Effect.fnUntraced(function* detailOfConnection({
   caller,
   runner,
 }: OpenedStream): Effect.fn.Return<Connection, never, Storage> {
+  const loginCredential = yield* LoginCredentialSent;
   if (Predicate.isUndefined(authorization)) {
-    const loginCredential = yield* LoginCredentialSent;
     return { detail: WEB, runner: "not a runner", sentWith: { kind: "web", loginCredential } };
   }
   const sent = yield* AgentSessionSent;
   if (Option.isNone(sent)) {
-    return { detail: WATCH, runner: runnerOf(runner), sentWith: { kind: "identity token" } };
+    return { detail: WATCH, runner: runnerOf(runner), sentWith: { kind: "identity token", loginCredential } };
   }
   const host = yield* joinedHost(caller.name);
   const detail = Option.match(host, {

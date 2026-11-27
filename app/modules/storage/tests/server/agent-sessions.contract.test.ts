@@ -97,7 +97,7 @@ it.effect.each(storageLayers)(
     Effect.gen(function* revokes() {
       const storage = yield* withAgent(layer);
       yield* storage.issueAgentSession({ force: false, session: session(FIRST) });
-      yield* storage.revokeAgentSession(FIRST);
+      yield* storage.revokeAgentSession(FIRST, T30);
       const revoked = yield* storage.useAgentSession({ hash: FIRST, now: T30 });
       const next = yield* storage.issueAgentSession({ force: false, session: session(SECOND, T30) });
       const unknown = yield* storage.useAgentSession({ hash: STRANGER, now: T30 });

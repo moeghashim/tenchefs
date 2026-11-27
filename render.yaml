@@ -30,5 +30,8 @@ services:
       # A random 256-bit base64 value: 44 characters, over the server's 32. Read it on the service's Environment tab.
       - key: COOKOUT_ADMIN_TOKEN
         generateValue: true
+      # Also a random 256-bit base64 value: the 32 bytes that encrypt trigger tokens and Webhook command secrets.
+      - key: COOKOUT_SECRETS_KEY
+        generateValue: true
       # No COOKOUT_PUBLIC_URL: unset, it is the RENDER_EXTERNAL_URL Render sets, so a new service deploys this file
       # unedited.

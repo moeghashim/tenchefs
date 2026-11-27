@@ -1,5 +1,6 @@
-import { Console, Duration, Effect, Function } from "effect";
+import { Console, Effect, Function } from "effect";
 import type { LoginCollectedResponse, LoginRequestStartedResponse, LogoutResponse } from "../../../logins/index.ts";
+import { pollEvery, waitingOutRateLimits } from "./collect-poll.ts";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
 import type { CallFailure } from "./adapters/sdk.ts";
 import type { CookoutClient } from "../../../sdk/index.ts";
@@ -17,8 +18,6 @@ interface LoggedIn extends IdentityResponse {
 }
 
 const NOTHING = {};
-const POLL_SECONDS = 2;
-const pollEvery = Duration.seconds(POLL_SECONDS);
 
 const expired: CallFailure = {
   code: "login_request_expired",
@@ -48,11 +47,14 @@ function approvalOf(waiting: Waiting): Effect.Effect<ApprovedLogin, CallFailure>
   );
   const again = Effect.suspend(() => approvalOf(waiting));
   const pollAgain = Effect.andThen(Effect.sleep(pollEvery), again);
-  return Effect.filterOrElse(collect, isApproved, Function.constant(pollAgain));
+  return Effect.filterOrElse(collect, isApproved, Function.constant(pollAgain)).pipe(waitingOutRateLimits(again));
 }
 
 function approvalPrompt(url: string, { approvalPath, expiresAt, userCode }: LoginRequestStartedResponse): string {
-  return `Open ${url}${approvalPath} and check it shows the code ${userCode}, then approve. The link lasts until ${expiresAt}.`;
+  return (
+    `Open ${url}${approvalPath} on a device where you're logged in and type the code ${userCode}, ` +
+    `or run \`cookout login approve ${userCode}\` there. The code lasts until ${expiresAt}.`
+  );
 }
 
 function logInByBrowser(url: string): Effect.Effect<LoggedIn, CallFailure, AgentSessionStateNeeds> {

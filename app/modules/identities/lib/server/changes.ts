@@ -1,17 +1,19 @@
 import { Array as Arr, Context, Effect, Layer, PubSub, Ref } from "effect";
 import type { Identity, IdentityName, TokenHash } from "../../index.ts";
+import type { EndedCredential } from "../../../storage/server.ts";
 import type { Scope } from "effect";
 
 type EndedTokens =
   | { readonly kind: "agent session"; readonly hash: TokenHash }
   | { readonly kind: "agent sessions" }
   | { readonly kind: "identity tokens"; readonly loginCredentials: readonly TokenHash[] }
+  | { readonly kind: "credentials"; readonly hashes: readonly TokenHash[] }
   | { readonly kind: "all" };
 
 interface TokensEnded {
   readonly identity: IdentityName;
   readonly tokens: EndedTokens;
-  readonly cause: "left" | "revoked" | "rotated" | "deactivated";
+  readonly cause: "left" | "revoked" | "rotated" | "deactivated" | "session revoked";
   readonly by: IdentityName | typeof THE_COOKOUT;
 }
 
@@ -88,6 +90,41 @@ function tokensEnded(ended: TokensEnded): Effect.Effect<void, never, IdentityCha
   return Effect.flatMap(IdentityChanges, (changes) => changes.endTokens(ended));
 }
 
+interface CredentialsEnded {
+  readonly ended: readonly EndedCredential[];
+  readonly by: TokensEnded["by"];
+}
+
+type Streamed = Exclude<EndedCredential["kind"], "join code" | "login link">;
+
+const CAUSE_OF: Readonly<Record<Streamed, TokensEnded["cause"]>> = {
+  "agent session": "revoked",
+  session: "session revoked",
+};
+
+function sameHolder(one: EndedCredential, other: EndedCredential): boolean {
+  return one.identity === other.identity && one.kind === other.kind;
+}
+
+function isStreamed(credential: EndedCredential): credential is EndedCredential & { readonly kind: Streamed } {
+  return credential.kind !== "join code" && credential.kind !== "login link";
+}
+
+function endingsOf({ by, ended }: CredentialsEnded): readonly TokensEnded[] {
+  const streamed = Arr.filter(ended, isStreamed);
+  return Arr.map(Arr.dedupeWith(streamed, sameHolder), (holder): TokensEnded => {
+    const hashes = Arr.map(
+      Arr.filter(streamed, (each) => sameHolder(each, holder)),
+      ({ hash }) => hash,
+    );
+    return { by, cause: CAUSE_OF[holder.kind], identity: holder.identity, tokens: { hashes, kind: "credentials" } };
+  });
+}
+
+function credentialsEnded(revoke: CredentialsEnded): Effect.Effect<void, never, IdentityChanges> {
+  return Effect.forEach(endingsOf(revoke), tokensEnded, EACH_IN_TURN);
+}
+
 export {
   type EndedTokens,
   IdentityChanges,
@@ -95,6 +132,8 @@ export {
   type TokensEnded,
   announced,
   announcedDeleted,
+  credentialsEnded,
+  endingsOf,
   identityChangesLayer,
   reactivated,
   tokensEnded,

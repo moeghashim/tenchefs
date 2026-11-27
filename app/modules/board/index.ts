@@ -54,7 +54,7 @@
  * it shows (`docs/adr/0068-a-page-catches-up-by-reading-again.md`). `loadOlder` pages further back; `post` posts a
  * top-level message with any files (#377), adds it, and only then calls `posted`, so a refused post keeps its text and files; `call` calls a Webhook command
  * with data typed as JSON, keeping the schema errors of data it refuses, and only a successful call empties
- * `callData` and calls `called`; `showClosed` keeps how many threads of a run of closed threads the feed shows.
+ * `callData` and calls `called`, and a refused one calls `refused`; `showClosed` keeps how many threads of a run of closed threads the feed shows.
  * `threads.subscribeShowing(place, acking)` shows a thread (`threadOf(place)`): read when first shown and again when
  * opened again or on a link back, acking its latest message if a reader that acks has come; a reader that doesn't ack
  * (the Inbox's conversation) calls `threads.ack` itself. A reply heard live joins every loaded thread it belongs to and
@@ -119,9 +119,16 @@
  * (`POST /v1/session`) through a client with that token for the cookout at `url`; a refused login (an agent's token, a bad token)
  * keeps the server's error code to show. `logOut` ends the session on the server (`DELETE /v1/session`, which revokes the
  * session cookie's credential) and is then logged out; if the server doesn't answer, it asks who is logged in again.
+ * `session.webLogin` logs in by approval from another device: `start` starts a web Login request (`startWebLogin`) and
+ * shows its code, where to type it (`approvalUrl`) and when it expires, then collects it every 2 s, the CLI's interval
+ * (`collectWebLogin`), passing over a rate limit or an unreachable server. An approved collect has set the session
+ * cookie, so the session is logged in as the approver at once, without a reload; a request the server no longer has
+ * has expired. The request ID lives only in memory: `back`, or the last reader leaving, drops it.
  *
- * `createLoginApprovals` makes the store the approval page reads: for a login request's user code, the request (its
- * host and when it expires) once the page subscribes, or why it can't be shown, and `approve`, which approves it as
+ * `createApprovalCode` makes the approval page's code field store: the code a person types (trimmed, upper-cased, its
+ * dash put back), or that what they typed isn't a code; it starts empty and empties again when the page closes, so no
+ * link can fill it. `createLoginApprovals` makes the store the approval page reads: for a login request's user code,
+ * the request (its kind, browser or host, client IP, when it started and when it expires) once the page subscribes, or why it can't be shown, and `approve`, which approves it as
  * whoever is logged in so the terminal that started it finishes logging in. `createAgentJoinApprovals` does the same
  * for an agent join request: the agent it would join or create for the person viewing it, an idle expiry they may
  * lower, and whether to replace the agent's live session.
@@ -155,9 +162,15 @@ export {
   type ScheduleListState,
   createScheduleList,
 } from "./lib/schedule-list.ts";
+export {
+  type SessionAsk,
+  type SessionList,
+  type SessionListState,
+  createSessionList,
+} from "./lib/session-list.ts";
 export { cronWords } from "./lib/cron-words.ts";
 export type { ChannelMessagesState, MessageBeforeState, ThreadMessagesState } from "./lib/message-selectors.ts";
-export type { CallState } from "./lib/webhook-command-call.ts";
+export type { CallRequest, CallState } from "./lib/webhook-command-call.ts";
 export type { SchemaProblem } from "../sdk/index.ts";
 export type { PostState } from "./lib/failure.ts";
 export type { Outgoing } from "./lib/outgoing.ts";
@@ -178,7 +191,7 @@ export {
   reactionRefusal,
   reactionsOf,
 } from "./lib/part-selectors.ts";
-export type { BoardState } from "./lib/board-store.ts";
+export type { BoardState, SessionState, WebLoginState } from "./lib/board-store.ts";
 export type { MarkAllState, MarkChannelRefusal } from "./lib/inbox-calls.ts";
 export {
   type AlertsShown,
@@ -228,6 +241,7 @@ export {
   threadOf,
 } from "./lib/board-selectors.ts";
 export { searchResultsOf } from "./lib/search-selectors.ts";
+export { type ApprovalCode, createApprovalCode } from "./lib/approval-code.ts";
 export {
   type LoginApproval,
   type LoginApprovalState,

@@ -1,17 +1,24 @@
-import { Array as Arr, Effect, Option } from "effect";
 import {
+  POSTGRES_ADMIN_SETTING_MIGRATION,
   POSTGRES_ATTACHMENTS_MIGRATION,
   POSTGRES_ATTACHMENT_SIZES_MIGRATION,
+  POSTGRES_CALL_TIMES_MIGRATION,
+  POSTGRES_CREDENTIAL_LINEAGE_MIGRATION,
+  POSTGRES_LOGIN_EXPIRY_MIGRATION,
+  POSTGRES_LOGIN_LINKS_MIGRATION,
+  POSTGRES_LOGIN_REQUEST_KINDS_MIGRATION,
+  POSTGRES_REQUEST_ORIGINS_MIGRATION,
   POSTGRES_SEARCH_MIGRATION,
+  POSTGRES_SECRETS_KEY_MIGRATION,
   POSTGRES_TRIGGERS_MIGRATION,
   POSTGRES_TRIGGER_HEADERS_MIGRATION,
   POSTGRES_TRIGGER_SKIPPED_MIGRATION,
 } from "./feature-migrations.ts";
-import { currentVersion, tooNew } from "./postgres-schema-version.ts";
-import { POSTGRES_ADMIN_SETTING_MIGRATION } from "./admin-setting.ts";
+import type { Effect } from "effect";
 import { POSTGRES_SCHEDULED_MESSAGES_MIGRATION } from "./scheduled-messages-sqlite.ts";
 import type { PostgresDatabase } from "./adapters/postgres.ts";
 import type { StorageUnavailable } from "./errors.ts";
+import { migrateInOrder } from "./postgres-schema-version.ts";
 
 const postgresMigrations: readonly (readonly string[])[] = [
   [
@@ -265,36 +272,17 @@ const postgresMigrations: readonly (readonly string[])[] = [
     'ALTER TABLE messages ADD COLUMN title_set_by text COLLATE "C"',
     'ALTER TABLE messages ADD COLUMN title_set_at text COLLATE "C"',
   ],
+  POSTGRES_CALL_TIMES_MIGRATION,
+  POSTGRES_LOGIN_EXPIRY_MIGRATION,
+  POSTGRES_SECRETS_KEY_MIGRATION,
+  POSTGRES_REQUEST_ORIGINS_MIGRATION,
+  POSTGRES_CREDENTIAL_LINEAGE_MIGRATION,
+  POSTGRES_LOGIN_REQUEST_KINDS_MIGRATION,
+  POSTGRES_LOGIN_LINKS_MIGRATION,
 ];
 
-const NEXT_VERSION = 1;
-
-function applyNext(db: PostgresDatabase): Effect.Effect<boolean, StorageUnavailable> {
-  return db.migrating(
-    Effect.gen(function* applyNextMigration() {
-      const version = yield* currentVersion(db);
-      if (version > postgresMigrations.length) {
-        return yield* tooNew({ current: version, latest: postgresMigrations.length });
-      }
-      return yield* Option.match(Arr.get(postgresMigrations, version), {
-        onNone: () => Effect.succeed(false),
-        onSome: (statements) =>
-          Effect.as(
-            Effect.andThen(
-              Effect.forEach(statements, (statement) => db.exec(statement), { concurrency: 1, discard: true }),
-              db.run("UPDATE schema_version SET version = ?", version + NEXT_VERSION),
-            ),
-            true,
-          ),
-      });
-    }),
-  );
-}
-
 function migratePostgres(db: PostgresDatabase): Effect.Effect<void, StorageUnavailable> {
-  return Effect.flatMap(applyNext(db), (applied) =>
-    Effect.asVoid(Effect.when(migratePostgres(db), Effect.succeed(applied))),
-  );
+  return migrateInOrder({ db, migrations: postgresMigrations });
 }
 
 export { migratePostgres };

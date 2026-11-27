@@ -1,4 +1,4 @@
-import { AgentJoinApprovalView, Authors, LoginApprovalView, LoginView } from "../../views/index.tsx";
+import { ApprovalView, Authors, LoginView } from "../../views/index.tsx";
 import { AppShell } from "../../design-system/layout.tsx";
 import type { Place } from "../../paths/index.ts";
 import type { ReactNode } from "react";
@@ -29,14 +29,11 @@ export function RouteView(props: RouteViewProps): ReactNode {
   if (route.name === "approve") {
     return (
       <AppShell>
-        <LoginApprovalView approval={props.stores.loginApprovals.forCode(route.userCode)} />
-      </AppShell>
-    );
-  }
-  if (route.name === "approve-join") {
-    return (
-      <AppShell>
-        <AgentJoinApprovalView approval={props.stores.agentJoinApprovals.forCode(route.userCode)} />
+        <ApprovalView
+          agentJoinApprovals={props.stores.agentJoinApprovals}
+          approvalCode={props.stores.approvalCode}
+          loginApprovals={props.stores.loginApprovals}
+        />
       </AppShell>
     );
   }

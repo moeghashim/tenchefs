@@ -1,6 +1,6 @@
 import type { AgentAt, StorageUnavailable } from "../../../storage/server.ts";
 import type { AgentSessionResponse, ListAgentSessionsResponse, RevokeAgentSessionResponse } from "../../index.ts";
-import { Context, DateTime, Duration, Effect, Option } from "effect";
+import { Array as Arr, Context, DateTime, Duration, Effect, Option } from "effect";
 import type { Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { Join, On } from "./join.ts";
 import type { JoinRequestChange, JoinRequestChanges, JoinRequests } from "./join-requests.ts";
@@ -9,6 +9,7 @@ import { agentSessionExpired, agentSessionRevoked } from "../../index.ts";
 import type { JoinCodes } from "./join-codes.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { TokensEnded } from "../../../identities/server.ts";
+import { endingsOf } from "../../../identities/server.ts";
 import { isoTimeOf } from "../../../time/server.ts";
 import { joinCodesOn } from "./join-codes.ts";
 import { joinRequestsOn } from "./join-requests.ts";
@@ -89,12 +90,16 @@ function ownerViews({
         Effect.map((live) => ({ agentSessions: Option.toArray(live) })),
       ),
     revokeFor: (identity, by) =>
-      agentNow(identity).pipe(
-        Effect.flatMap(storage.revokeLiveAgentSession),
-        Effect.tap((revoked) => Effect.when(publishSession(identity), Effect.succeed(revoked))),
-        Effect.tap(() => endTokens({ by, cause: "revoked", identity, tokens: AGENT_SESSIONS })),
-        Effect.map((revoked) => ({ revoked })),
-      ),
+      Effect.gen(function* revokeLiveSession() {
+        const at = yield* agentNow(identity);
+        const ended = yield* storage.revokeLiveAgentSession(at);
+        const revoked = Arr.isReadonlyArrayNonEmpty(ended);
+        yield* Effect.when(publishSession(identity), Effect.succeed(revoked));
+        yield* endTokens({ by, cause: "revoked", identity, tokens: AGENT_SESSIONS });
+        const below = endingsOf({ by, ended: Arr.filter(ended, (each) => each.identity !== identity) });
+        yield* Effect.forEach(below, endTokens, { concurrency: 1, discard: true });
+        return { revoked };
+      }),
   };
 }
 
@@ -113,7 +118,8 @@ function agentSessionsOn(on: On & Ends): Omit<AgentSessionsService, "sessionChan
   return {
     join: forcedJoiner(on),
     leave: (agent, hash) =>
-      Effect.andThen(on.storage.revokeAgentSession(hash), on.publishSession(agent)).pipe(
+      Effect.flatMap(agentNow(agent), ({ now }) => on.storage.revokeAgentSession(hash, now)).pipe(
+        Effect.andThen(on.publishSession(agent)),
         Effect.andThen(
           on.endTokens({ by: agent, cause: "left", identity: agent, tokens: { hash, kind: "agent session" } }),
         ),

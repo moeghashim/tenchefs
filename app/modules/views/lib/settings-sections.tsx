@@ -5,6 +5,7 @@ import type { IdentityName } from "../../sdk/index.ts";
 import type { Layout } from "../../layout/index.ts";
 import { PageSection } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
+import type { SessionList } from "../../board/index.ts";
 import type { SettingsSection } from "../../paths/index.ts";
 import { ThemeChoice } from "./theme-choice.tsx";
 import { hrefOf } from "../../paths/index.ts";
@@ -17,6 +18,7 @@ interface SettingsSectionsProps {
   readonly me: IdentityName;
   readonly section: SettingsSection | null;
   readonly onLogOut: () => void;
+  readonly sessionList: SessionList;
 }
 
 export function SettingsSections(props: SettingsSectionsProps): ReactNode {
@@ -37,7 +39,13 @@ export function SettingsSections(props: SettingsSectionsProps): ReactNode {
       >
         <ThemeChoice layout={props.layout} />
       </PageSection>
-      <AgentAndSessionSections identities={composer.identities} me={me} onLogOut={props.onLogOut} section={section} />
+      <AgentAndSessionSections
+        identities={composer.identities}
+        me={me}
+        onLogOut={props.onLogOut}
+        section={section}
+        sessionList={props.sessionList}
+      />
     </>
   );
 }

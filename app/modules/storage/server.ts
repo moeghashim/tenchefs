@@ -3,17 +3,20 @@
  * atomic stay one method each, and Layers that pass the same contract
  * suite. Every method fails with `StorageUnavailable` when the store can't be used.
  */
-import { Array as Arr, Context, Layer, Redacted, String as Str } from "effect";
-import type { Effect, FileSystem } from "effect";
+import { Array as Arr, Context, Effect, Layer, Redacted, String as Str } from "effect";
+import type { FileSystem } from "effect";
 import type { FullStorage } from "./lib/server/memory-store.ts";
-import { StorageUnavailable } from "./lib/server/errors.ts";
+import type { SecretsCipher } from "../secrets/server.ts";
+import type { SecretsKeyMismatch } from "./lib/server/sealed-secrets.ts";
+import type { StorageUnavailable } from "./lib/server/errors.ts";
+import { keyMismatch } from "./lib/server/sealed-secrets.ts";
 import { openMemoryStore } from "./lib/server/memory-store.ts";
 import { openPostgresStore } from "./lib/server/postgres-store.ts";
 import { openSqliteStore } from "./lib/server/sqlite-store.ts";
 import { postgresQueryPlans as planPostgresQueries } from "./lib/server/query-plans-postgres.ts";
 import { sqliteQueryPlans as planSqliteQueries } from "./lib/server/query-plans-sqlite.ts";
 
-export { StorageUnavailable };
+export { StorageUnavailable } from "./lib/server/errors.ts";
 
 /**
  * The asset store: an attachment's or an avatar's bytes, put, read and removed by its ID only, beside
@@ -56,7 +59,19 @@ export type { NewWebhookCommandCall } from "./lib/server/command-calls.ts";
 export type { JoinCodeRedemption } from "./lib/server/join-codes.ts";
 export type { AgentAt, StoredAgentSession, UseAgentSessionResult } from "./lib/server/agent-sessions.ts";
 export type { TransferAgentResult } from "./lib/server/identity-admins.ts";
-export type { LoginCollection, LoginRequest, NewLoginRequest } from "./lib/server/login-requests.ts";
+/**
+ * Where a Login request or agent join request was started from, recorded when it starts (#905): the client's IP
+ * address and the User-Agent it sent. A request stored before they were recorded has neither.
+ */
+export type { RequestOrigin } from "./lib/server/request-origins.ts";
+export type {
+  LoginCollection,
+  LoginCredentialLookup,
+  LoginRequest,
+  LoginRequestKind,
+  NewLoginRequest,
+} from "./lib/server/login-requests.ts";
+export type { EndedCredential } from "./lib/server/credential-lineage.ts";
 export type {
   AgentJoinApproval,
   AgentJoinCollection,
@@ -70,11 +85,16 @@ export class Storage extends Context.Service<Storage, FullStorage>()("@ai-hero/c
  * Opens and migrates the SQLite file at `path`, and closes it when the Layer
  * is released. A new file is created readable by its owner only, and so are
  * its WAL and shared-memory files, since they hold token hashes and messages.
- * @param path The SQLite file, created if missing.
+ * Trigger tokens, trigger header values and Webhook command secrets are sealed with `cipher` before they are written
+ * and opened as they are read (ADR 0150).
+ * @param opening The SQLite file, created if missing, and the cipher made from `COOKOUT_SECRETS_KEY`.
  * @returns The store, failing with `StorageUnavailable` if it can't be opened.
  */
-export function sqliteStorage(path: string): Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem> {
-  return Layer.effect(Storage, openSqliteStore({ path }));
+export function sqliteStorage(opening: {
+  readonly path: string;
+  readonly cipher: SecretsCipher;
+}): Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem> {
+  return Layer.effect(Storage, openSqliteStore(opening));
 }
 
 /**
@@ -85,6 +105,7 @@ export function sqliteStorage(path: string): Layer.Layer<Storage, StorageUnavail
  * @returns Each statement with the `detail` lines of its `EXPLAIN QUERY PLAN`.
  */
 export function sqliteQueryPlans<Failure>(planning: {
+  readonly cipher: SecretsCipher;
   readonly path: string;
   readonly work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>;
 }): ReturnType<typeof planSqliteQueries<Failure>> {
@@ -99,6 +120,7 @@ export function sqliteQueryPlans<Failure>(planning: {
  * @returns Each statement with the lines of its `EXPLAIN (GENERIC_PLAN)`.
  */
 export function postgresQueryPlans<Failure>(planning: {
+  readonly cipher: SecretsCipher;
   readonly url: Redacted.Redacted;
   readonly work: (storage: Storage["Service"]) => Effect.Effect<unknown, Failure>;
 }): ReturnType<typeof planPostgresQueries<Failure>> {
@@ -117,14 +139,21 @@ export function postgresQueryPlans<Failure>(planning: {
  * each once; a database newer than the list fails with "Upgrade cookout".
  * Every section is on Postgres, search included (a GIN index over each
  * message's words). `cookout serve` opens it when `DATABASE_URL` is set.
- * @param url The database URL, kept redacted.
+ * Secrets are sealed with `cipher`, as in `sqliteStorage`.
+ * @param opening The database URL, kept redacted, and the cipher made from `COOKOUT_SECRETS_KEY`.
  * @returns The store, failing with `StorageUnavailable` if it can't be opened.
  */
-export function postgresStorage(url: Redacted.Redacted): Layer.Layer<Storage, StorageUnavailable> {
-  return Layer.effect(Storage, openPostgresStore({ url }));
+export function postgresStorage(opening: {
+  readonly url: Redacted.Redacted;
+  readonly cipher: SecretsCipher;
+}): Layer.Layer<Storage, StorageUnavailable> {
+  return Layer.effect(Storage, openPostgresStore(opening));
 }
 
-/** A store held in this process only. Everything is lost when the Layer is released. */
+/**
+ * A store held in this process only. Everything is lost when the Layer is released. It keeps nothing at rest, so it
+ * seals no secrets.
+ */
 export const memoryStorage: Layer.Layer<Storage> = Layer.effect(Storage, openMemoryStore);
 
 /**
@@ -139,6 +168,8 @@ export type StorageSetting =
  * Chooses the store from the settings: Postgres when the URL is set, since it wins over the path, so a board can
  * keep its SQLite file in place while it runs on Postgres; otherwise SQLite at the path.
  * @param settings The SQLite path (`COOKOUT_DB`) and the database URL (`DATABASE_URL`), empty when unset.
+ * @param settings.path The SQLite path.
+ * @param settings.url The database URL, empty when unset.
  * @returns The storage setting.
  */
 export function storageSetting({
@@ -154,17 +185,47 @@ export function storageSetting({
   return { store: "postgres", url };
 }
 
+/** A storage setting with the cipher made from `COOKOUT_SECRETS_KEY`, which opens a store. */
+export interface StorageOpening {
+  readonly setting: StorageSetting;
+  readonly cipher: SecretsCipher;
+}
+
 /**
  * Opens the store a storage setting names, `postgresStorage` or `sqliteStorage`.
- * @param setting The storage setting.
+ * @param opening The storage setting and the cipher made from `COOKOUT_SECRETS_KEY`.
+ * @param opening.cipher The cipher made from `COOKOUT_SECRETS_KEY`.
+ * @param opening.setting The storage setting.
  * @returns The store, failing with `StorageUnavailable` if it can't be opened.
  */
-export function storageLayer(setting: StorageSetting): Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem> {
+export function storageLayer({
+  cipher,
+  setting,
+}: StorageOpening): Layer.Layer<Storage, StorageUnavailable, FileSystem.FileSystem> {
   if (setting.store === "postgres") {
-    return postgresStorage(setting.url);
+    return postgresStorage({ cipher, url: setting.url });
   }
-  return sqliteStorage(setting.path);
+  return sqliteStorage({ cipher, path: setting.path });
 }
+
+/** The store's secrets were sealed with another `COOKOUT_SECRETS_KEY` than this one, so the server does not start. */
+export { SecretsKeyMismatch } from "./lib/server/sealed-secrets.ts";
+
+/**
+ * Seals the store's secrets when it is built (ADR 0150). The first boot with `COOKOUT_SECRETS_KEY` seals every trigger
+ * token, trigger header value and Webhook command secret stored in plaintext before, and records which key sealed
+ * them, in one transaction. A later boot with the same key changes nothing; one with another key fails with
+ * `SecretsKeyMismatch`, since the store's secrets can't be opened with it.
+ */
+export const secretsSealed: Layer.Layer<never, StorageUnavailable | SecretsKeyMismatch, Storage> = Layer.effectDiscard(
+  Effect.flatMap(Storage, (storage) =>
+    Effect.filterOrFail(
+      storage.sealSecrets,
+      (sealed) => sealed !== "other_key",
+      () => keyMismatch,
+    ),
+  ),
+);
 
 /**
  * The store as it may be shown, in a startup line or a log: the SQLite path, or the Postgres database as

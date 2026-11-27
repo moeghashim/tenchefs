@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import type { TextFieldParts } from "./parts.ts";
 import { useFocusOnOpen } from "./focus-on-open.ts";
 
+const TYPES = { secret: "password", text: "text" } as const;
+
 export function TextField(parts: TextFieldParts): ReactNode {
   const box = useFocusOnOpen<HTMLInputElement>(parts.focused === true);
   return (
@@ -14,7 +16,7 @@ export function TextField(parts: TextFieldParts): ReactNode {
         ref={box}
         required
         spellCheck={false}
-        type="password"
+        type={TYPES[parts.kind ?? "secret"]}
       />
     </label>
   );

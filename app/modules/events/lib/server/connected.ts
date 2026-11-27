@@ -2,28 +2,28 @@ import type { Connected, StreamRequest } from "./source.ts";
 import { ConnectedEventSchema, PresenceEventSchema } from "./wire.ts";
 import { Effect, Schema, Stream } from "effect";
 import { PresenceRegistry, holdLiveConnection } from "../../../presence/server.ts";
-import type { Storage, StorageUnavailable } from "../../../storage/server.ts";
 import { asksAsRunner, asksForAllChannels } from "./all-channels.ts";
 import { refusalSseEvent, sseEvent } from "./source.ts";
-import type { AgentSessions } from "../../../agent-sessions/server.ts";
+import type { CredentialWatch } from "./credential-ended.ts";
 import { Messages } from "../../../messages/server.ts";
 import { OfflineAlerts } from "../../../inbox/server.ts";
 import type { Presence } from "../../../presence/index.ts";
+import type { StorageUnavailable } from "../../../storage/server.ts";
 import { presenceName } from "../../../presence/index.ts";
-import { sentAgentSessionEnded } from "../../../agent-sessions/server.ts";
+import { sentCredentialEnded } from "./credential-ended.ts";
 
 const encodeConnected = Schema.encodeEffect(Schema.fromJsonString(ConnectedEventSchema));
 const presenceEvent = sseEvent(PresenceEventSchema);
 
-type LiveConnectionNeeds = Messages | PresenceRegistry | Storage | AgentSessions;
+type LiveConnectionNeeds = Messages | PresenceRegistry | CredentialWatch;
 
 function connected(stream: StreamRequest): Connected<LiveConnectionNeeds> {
   const { authorization, caller } = stream;
   return Effect.gen(function* readLatestOnRun() {
     const held = yield* holdLiveConnection({ authorization, caller, runner: asksAsRunner(stream) });
     const messages = yield* Messages;
-    const request = yield* Effect.context<AgentSessions>();
-    const sessionEnded = Effect.flatMap(Effect.provideContext(sentAgentSessionEnded, request), held.refused);
+    const request = yield* Effect.context<CredentialWatch>();
+    const sessionEnded = Effect.flatMap(Effect.provideContext(sentCredentialEnded, request), held.refused);
     const ended = Stream.fromEffect(Effect.flatMap(Effect.raceFirst(held.ended, sessionEnded), refusalSseEvent));
     const sayingConnected = Stream.fromEffect(
       Effect.gen(function* sayConnected() {

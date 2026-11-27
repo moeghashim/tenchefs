@@ -2,7 +2,7 @@ import type { AgentSessionResponse, JoinRequest } from "../../index.ts";
 import { DateTime, Effect, Option } from "effect";
 import type { DisplayName, Identity, IdentityName } from "../../../identities/index.ts";
 import type { Storage, StorageUnavailable, StoredAgentSession } from "../../../storage/server.ts";
-import { agentSessionLive, idleExpiryTooLong } from "./refusals.ts";
+import { agentSessionLive, idleExpiryTooLong, withParent } from "./refusals.ts";
 import { defaultIdleSeconds, idleSecondsOf } from "./idle-expiry.ts";
 import type { Refusal } from "../../../http/index.ts";
 import type { Secrets } from "../../../secrets/server.ts";
@@ -65,7 +65,7 @@ function issuer({ secrets, storage }: On) {
         joined: { ...times, hash, identity: agent.name, idleSeconds },
         sessionUrl,
       });
-      const issued = yield* storage.issueAgentSession({ force, session });
+      const issued = yield* Effect.flatMap(withParent({ force, session }), storage.issueAgentSession);
       if (issued.status === "live") {
         return yield* Effect.fail(agentSessionLive({ expiresAt: issued.expiresAt, identity: agent.name }));
       }

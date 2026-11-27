@@ -59,6 +59,10 @@ const AgentSessionSent = Context.Reference<Option.Option<TokenHash>>("cookout/id
   defaultValue: Option.none,
 });
 
+const CredentialSent = Context.Reference<Option.Option<TokenHash>>("cookout/identities/CredentialSent", {
+  defaultValue: Option.none,
+});
+
 const LoginCredentialSent = Context.Reference<Option.Option<TokenHash>>("cookout/identities/LoginCredentialSent", {
   defaultValue: Option.none,
 });
@@ -230,7 +234,11 @@ export const authenticate =
   (credentials: Credentials): Effect.Effect<Principal, Refusal | StorageUnavailable> =>
     sentToken(credentials).pipe(
       Effect.flatMap(secrets.hashToken),
-      Effect.flatMap((hash) => Effect.flatMap(storage.findIdentityByTokenHash(hash), principalOf(storage, hash))),
+      Effect.flatMap((hash) =>
+        Effect.flatMap(storage.findIdentityByTokenHash(hash), principalOf(storage, hash)).pipe(
+          Effect.map((principal): Principal => ({ ...principal, credential: hash })),
+        ),
+      ),
       Effect.filterOrFail(
         (principal) => principal.identity.deactivated !== true,
         () => identityDeactivated,
@@ -254,9 +262,14 @@ export const issueToken: Effect.Effect<IssuedToken, never, Secrets> = Effect.gen
   return { hash: yield* secrets.hashToken(token), token };
 });
 
+export function hashOf(sent: Token): Effect.Effect<TokenHash, never, Secrets> {
+  return Effect.flatMap(Secrets, (secrets) => secrets.hashToken(sent));
+}
+
 export {
   AgentSessionSent,
   Caller,
+  CredentialSent,
   HarnessSent,
   LoginCredentialSent,
   broughtInBy,
@@ -271,5 +284,13 @@ export {
   sentToken,
 };
 export type { Principal } from "./principals.ts";
+export type { Secrets } from "../../../secrets/server.ts";
 export { harnessOf } from "./harness-guard.ts";
-export { IdentityChanges, announced, announcedDeleted, reactivated, tokensEnded } from "./changes.ts";
+export {
+  IdentityChanges,
+  announced,
+  announcedDeleted,
+  credentialsEnded,
+  reactivated,
+  tokensEnded,
+} from "./changes.ts";

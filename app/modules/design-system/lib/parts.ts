@@ -32,6 +32,7 @@ interface FormParts extends Parts {
   readonly label: string;
   readonly field: string;
   readonly onSubmit: (value: string) => void;
+  readonly flush?: boolean;
 }
 
 interface FieldParts {
@@ -41,6 +42,7 @@ interface FieldParts {
 
 interface TextFieldParts extends FieldParts {
   readonly focused?: boolean;
+  readonly kind?: "secret" | "text";
 }
 
 interface DataAreaParts extends FieldParts {

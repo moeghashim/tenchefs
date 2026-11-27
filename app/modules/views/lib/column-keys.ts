@@ -10,9 +10,11 @@ const ROW = "a[data-feed-row]";
 const SELECTED_ROW = `${ROW}[aria-current="page"]`;
 const BOX = 'textarea[name="text"]';
 const PANEL = "aside";
+const CONVERSATION = 'aside[aria-label="Conversation"]';
+const MESSAGE_OR_ITS_LINK = `${MESSAGE}, ${MESSAGE} a[href]`;
 const LAST = -1;
 
-type ColumnAction = "intoMessageBox" | "intoMessages" | "toSidebar";
+type ColumnAction = "backToRow" | "intoMessageBox" | "intoMessages" | "toSidebar";
 
 interface ColumnKeys {
   readonly watch: (target: () => unknown) => void;
@@ -85,6 +87,14 @@ function chosenRow(): unknown {
   return rowOutsidePanel(SELECTED_ROW) ?? rowOutsidePanel(ROW);
 }
 
+function inConversation(target: unknown): boolean {
+  return target instanceof HTMLElement && target.matches(MESSAGE_OR_ITS_LINK) && target.closest(CONVERSATION) !== null;
+}
+
+function backToRow({ target }: KeyboardEvent): boolean {
+  return inConversation(target) && focusedOn(chosenRow());
+}
+
 interface Link {
   readonly link: HTMLAnchorElement;
   readonly chosen: () => unknown;
@@ -154,7 +164,7 @@ function intoMessageBox({ target }: KeyboardEvent): boolean {
 }
 
 function columnActions(keys: Readonly<ColumnKeys>): Readonly<Record<ColumnAction, Act>> {
-  return { intoMessageBox, intoMessages: intoMessages(keys), toSidebar };
+  return { backToRow, intoMessageBox, intoMessages: intoMessages(keys), toSidebar };
 }
 
 export { columnActions };

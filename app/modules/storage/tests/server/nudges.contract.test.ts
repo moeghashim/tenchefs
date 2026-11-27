@@ -157,22 +157,30 @@ it.effect.each(storageLayers)(
 );
 
 it.effect.each(storageLayers)(
-  "storage contract ($adapter): a reply or a close reads a thread's unread nudge, and a reopen leaves it read",
+  "storage contract ($adapter): a reply, a close or a reopen takes a thread's nudge out of the listing, read or not",
   ({ layer }) =>
-    Effect.gen(function* readByActivity() {
+    Effect.gen(function* goneByActivity() {
       const { post, reply, storage } = yield* grill(layer);
       const replied = yield* post(MONDAY, "replied");
       const closed = yield* post(MONDAY, "closed");
-      yield* storage.raiseDueNudges(FRIDAY, nudgeIntervals);
-      yield* reply(SATURDAY, replied.id);
-      yield* storage.closeThread(closed.id, { closedAt: SATURDAY, closedBy: BOB });
-      yield* storage.reopenThread(closed.id, NEXT_MONDAY);
+      const reopened = yield* post(MONDAY, "reopened");
+      const raised = yield* storage.raiseDueNudges(FRIDAY, nudgeIntervals);
+      yield* Effect.all(
+        [
+          storage.markNudgeRead(ADA, idAt(raised, MIDDLE)),
+          reply(SATURDAY, replied.id),
+          storage.closeThread(closed.id, { closedAt: SATURDAY, closedBy: BOB }),
+          storage.closeThread(reopened.id, { closedAt: SATURDAY, closedBy: BOB }),
+          storage.reopenThread(reopened.id, NEXT_MONDAY),
+        ],
+        { concurrency: 1 },
+      );
       const [unread, all, due] = yield* Effect.all(
         [storage.listNudges(ADA, "unread"), storage.listNudges(ADA, "all"), storage.nextNudgeDue(nudgeIntervals)],
         { concurrency: 1 },
       );
 
-      expect([unread, Arr.map(all, ({ read }) => read)]).toStrictEqual([[], [true, true]]);
+      expect([unread, all]).toStrictEqual([[], []]);
       expect(due).toBe(isoTime("2026-01-13T00:00:00.000Z"));
     }),
 );

@@ -143,15 +143,17 @@ it("approving a login puts focus on the page's heading, as Approve is gone", { t
   const started = await anonymousClient().startLogin({ host: "focus-laptop" });
   const close = openAt({
     client: human.client,
-    hash: `#/approve/${started.userCode}`,
+    hash: "#/approve",
     loginApprovals: createLoginApprovals(human.client),
   });
+  fireEvent.change(await screen.findByLabelText("Code"), { target: { value: started.userCode } });
+  fireEvent.click(inPane().getByRole("button", { name: "Show" }));
   await pressed(inPane().findByRole("button", { name: "Approve" }));
   await screen.findByText(/^Approved\./u);
 
   await waitFor(() => {
     expect(globalThis.document.activeElement).toBe(
-      inPane().getByRole("heading", { level: 1, name: "Approve a login" }),
+      inPane().getByRole("heading", { level: 1, name: "Approve a device" }),
     );
   });
 

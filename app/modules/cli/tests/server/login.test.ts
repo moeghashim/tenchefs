@@ -240,15 +240,19 @@ it.effect("a credentials file that isn't one is credentials_damaged", () =>
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );
 
-it.effect("login prints a link and a code, and once ada approves it, later commands act as ada", () =>
+it.effect("login prints the approval address and the code, never a link holding it, then acts as ada", () =>
   Effect.gen(function* browserLogin() {
     const { ada, cookout, env } = yield* setUp;
 
     const login = yield* logInByBrowser(env, ada);
     const whoami = yield* run(env, "whoami");
+    const code = codeIn(login.stderr);
+    const prompt = `Open ${cookout.url}/#/approve on a device where you're logged in and type the code ${code}`;
 
     expect(login).toMatchObject({ exitCode: 0, stdoutJson: { identity: { name: "ada" }, url: cookout.url } });
-    expect(login.stderr).toMatch(new RegExp(`^Open ${cookout.url}/#/approve/[A-Z0-9-]{9} and check`, "u"));
+    expect(Str.startsWith(prompt)(login.stderr)).toBe(true);
+    expect(login.stderr).toContain(`or run \`cookout login approve ${code}\` there.`);
+    expect(login.stderr).not.toMatch(new RegExp(`://\\S*${code}`, "u"));
     expect(whoami).toMatchObject({ exitCode: 0, stdoutJson: { identity: { name: "ada" }, source: "login" } });
   }).pipe(Effect.provide([testCookout(), commandLineServices])),
 );

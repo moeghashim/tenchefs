@@ -1,6 +1,7 @@
 import type { ChannelName, CookoutEvent, MessageId } from "../../sdk/index.ts";
 import type { Held, Queues } from "./messages-held.ts";
 import type { ReplyRequest, ThreadOps, ThreadsClient } from "./thread-reads.ts";
+import type { CallRequest } from "./webhook-command-call.ts";
 import { LOADING } from "./message-states.ts";
 import type { MessagesHeld } from "./messages-table.ts";
 import { createThreadReaders } from "./thread-readers.ts";
@@ -20,6 +21,8 @@ interface ThreadReader {
 interface Threads {
   readonly show: (place: ThreadPlace, reader: ThreadReader) => () => void;
   readonly reply: (place: ThreadPlace, request: ReplyRequest) => void;
+  readonly call: (place: ThreadPlace, request: CallRequest) => void;
+  readonly editCallData: (place: ThreadPlace, callData: string) => void;
   readonly ack: (place: ThreadPlace, id: MessageId) => void;
   readonly heard: (before: MessagesHeld, event: CookoutEvent) => void;
   readonly back: () => void;
@@ -147,6 +150,14 @@ function createThreads(options: ThreadsOptions): Threads {
           });
         }
       }
+    },
+    call: (place, request) => {
+      enqueue(openedAt(place), async (ops) => {
+        await ops.call(request);
+      });
+    },
+    editCallData: (place, callData) => {
+      openedAt(place).ops.editCallData(callData);
     },
     heard: hearing(threading),
     reply: (place, request) => {

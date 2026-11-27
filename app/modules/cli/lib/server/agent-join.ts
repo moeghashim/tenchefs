@@ -4,7 +4,8 @@ import type {
   AgentSessionResponse,
   StartAgentJoinRequest,
 } from "../../../agent-sessions/index.ts";
-import { Console, Duration, Effect, Function, Option } from "effect";
+import { Console, Effect, Function, Option } from "effect";
+import { pollEvery, waitingOutRateLimits } from "./collect-poll.ts";
 import type { CallFailure } from "./adapters/sdk.ts";
 import type { CookoutClient } from "../../../sdk/index.ts";
 import type { IdentityName } from "../../../identities/index.ts";
@@ -22,8 +23,6 @@ interface JoinAsked {
 }
 
 const NOTHING = {};
-const POLL_SECONDS = 2;
-const pollEvery = Duration.seconds(POLL_SECONDS);
 
 const expired: CallFailure = {
   code: "agent_join_request_expired",
@@ -47,17 +46,16 @@ function approvalOf(
   const collect = Effect.tryPromise({ catch: toFailure, try: () => client.collectAgentJoin(requestId) }).pipe(
     Effect.catchIf(isGone, failExpired),
   );
-  const pollAgain = Effect.andThen(
-    Effect.sleep(pollEvery),
-    Effect.suspend(() => approvalOf(client, requestId)),
-  );
-  return Effect.filterOrElse(collect, isApproved, Function.constant(pollAgain));
+  const again = Effect.suspend(() => approvalOf(client, requestId));
+  const pollAgain = Effect.andThen(Effect.sleep(pollEvery), again);
+  return Effect.filterOrElse(collect, isApproved, Function.constant(pollAgain)).pipe(waitingOutRateLimits(again));
 }
 
 function approvalPrompt(url: string, { approvalPath, expiresAt, userCode }: AgentJoinRequestStartedResponse): string {
   return (
-    `No Login here, so a person approves this join. Open ${url}${approvalPath}, check it shows the code ` +
-    `${userCode}, then approve. The link lasts until ${expiresAt}.`
+    `No Login here, so a person approves this join. Open ${url}${approvalPath} on a device where they're logged in ` +
+    `and type the code ${userCode}, or run \`cookout approve-join ${userCode}\` there. ` +
+    `The code lasts until ${expiresAt}.`
   );
 }
 

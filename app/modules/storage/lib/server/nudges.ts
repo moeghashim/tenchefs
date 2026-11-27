@@ -75,7 +75,6 @@ interface Raising {
 }
 
 interface Shown {
-  readonly open: ReadonlyMap<MessageId, OpenThread>;
   readonly on: NudgesOn;
   readonly recipient: IdentityName;
 }
@@ -164,12 +163,12 @@ function raise({ due, now, on }: Raising): Fails<readonly StoredNudge[]> {
   });
 }
 
-function isUnread(open: Shown["open"], record: NudgeRecord): boolean {
+function isStillQuiet(open: ReadonlyMap<MessageId, OpenThread>, record: NudgeRecord): boolean {
   const thread = open.get(record.thread);
-  return !record.read && Predicate.isNotUndefined(thread) && thread.lastActivityAt < record.raisedAt;
+  return Predicate.isNotUndefined(thread) && thread.lastActivityAt < record.raisedAt;
 }
 
-function shownNudge({ on, open, recipient }: Shown): (record: NudgeRecord) => Fails<readonly StoredNudge[]> {
+function shownNudge({ on, recipient }: Shown): (record: NudgeRecord) => Fails<readonly StoredNudge[]> {
   return (record) =>
     Effect.map(on.messages.getThread(record.thread), (found) =>
       Arr.map(Arr.fromNullishOr(found), ({ parent }) => ({
@@ -177,14 +176,14 @@ function shownNudge({ on, open, recipient }: Shown): (record: NudgeRecord) => Fa
         kind: record.kind,
         parent,
         raisedAt: record.raisedAt,
-        read: !isUnread(open, record),
+        read: record.read,
         recipient,
       })),
     );
 }
 
 function openThreadsFor(on: NudgesOn, records: readonly NudgeRecord[]): Fails<ReadonlyMap<MessageId, OpenThread>> {
-  if (Arr.every(records, (record) => record.read)) {
+  if (!Arr.isReadonlyArrayNonEmpty(records)) {
     return Effect.succeed(new Map());
   }
   return Effect.map(
@@ -197,7 +196,8 @@ function listed(on: NudgesOn, recipient: IdentityName): Fails<readonly StoredNud
   return Effect.gen(function* listNudges() {
     const records = yield* on.records.ofRecipient(recipient);
     const open = yield* openThreadsFor(on, records);
-    const shown = yield* Effect.forEach(records, shownNudge({ on, open, recipient }), ONE_AT_A_TIME);
+    const quiet = Arr.filter(records, (record) => isStillQuiet(open, record));
+    const shown = yield* Effect.forEach(quiet, shownNudge({ on, recipient }), ONE_AT_A_TIME);
     return Arr.flatten(shown);
   });
 }

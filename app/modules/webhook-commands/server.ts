@@ -5,7 +5,7 @@
  * (ADR 0027), or reuses an agent of that name, and issues the command's
  * secret from `Secrets`, shown once; the live stream announces it to every web UI. Rotating issues a new secret the same way,
  * and the old one signs no delivery from then on. A call's data is checked against the
- * command's JSON Schema, then posted as a top-level message by the caller,
+ * command's JSON Schema, then posted by the caller as a top-level message, or as a reply in the thread of its `replyTo`,
  * and the answer comes without waiting for any delivery to the webhook.
  * `webhookCommandsLayer` sends each call to the command's URL in the background:
  * `{ command, data, channel, threadId, token, callId }` as JSON, signed in the

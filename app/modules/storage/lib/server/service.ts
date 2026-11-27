@@ -5,6 +5,7 @@ import type { ChannelsSection } from "./channels.ts";
 import type { HealthSection } from "./health.ts";
 import type { IdentitySections } from "./identity-section-types.ts";
 import type { InboxSection } from "./inbox.ts";
+import type { SealedSecretsSection } from "./sealed-secrets.ts";
 import type { WebhookCommandCallsSection } from "./command-calls.ts";
 import type { WebhookCommandsSection } from "./commands.ts";
 
@@ -17,7 +18,8 @@ type BoardStorage = HealthSection &
   WebhookCommandsSection &
   WebhookCommandCallsSection &
   AgentJoinRequestsSection &
-  JoinCodesSection;
+  JoinCodesSection &
+  SealedSecretsSection;
 
 export type StorageService = BoardStorage & ScheduledMessagesSection;
 

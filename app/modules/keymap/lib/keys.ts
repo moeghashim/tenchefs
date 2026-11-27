@@ -119,7 +119,7 @@ const KEYS = [
   {
     action: "toLeftColumn",
     chord: "ArrowLeft",
-    does: "Column on the left, from the box's first character",
+    does: "Column on the left, or the Inbox's newest message, from the box's first character",
     scope: "text box",
   },
   {
@@ -166,6 +166,12 @@ const KEYS = [
   { action: "toggleThreadClosed", chord: "x", does: "Close its thread, or reopen it", scope: "message" },
   { action: "deleteMessage", chord: "Delete", does: "Delete it, when you wrote it", scope: "message" },
   { action: "toSidebar", chord: "ArrowLeft", does: "Sidebar, on the channel's link", scope: "message" },
+  {
+    action: "backToRow",
+    chord: "ArrowLeft",
+    does: "Back to its row, from the Inbox's conversation",
+    scope: "message",
+  },
   { action: "intoMessageBox", chord: "ArrowDown", does: "Message box, from the newest message", scope: "message" },
   { action: "nextMessage", chord: "j", does: "Next message", scope: "message list" },
   { action: "nextMessage", chord: "ArrowDown", does: "Next message", scope: "message list" },

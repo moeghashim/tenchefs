@@ -9,7 +9,10 @@
  * - `Tag` is one such small tag, such as `admin`.
  * - `IdentityLink` is the logged-in identity's avatar and name as a link, highlighted when open.
  * - `IdentityRow` is a link to an identity, with its avatar, name, any tags and a muted detail line, highlighted when open.
- * - `Profile` is one identity's large avatar beside its `ProfileName` and its details.
+ * - `ProfileFrame` is one identity's whole profile, filling its panel: its `Profile` pinned on top, then its `ProfileSections`.
+ * - `ProfileSections` holds a profile's `ProfileSection`s, with more space between them than inside each, and scrolls them under the `Profile` when they don't fit, so the page itself never scrolls.
+ * - `Profile` is one identity's large avatar beside its `ProfileName`, its details and any control for the avatar, at the top of its `ProfileFrame`.
+ * - `ProfileSection` is a group of a profile's controls under a small muted heading (a level-4 heading naming the section).
  * - `ProfileName` is an identity's name and any tags, as a heading.
  * - `DateText` is a moment as a date, in mono.
  * - `QuietLink` is a muted link in such a line, such as a name linking to its profile.
@@ -48,7 +51,10 @@ export {
   DateText,
   IdentityRow,
   Profile,
+  ProfileFrame,
+  ProfileSections,
   ProfileName,
+  ProfileSection,
   AvatarImages,
 } from "./lib/content.ts";
 export type { AvatarImage, AvatarImageSource } from "./lib/avatar-parts.ts";

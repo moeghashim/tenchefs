@@ -1,6 +1,6 @@
 import type { CommandWithSecretResponse, RegisteredWebhookCommand } from "../../index.ts";
 import { DateTime, Effect, Option, Predicate } from "effect";
-import { handlerOf, isWebhookCommandName } from "../../index.ts";
+import { handlerOf, isCommandName, isWebhookCommandName } from "../../index.ts";
 import { requireDataSchema, webhookCommandNotFound } from "./call.ts";
 import type { AddCommandRequestSchema } from "./wire.ts";
 import type { Owner } from "../../../identities/index.ts";
@@ -21,6 +21,21 @@ const CONFLICT = 409;
 
 function webhookCommandExists(name: string): Refusal {
   return { code: "command_exists", message: `The command ${name} already exists.`, status: CONFLICT };
+}
+
+function commandNameTaken(name: string): Refusal {
+  return {
+    code: "command_exists",
+    message: `${name} is a Command's name (/${name}), so no Webhook command can take it.`,
+    status: CONFLICT,
+  };
+}
+
+function notCommandName(name: string): Effect.Effect<void, Refusal> {
+  if (isCommandName(name)) {
+    return Effect.fail(commandNameTaken(name));
+  }
+  return Effect.void;
 }
 
 function handlerNotAgent(name: string): Refusal {
@@ -51,7 +66,8 @@ function addWebhookCommand({
   readonly owner: Owner;
 }): Effect.Effect<CommandWithSecretResponse, Refusal | StorageUnavailable, AddNeeds> {
   return Effect.gen(function* addStampedWebhookCommand() {
-    const command = yield* requireDataSchema(fields.schema).pipe(
+    const command = yield* notCommandName(fields.name).pipe(
+      Effect.andThen(requireDataSchema(fields.schema)),
       Effect.andThen(Effect.map(DateTime.now, (now) => stamped(fields, isoTimeOf(now)))),
     );
     const secrets = yield* Secrets;

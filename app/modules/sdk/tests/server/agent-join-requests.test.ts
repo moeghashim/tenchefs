@@ -17,6 +17,7 @@ const CONFLICT = 409;
 const LIFETIME_MINUTES = 10;
 const THREE = 3;
 const FOUR = 4;
+const SOME_TEXT: unknown = expect.any(String);
 const asked = { as: "triage-agent", host: "build-box" };
 
 interface Started {
@@ -70,18 +71,22 @@ it.effect("an agent join request is pending until a human approves it, then join
     const actingAs = yield* whoIs(on.cookout, session);
 
     expect([on.started.approvalPath, on.started.expiresAt, pending]).toStrictEqual([
-      `/#/approve-join/${on.started.userCode}`,
+      "/#/approve",
       "2026-01-01T00:10:00.000Z",
       { status: "pending" },
     ]);
     expect(shown.agentJoinRequest).toStrictEqual({
       ...asked,
       approved: false,
+      clientIp: SOME_TEXT,
+      createdAt: "2026-01-01T00:00:00.000Z",
       creates: false,
       expiresAt: on.started.expiresAt,
       idleExpiry: "30d",
       joins: "triage-agent",
+      kind: "agent_join",
       userCode: on.started.userCode,
+      where: asked.host,
     });
     expect(session).toMatchObject({ created: false, expiresAt: "2026-01-31T00:00:00.000Z", identity: "triage-agent" });
     expect(actingAs).toMatchObject({ kind: "agent", name: "triage-agent", owner: "ada" });

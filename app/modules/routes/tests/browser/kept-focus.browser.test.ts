@@ -9,7 +9,11 @@ import { unique } from "./names.ts";
 const LAST = -1;
 const MESSAGE_BOX = { exact: true, name: "Message" } as const;
 const NOWHERE = "http://127.0.0.1:9/command";
-const SCHEMA = { properties: { version: { type: "string" } }, required: ["version"], type: "object" } as const;
+const SCHEMA = {
+  properties: { count: { type: "integer" }, version: { type: "string" } },
+  required: ["version"],
+  type: "object",
+} as const;
 
 function postForm(page: Page): Locator {
   return inPane(page).getByRole("form", { exact: true, name: "Post to the channel" });

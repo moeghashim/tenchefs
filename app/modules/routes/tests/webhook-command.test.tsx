@@ -113,7 +113,11 @@ it("a refused call shows the schema error next to its field and keeps what was t
     channel: "web-command-short",
     webhookCommand: {
       name: "web-call-short",
-      schema: { properties: { branch: { minLength: 3, type: "string" } }, required: ["branch"], type: "object" },
+      schema: {
+        properties: { branch: { minLength: 3, type: "string" }, count: { type: "integer" } },
+        required: ["branch"],
+        type: "object",
+      },
     },
   });
   const close = await openChannel({ channel: "web-command-short" });

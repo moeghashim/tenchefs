@@ -12,6 +12,8 @@ import { createTestAgent } from "../../../testing/index.ts";
 
 const EXIT_FAILURE = 1;
 
+const SOME_TEXT: unknown = expect.any(String);
+
 const board = Effect.gen(function* seedBoard() {
   const cookout = yield* TestCookout;
   yield* cookout.createIdentity("ada", { kind: "human" });
@@ -20,7 +22,7 @@ const board = Effect.gen(function* seedBoard() {
   return { chief, cookout, env };
 });
 
-it.effect("an agent approves another agent's join by its code, and the new agent collects its own session", () =>
+it.effect("an agent approves another agent's join by its code, printing its details, and the new agent collects", () =>
   Effect.gen(function* approveByCode() {
     const { chief, cookout, env } = yield* board;
     yield* answer(() => createTestAgent({ broughtIn: true, by: chief.client, displayName: "worker", name: "worker" }));
@@ -35,7 +37,18 @@ it.effect("an agent approves another agent's join by its code, and the new agent
 
     expect(approved).toMatchObject({
       exitCode: 0,
-      stdoutJson: { agentJoinRequest: { approved: true, creates: false, idleExpiry: "1d", joins: "worker" } },
+      stdoutJson: {
+        agentJoinRequest: {
+          approved: true,
+          clientIp: SOME_TEXT,
+          createdAt: SOME_TEXT,
+          creates: false,
+          idleExpiry: "1d",
+          joins: "worker",
+          kind: "agent_join",
+          where: "box",
+        },
+      },
     });
     expect(collected).toMatchObject({ agentSession: { identity: "worker" }, status: "approved" });
   }).pipe(Effect.provide([testCookout(), commandLineServices])),

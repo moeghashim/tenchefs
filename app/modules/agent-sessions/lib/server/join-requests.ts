@@ -3,6 +3,7 @@ import type {
   AgentJoinApproval,
   AgentJoinCollection,
   AgentJoinRequest,
+  RequestOrigin,
   StorageUnavailable,
 } from "../../../storage/server.ts";
 import type {
@@ -26,16 +27,16 @@ import {
   termsAsked,
   viewOf,
 } from "./join-request-terms.ts";
-import { agentNotFound, agentSessionLive, joinNotOwned } from "./refusals.ts";
+import { agentNotFound, agentSessionLive, joinNotOwned, withParent } from "./refusals.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { On } from "./join.ts";
 import type { Refusal } from "../../../http/index.ts";
-import { agentJoinApprovalPathOf } from "../../index.ts";
+import { agentJoinApprovalPath } from "../../index.ts";
 import { agentToApprove } from "./resolve.ts";
 
 type Fails<Value> = Effect.Effect<Value, Refusal | StorageUnavailable>;
 
-interface StartAgentJoin {
+interface StartAgentJoin extends RequestOrigin {
   readonly as: IdentityName;
   readonly host: string;
   readonly idleExpiry?: string;
@@ -118,7 +119,7 @@ function starter(on: Changing): JoinRequests["startJoin"] {
         Function.constant(Effect.die(codeTaken)),
       );
       yield* Effect.andThen(stored, on.joinRequestChanges.started(startedOf(identity, { createdAt, expiresAt })));
-      return { approvalPath: agentJoinApprovalPathOf(userCode), expiresAt, requestId, userCode };
+      return { approvalPath: agentJoinApprovalPath, expiresAt, requestId, userCode };
     });
 }
 
@@ -210,7 +211,8 @@ function decided(on: On, { approval, caller }: Approving, found: AgentJoinReques
     if (!force) {
       yield* refuseLive(on, identity.name);
     }
-    return { approval: { created, force, identity: identity.name, idleSeconds: terms.idleSeconds }, terms };
+    const approved = yield* withParent({ created, force, identity: identity.name, idleSeconds: terms.idleSeconds });
+    return { approval: approved, terms };
   });
 }
 

@@ -1,28 +1,43 @@
-import { Array as Arr, Effect, String as Str } from "effect";
+import { Array as Arr, DateTime, Effect, String as Str } from "effect";
 import { StorageUnavailable, postgresStorage } from "../../server.ts";
 import {
   appendTo,
   channelFixture,
   emptyPostgresDatabase,
   identityFixture,
+  isoTime,
   newMessageFixture,
   onPostgresDatabase,
   openStore,
+  testSecretsCipher,
 } from "../../../testing/server.ts";
 import { expect, it } from "@effect/vitest";
 import type { Redacted } from "effect";
+import { isoTimeOf } from "../../../time/server.ts";
 import { tokenHash } from "../../../identities/index.ts";
 
 const HASH_LENGTH = 64;
 const hashA = tokenHash(Str.repeat(HASH_LENGTH)("a"));
 const hashB = tokenHash(Str.repeat(HASH_LENGTH)("b"));
+const hashC = tokenHash(Str.repeat(HASH_LENGTH)("c"));
 const matt = identityFixture("matt", { kind: "human" });
 const ada = identityFixture("ada", { kind: "human" });
-
 const BEFORE_INSERT = "CREATE TRIGGER fault BEFORE INSERT ON identities FOR EACH ROW EXECUTE FUNCTION fault()";
 const AT_COMMIT = `CREATE CONSTRAINT TRIGGER fault AFTER INSERT ON identities DEFERRABLE INITIALLY DEFERRED
   FOR EACH ROW EXECUTE FUNCTION fault()`;
+const BEFORE_SECRETS_KEY = [
+  "DROP TABLE login_links, credential_lineage",
+  "ALTER TABLE login_requests DROP COLUMN kind",
+  "ALTER TABLE login_requests DROP COLUMN approved_with",
+  "ALTER TABLE agent_join_requests DROP COLUMN approved_with",
+  "ALTER TABLE login_requests DROP COLUMN client_ip, DROP COLUMN user_agent",
+  "ALTER TABLE agent_join_requests DROP COLUMN client_ip, DROP COLUMN user_agent",
+  "DROP TABLE secrets_key",
+];
 const BEFORE_SEARCH = [
+  ...BEFORE_SECRETS_KEY,
+  "ALTER TABLE login_credentials DROP COLUMN last_used_at, DROP COLUMN expires_at",
+  "ALTER TABLE deliveries DROP COLUMN called_at",
   "ALTER TABLE messages DROP COLUMN title, DROP COLUMN title_set_by, DROP COLUMN title_set_at",
   "DROP TABLE avatars_to_remove",
   "DROP TABLE admin_setting",
@@ -41,6 +56,15 @@ const BEFORE_SEARCH = [
   "DROP FUNCTION message_search_words",
   "UPDATE schema_version SET version = 3",
 ];
+const BEFORE_LOGIN_EXPIRY = [
+  ...BEFORE_SECRETS_KEY,
+  `UPDATE login_credentials SET made_with = '${hashA}' WHERE hash = '${hashB}'`,
+  "ALTER TABLE login_credentials DROP COLUMN last_used_at, DROP COLUMN expires_at",
+  "UPDATE schema_version SET version = version - 6",
+];
+const DAYS_UNUSED = 90;
+const JUST_BEFORE = -1;
+const AT_EXPIRY = 0;
 const FAIL_ONCE = "IF nextval('fault_attempts') <= 1 THEN RAISE EXCEPTION 'conflict' USING ERRCODE = '40001'; END IF;";
 
 function failInsertsWith(
@@ -63,7 +87,7 @@ function failInsertsWith(
 }
 
 function opened(url: Redacted.Redacted): ReturnType<typeof openStore<StorageUnavailable, never>> {
-  return url.pipe(postgresStorage, openStore);
+  return openStore(postgresStorage({ cipher: testSecretsCipher, url }));
 }
 
 function openAndClose(url: Redacted.Redacted): Effect.Effect<void, StorageUnavailable> {
@@ -110,9 +134,7 @@ it.effect("two stores opened on the same empty database at once apply each migra
   Effect.scoped(
     Effect.gen(function* together() {
       const url = yield* emptyPostgresDatabase;
-      const [first, second] = yield* Effect.all([opened(url), opened(url)], {
-        concurrency: "unbounded",
-      });
+      const [first, second] = yield* Effect.all([opened(url), opened(url)], { concurrency: "unbounded" });
       yield* first.storage.createIdentity(matt, hashA);
       const identities = yield* second.storage.listIdentities();
       yield* Effect.andThen(first.close, second.close);
@@ -220,6 +242,59 @@ it.effect("the search migration finds every message stored before search existed
       yield* second.close;
 
       expect(Arr.map(results, ({ message }) => message.id)).toStrictEqual([said.id]);
+    }),
+  ),
+);
+
+const wallClock = Effect.map(DateTime.now, isoTimeOf);
+
+function daysUnused(at: ReturnType<typeof isoTimeOf>, seconds: number): ReturnType<typeof isoTimeOf> {
+  return isoTimeOf(DateTime.add(DateTime.makeUnsafe(at), { days: DAYS_UNUSED, seconds }));
+}
+
+const [madeAt, dayAfter] = [isoTime("2026-01-01T00:00:00.000Z"), isoTime("2026-01-02T00:00:00.000Z")];
+
+function loginStoredBefore(host: string, statements: readonly string[]): typeof emptyPostgresDatabase {
+  return Effect.gen(function* storeLoginThenDowngrade() {
+    const url = yield* emptyPostgresDatabase;
+    const first = yield* opened(url);
+    yield* first.storage.createIdentity(ada, hashA);
+    const login = { credentialHash: hashB, host, identity: ada.name, now: madeAt, parent: hashA };
+    yield* first.storage.issueLoginCredential(login);
+    yield* first.close;
+    yield* onPostgresDatabase({ statements, url });
+    return url;
+  });
+}
+
+it.live("a Login credential stored before login expiry authenticates after the upgrade, last used at the upgrade", () =>
+  Effect.scoped(
+    Effect.gen(function* upgradeLogins() {
+      const url = yield* loginStoredBefore("ada-laptop", BEFORE_LOGIN_EXPIRY);
+      const before = yield* wallClock;
+      const second = yield* opened(url);
+      const after = yield* wallClock;
+      const late = yield* second.storage.checkLoginCredential({ hash: hashB, now: daysUnused(after, AT_EXPIRY) });
+      const used = yield* second.storage.useLoginCredential({ hash: hashB, now: daysUnused(before, JUST_BEFORE) });
+      yield* second.close;
+
+      expect(late).toStrictEqual({ status: "expired" });
+      expect(used).toMatchObject({ identity: { name: ada.name }, status: "active" });
+    }),
+  ),
+);
+
+it.effect("a web session stored on Postgres before lineage is made by its Identity token, which rotating revokes", () =>
+  Effect.scoped(
+    Effect.gen(function* upgradeLineage() {
+      const second = yield* Effect.flatMap(loginStoredBefore("web UI", BEFORE_LOGIN_EXPIRY), opened);
+      const listed = yield* second.storage.listSessions({ current: hashC, identity: ada.name, now: dayAfter });
+      yield* second.storage.replaceToken(ada.name, hashC);
+      const revoked = yield* second.storage.revokeBelowRevokedTokens(ada.name, dayAfter);
+      yield* second.close;
+
+      expect(listed).toMatchObject([{ kind: "web", madeAt, madeBy: { kind: "identity token" }, where: "web browser" }]);
+      expect(revoked).toStrictEqual([{ hash: hashB, identity: ada.name, kind: "session" }]);
     }),
   ),
 );

@@ -82,7 +82,11 @@ function forYouRows(): readonly string[] {
 }
 
 function earlierNudges(): readonly string[] {
-  return textsOf(within(screen.getByRole("list", { name: "Earlier nudges" })).getAllByRole("listitem"));
+  const list = screen.queryByRole("list", { name: "Earlier nudges" });
+  if (list === null) {
+    return [];
+  }
+  return textsOf(within(list).getAllByRole("listitem"));
 }
 
 function clickInForYou(name: string): void {
@@ -131,19 +135,14 @@ it.effect("after 3 quiet days the starter's inbox shows the nudge under For you 
   }).pipe(Effect.scoped, Effect.provide(testCookout())),
 );
 
-it.effect("Close in a nudge row closes the thread as the reader, and the row moves to Earlier", () =>
+it.effect("Close in a nudge row closes the thread as the reader, and the row leaves the inbox, Earlier too", () =>
   Effect.gen(function* closeInRow() {
     const { ada, thread } = yield* nudgedLive;
     clickInForYou("Close");
     yield* caughtUp;
     const { parent } = yield* answer(() => ada.client.getThread(thread.id));
 
-    expect([parent.closedBy, forYouRows(), inboxCounts(), earlierNudges()]).toStrictEqual([
-      "ada",
-      [],
-      [],
-      [expect.stringContaining(NUDGE)],
-    ]);
+    expect([parent.closedBy, forYouRows(), inboxCounts(), earlierNudges()]).toStrictEqual(["ada", [], [], []]);
 
     yield* Effect.map(
       answer(() => ada.client.inbox()),
@@ -186,16 +185,13 @@ it.effect("Mark all as read marks the nudge read with the rest, moving it to Ear
   }).pipe(Effect.scoped, Effect.provide(testCookout())),
 );
 
-it.effect("a reply by someone else in the thread clears the nudge row live", () =>
+it.effect("a reply by someone else in the thread clears the nudge row live, from Earlier too", () =>
   Effect.gen(function* replyClears() {
     const { bob, thread } = yield* nudgedLive;
     yield* answer(() => bob.client.createMessage({ channel: "grill", replyTo: thread.id, text: "I do" }));
     yield* answer(() => inPane().findByText("I do"));
 
-    expect([forYouRows(), earlierNudges()]).toStrictEqual([
-      [expect.not.stringContaining(NUDGE)],
-      [expect.stringContaining(NUDGE)],
-    ]);
+    expect([forYouRows(), earlierNudges()]).toStrictEqual([[expect.not.stringContaining(NUDGE)], []]);
   }).pipe(Effect.scoped, Effect.provide(testCookout())),
 );
 

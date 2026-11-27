@@ -2,30 +2,30 @@ import { callDataOf, fieldsOf, promptOf, shownCall, typedIn } from "./prompt-fie
 import { useCallback, useMemo } from "react";
 import { CallRefusal } from "./call-refusal.tsx";
 import type { CallState } from "../../board/index.ts";
-import type { ChannelName } from "../../sdk/index.ts";
 import { PromptForm } from "../../design-system/controls.tsx";
 import type { PromptKeys } from "./use-prompt-keys.ts";
 import type { ReactNode } from "react";
 import type { WebhookCommand } from "../../webhook-commands/index.ts";
+import type { WebhookCommandCalls } from "./use-board.ts";
 import { WebhookCommandFields } from "./webhook-command-fields.tsx";
-import { useChannelCalls } from "./use-board.ts";
 import { usePromptKeys } from "./use-prompt-keys.ts";
 
 const TEXT = { button: "Call", calling: "Calling…" } as const;
 
 interface WebhookCommandPromptProps {
   readonly webhookCommand: WebhookCommand;
-  readonly channel: ChannelName;
+  readonly calls: WebhookCommandCalls;
   readonly call: CallState;
   readonly callData: string;
   readonly keymap: PromptKeys["keymap"];
   readonly onBack: () => void;
   readonly onDone: () => void;
+  readonly onCancel: () => void;
 }
 
 export function WebhookCommandPrompt(props: WebhookCommandPromptProps): ReactNode {
-  const { callData, channel, webhookCommand: command, onDone } = props;
-  const { call, editCallData } = useChannelCalls(channel);
+  const { callData, calls, webhookCommand: command, onCancel, onDone } = props;
+  const { call, editCallData } = calls;
   const { fields, prompt } = useMemo(() => {
     const asked = promptOf(command.schema);
     return { fields: fieldsOf(asked), prompt: asked };
@@ -38,12 +38,13 @@ export function WebhookCommandPrompt(props: WebhookCommandPromptProps): ReactNod
     [editCallData, typed],
   );
   const handleSubmit = useCallback(() => {
-    call(command.name, callDataOf({ kept: callData, prompt, typed }), onDone);
+    const data = callDataOf({ kept: callData, prompt, typed });
+    call({ called: onDone, data, refused: null, webhookCommand: command.name });
   }, [call, callData, command.name, onDone, prompt, typed]);
   const handleCancel = useCallback(() => {
     editCallData("");
-    onDone();
-  }, [editCallData, onDone]);
+    onCancel();
+  }, [editCallData, onCancel]);
   const label = usePromptKeys({ keymap: props.keymap, label: `Call /${command.name}`, onEscape: props.onBack });
   const shown = shownCall({ call: props.call, webhookCommand: command.name });
   return (

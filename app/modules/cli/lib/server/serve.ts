@@ -21,12 +21,19 @@ import {
   adminNameRule,
   adminToken,
   adminTokenRule,
+  behindFly,
   databasePath,
   host,
   port,
   publicUrl,
 } from "../../../config/server.ts";
-import { chosenAssetStore, servedStorage } from "./serve-stores.ts";
+import {
+  chosenAssetStore,
+  otherSecretsKey,
+  secretsCipherOrRefuse,
+  secretsSealed,
+  servedStorage,
+} from "./serve-stores.ts";
 import { firstAdminName, token } from "../../../identities/index.ts";
 import { httpServer, serverUrl } from "../../../http/server.ts";
 
@@ -57,6 +64,7 @@ export const cookoutServer = ({
     Layer.provideMerge(adminTokenSet({ adminName: name, adminToken: admin })),
     Layer.provideMerge(domainLayers),
     Layer.provideMerge(boardUrlLayer(serving.publicUrl ?? "")),
+    Layer.provideMerge(secretsSealed),
   );
 
 function webFolderOf({ webFolder }: ServeLayers): Pick<Serving, "webFolder"> {
@@ -160,12 +168,24 @@ const startOn = Effect.fnUntraced(function* startOnStorage(
   { path, served }: { readonly path: string; readonly served: ServedStorage },
 ) {
   const admin = yield* adminTokenOrRefuse;
+  const cipher = yield* secretsCipherOrRefuse;
   const name = yield* adminNameOrRefuse;
+  const onFly = yield* behindFly;
   const assets = yield* chosenAssetStore(path);
-  const stores = Layer.merge(layers.storage(served.setting), assets);
-  const server = cookoutServer({ ...listen, ...webFolderOf(layers), adminName: name, adminToken: admin });
+  const stores = Layer.merge(layers.storage({ cipher, setting: served.setting }), assets);
+  const server = cookoutServer({
+    ...listen,
+    ...webFolderOf(layers),
+    adminName: name,
+    adminToken: admin,
+    behindFly: onFly,
+  });
   const services = yield* Layer.build(Layer.provide(server, stores).pipe(Layer.provide(triggerCallerLive))).pipe(
-    Effect.catchTags({ AdminNameIsAgent: adminNameIsAgent, StorageUnavailable: storageUnavailable(served.redact) }),
+    Effect.catchTags({
+      AdminNameIsAgent: adminNameIsAgent,
+      SecretsKeyMismatch: () => otherSecretsKey,
+      StorageUnavailable: storageUnavailable(served.redact),
+    }),
   );
   const url = yield* serverUrl.pipe(Effect.provideContext(services));
   yield* printLine({ database: served.database, listening: url });

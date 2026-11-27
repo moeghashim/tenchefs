@@ -85,7 +85,6 @@ function triggerSteps({ page }: Walking): readonly Step[] {
 function rotateSteps({ page }: Walking): readonly Step[] {
   const rotate = button(page, "Rotate token");
   return [
-    { focused: rotate, keys: "Tab" },
     { focused: inConfirm(page, "Cancel"), keys: "Enter" },
     { focused: rotate, gone: [inDialog(page)], keys: "Escape" },
     { focused: inConfirm(page, "Cancel"), keys: "Enter" },
@@ -143,7 +142,7 @@ function deleteSteps({ cast, page }: Walking): readonly Step[] {
   ];
 }
 
-test("an agent's profile by keyboard alone: display name, description, trigger URL and token, Rotate token, copy token, Revoke, Transfer and Delete", async ({
+test("an agent's profile by keyboard alone: display name, description, trigger URL and token, Revoke, Rotate token, copy token, Transfer and Delete", async ({
   page,
 }) => {
   await copiesRecorded(page);
@@ -154,8 +153,8 @@ test("an agent's profile by keyboard alone: display name, description, trigger U
     steps: [
       ...textSteps(walking),
       ...triggerSteps(walking),
-      ...rotateSteps(walking),
       ...revokeSteps(walking),
+      ...rotateSteps(walking),
       ...transferSteps(walking),
       ...deleteSteps(walking),
     ],

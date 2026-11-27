@@ -1,6 +1,7 @@
 import { Array as Arr, Effect, Schema } from "effect";
 import type { FileSystem, Scope } from "effect";
 import type { FullStorage } from "./memory-store.ts";
+import type { SecretsCipher } from "../../../secrets/server.ts";
 import type { SqliteDatabase } from "./adapters/sqlite.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { openSqliteStore } from "./sqlite-store.ts";
@@ -34,10 +35,12 @@ function planOf(db: SqliteDatabase, sql: string): Effect.Effect<QueryPlan, Stora
 
 interface Planning<Failure> {
   readonly path: string;
+  readonly cipher: SecretsCipher;
   readonly work: (storage: FullStorage) => Effect.Effect<unknown, Failure>;
 }
 
 function sqliteQueryPlans<Failure>({
+  cipher,
   path,
   work,
 }: Planning<Failure>): Effect.Effect<
@@ -55,7 +58,7 @@ function sqliteQueryPlans<Failure>({
       opened.push(db);
       return { ...db, all: spied(note, db.all), get: spied(note, db.get), run: spied(note, db.run) };
     }
-    const storage = yield* openSqliteStore({ path, watch });
+    const storage = yield* openSqliteStore({ cipher, path, watch });
     yield* work(storage);
     const statements = Arr.fromIterable(seen);
     const plansPerDatabase = yield* Effect.forEach(

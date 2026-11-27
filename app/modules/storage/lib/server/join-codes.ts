@@ -10,6 +10,7 @@ interface NewJoinCode {
   readonly agent: IdentityName;
   readonly createdAt: IsoTime;
   readonly expiresAt: IsoTime;
+  readonly parent?: TokenHash | undefined;
 }
 
 interface RedeemJoinCode {
@@ -65,7 +66,11 @@ function sessionFor({ agent, redeem }: Redeeming): IssueAgentSession {
   const { host, idleSeconds, now, sessionHash, sessionUrl } = redeem;
   const expiresAt = renewedExpiry({ idleSeconds, now });
   const session = { expiresAt, hash: sessionHash, identity: agent, idleSeconds, issuedAt: now };
-  return { force: false, session: withOptional(withOptional(session, "host", host), "sessionUrl", sessionUrl) };
+  return {
+    force: false,
+    parent: redeem.codeHash,
+    session: withOptional(withOptional(session, "host", host), "sessionUrl", sessionUrl),
+  };
 }
 
 function redemptionOf({ issue, result }: Issued): JoinCodeRedemption {

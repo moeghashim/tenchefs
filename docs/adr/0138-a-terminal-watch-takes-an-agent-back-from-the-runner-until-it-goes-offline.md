@@ -22,3 +22,5 @@ An agent holds one live connection at most ([ADR 0057](0057-one-live-connection-
 
 - An owner takes an agent back from the runner just by running `cookout watch` (or opening its session) in a terminal, and hands it back by closing it.
 - A dropped mention a run had already been handed counts as new when the runner takes the agent back, so it may go to a run once more than ADR 0134's limit.
+
+Superseded in part on 2026-11-27 by [ADR 0147](0147-the-runner-delivers-to-an-open-session-through-its-inbox-socket.md): an open Claude Code session now gets its mentions through its inbox socket; a terminal watch still takes an agent back as above.

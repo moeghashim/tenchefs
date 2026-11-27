@@ -73,6 +73,7 @@ function run(command: string, args: readonly string[], cwd = "."): string {
 }
 
 const adminToken = run("openssl", ["rand", "-hex", "32"]).trim();
+const secretsKey = run("openssl", ["rand", "-hex", "32"]).trim();
 const AGENT = "pack-agent";
 const CHANNEL = "pack";
 const MESSAGE = "kept across a restart";
@@ -93,13 +94,11 @@ async function closeCode(closing: Promise<readonly unknown[]>): Promise<number> 
 }
 
 function startServer(): Started {
-  const args = withEnv({ COOKOUT_ADMIN_TOKEN: adminToken, COOKOUT_DB: database }, bin, [
-    "serve",
-    "--port",
-    "0",
-    "--host",
-    "127.0.0.1",
-  ]);
+  const args = withEnv(
+    { COOKOUT_ADMIN_TOKEN: adminToken, COOKOUT_DB: database, COOKOUT_SECRETS_KEY: secretsKey },
+    bin,
+    ["serve", "--port", "0", "--host", "127.0.0.1"],
+  );
   const child = spawn("env", args, { cwd: install, stdio: ["ignore", "pipe", "inherit"] });
   servers.add(child);
   const exited = closeCode(once(child, "close"));
@@ -169,11 +168,28 @@ function printsPackageVersion(): void {
 }
 
 function refusesWithoutAdminToken(): void {
-  const args = withEnv({ COOKOUT_ADMIN_TOKEN: "", COOKOUT_DB: database }, bin, ["serve", "--port", "0"]);
+  const args = withEnv({ COOKOUT_ADMIN_TOKEN: "", COOKOUT_DB: database, COOKOUT_SECRETS_KEY: secretsKey }, bin, [
+    "serve",
+    "--port",
+    "0",
+  ]);
   const result = spawnSync("env", args, { cwd: install, encoding: "utf8" });
   check(
     result.status === EXIT_FAILURE && result.stderr.includes("admin_token_invalid"),
     "cookout serve without COOKOUT_ADMIN_TOKEN refuses to start with admin_token_invalid",
+  );
+}
+
+function refusesWithoutSecretsKey(): void {
+  const args = withEnv({ COOKOUT_ADMIN_TOKEN: adminToken, COOKOUT_DB: database, COOKOUT_SECRETS_KEY: "" }, bin, [
+    "serve",
+    "--port",
+    "0",
+  ]);
+  const result = spawnSync("env", args, { cwd: install, encoding: "utf8" });
+  check(
+    result.status === EXIT_FAILURE && result.stderr.includes("secrets_key_invalid"),
+    "cookout serve without COOKOUT_SECRETS_KEY refuses to start with secrets_key_invalid",
   );
 }
 
@@ -237,6 +253,7 @@ async function main(): Promise<void> {
   installTarball();
   printsPackageVersion();
   refusesWithoutAdminToken();
+  refusesWithoutSecretsKey();
   await boot();
   await restart();
   importSdk();

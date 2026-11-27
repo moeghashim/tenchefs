@@ -1,6 +1,8 @@
-import type { ChannelName, CookoutClient, MessageId, ThreadResponse } from "../../sdk/index.ts";
+import type { ChannelName, CookoutClient, JsonValue, MessageId, ThreadResponse } from "../../sdk/index.ts";
 import { NOTHING_DELETED, withDeletedKept } from "./message-deletions.ts";
+import { callFailure, notJson, parseData } from "./webhook-command-call.ts";
 import { withEntry, withFresh } from "./messages-table.ts";
+import type { CallRequest } from "./webhook-command-call.ts";
 import type { Held } from "./messages-held.ts";
 import { LOADING } from "./message-states.ts";
 import type { MessagesHeld } from "./messages-table.ts";
@@ -9,7 +11,7 @@ import type { ThreadLoaded } from "./message-states.ts";
 import { attachmentsOf } from "./outgoing.ts";
 import { failure } from "./failure.ts";
 
-type ThreadsClient = Pick<CookoutClient, "ack" | "createMessage" | "getThread">;
+type ThreadsClient = Pick<CookoutClient, "ack" | "callCommand" | "createMessage" | "getThread">;
 
 interface ThreadAt {
   readonly held: Held;
@@ -30,6 +32,8 @@ interface ThreadOps {
   readonly ack: (id: MessageId) => Promise<void>;
   readonly reload: () => Promise<void>;
   readonly reply: (request: ReplyRequest) => Promise<void>;
+  readonly call: (request: CallRequest) => Promise<void>;
+  readonly editCallData: (callData: string) => void;
 }
 
 function loadedIn(held: MessagesHeld, key: string): ThreadLoaded | null {
@@ -58,6 +62,8 @@ function latestOf({ parent, replies }: ThreadResponse): MessageId {
 
 function firstRead(read: ThreadResponse): ThreadLoaded {
   return {
+    call: { status: "idle" },
+    callData: "",
     deleted: NOTHING_DELETED,
     parent: read.parent.id,
     read: { status: "none" },
@@ -149,10 +155,54 @@ async function postReply(at: ThreadAt, { files, posted, text }: ReplyRequest): P
   }
 }
 
+function tellRefused({ refused }: CallRequest): void {
+  if (refused !== null) {
+    refused();
+  }
+}
+
+interface ThreadCall {
+  readonly data: JsonValue;
+  readonly request: CallRequest;
+}
+
+async function sendCall(at: ThreadAt, { data, request }: ThreadCall): Promise<void> {
+  const { webhookCommand } = request;
+  updateThread(at, (thread) => ({ ...thread, call: { status: "calling", webhookCommand } }));
+  try {
+    await at.client.callCommand(webhookCommand, { channel: at.channel, data, replyTo: at.id });
+    await readThread(at, (thread, read) => ({
+      ...withRead(thread, read),
+      call: { status: "called", webhookCommand },
+      callData: "",
+    }));
+    request.called();
+  } catch (error: unknown) {
+    updateThread(at, (thread) => ({ ...thread, call: callFailure({ error, webhookCommand }) }));
+    tellRefused(request);
+  }
+}
+
+async function callInThread(at: ThreadAt, request: CallRequest): Promise<void> {
+  const parsed = parseData(request.data);
+  if (parsed.status === "not-json") {
+    updateThread(at, (thread) => ({ ...thread, call: notJson(request.webhookCommand) }));
+    tellRefused(request);
+    return;
+  }
+  await sendCall(at, { data: parsed.data, request });
+}
+
 function threadOps(at: ThreadAt): ThreadOps {
   return {
     ack: async (id) => {
       await ackThread(at, id);
+    },
+    call: async (request) => {
+      await callInThread(at, request);
+    },
+    editCallData: (callData) => {
+      updateThread(at, (thread) => ({ ...thread, callData }));
     },
     reload: async () => {
       await reloadThread(at);

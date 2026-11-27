@@ -119,6 +119,7 @@ it.effect.each([
           directory: path.resolve("."),
           harness: "claude-code",
           path: joined.env["PATH"],
+          sessionId: joined.harnessSession,
           url: on.url,
           wakeCommand: ["claude", "-p", "--resume", joined.harnessSession, "--allowedTools", "Bash(cookout:*)"],
         },
@@ -189,7 +190,7 @@ it.effect("no token reaches the wake run's environment or anything the runner pr
     const everything = yield* Effect.orDie(encode([lines, errors, log]));
     const names = Arr.map(log, ({ env }) => Arr.sort(Record.keys(env), Order.String));
 
-    expect(names).toStrictEqual([["COOKOUT_STATE_DIR", "COOKOUT_URL", "PATH"], []]);
+    expect(names).toStrictEqual([["COOKOUT_STATE_DIR", "COOKOUT_URL", "COOKOUT_WAKE_RUN", "PATH"], []]);
     expect(Option.isSome(token)).toBe(true);
     expect(everything).not.toContain(Option.getOrElse(token, () => joined.agent.token));
     expect(everything).not.toContain(joined.agent.token);

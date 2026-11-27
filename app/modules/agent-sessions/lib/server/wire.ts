@@ -1,4 +1,9 @@
-import { AgentIdentitySchema, SentDescriptionSchema, SentDisplayNameSchema } from "../../../identities/server.ts";
+import {
+  AgentIdentitySchema,
+  SentDescriptionSchema,
+  SentDisplayNameSchema,
+  approvalRequestDetailsFields,
+} from "../../../identities/server.ts";
 import type {
   AgentJoinCollectedResponse,
   AgentJoinRequestResponse,
@@ -128,6 +133,7 @@ const AgentJoinCollectedResponseSchema = matchesWire<AgentJoinCollectedResponse>
 );
 
 const AgentJoinRequestViewSchema = Schema.Struct({
+  ...approvalRequestDetailsFields,
   approved: Schema.Boolean,
   as: Schema.String,
   creates: Schema.Boolean,

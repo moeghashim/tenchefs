@@ -1,11 +1,12 @@
 import { Array as Arr, Effect, Option, Order, Predicate, Schema, String as Str } from "effect";
 import type { TriggerHeader, TriggerResult, TriggerSkip, TriggerToken } from "../../../triggers/index.ts";
 import { isOkStatus, isTriggerToken, triggerSkips } from "../../../triggers/index.ts";
+import { openedHeaders, openedSecret } from "./sealed-secrets.ts";
 import type { Fails } from "./errors.ts";
 import type { IdentityName } from "../../../identities/index.ts";
 import { IsoTimeSchema } from "../../../time/server.ts";
 import type { MemoryState } from "./memory-state.ts";
-import type { SqlDatabase } from "./adapters/sql-database.ts";
+import type { SealingDatabase } from "./sealed-secrets.ts";
 import { isIdentityName } from "../../../identities/index.ts";
 import { unreadable } from "./errors.ts";
 
@@ -87,7 +88,7 @@ const TriggerRow = Schema.Struct({
   last_error: Schema.NullOr(Schema.String),
   last_skipped: Schema.NullOr(Schema.Literals(triggerSkips)),
   last_status: Schema.NullOr(Schema.Int),
-  token: Schema.String.pipe(Schema.refine(isTriggerToken)),
+  token: Schema.String,
   url: Schema.String,
 });
 
@@ -124,20 +125,49 @@ function resultOf({
   });
 }
 
-function triggerOf(row: Row): StoredTrigger {
-  const stored = withHeaders({ agent: row.agent_name, token: row.token, url: row.url }, row.headers);
-  return Option.match(resultOf(row), { onNone: () => stored, onSome: (lastResult) => ({ ...stored, lastResult }) });
+type Cipher = SealingDatabase["cipher"];
+
+function triggerTokenOf(cipher: Cipher): (sealed: string) => Fails<TriggerToken> {
+  const open = openedSecret(cipher);
+  return (sealed) =>
+    Effect.flatMap(open(sealed), (token) =>
+      Effect.mapError(Effect.fromOption(Option.liftPredicate(token, isTriggerToken)), unreadable),
+    );
 }
 
-function triggersOf(rows: readonly unknown[]): Fails<readonly StoredTrigger[]> {
-  return Schema.decodeUnknownEffect(Schema.Array(TriggerRow))(rows).pipe(
-    Effect.mapBoth({ onFailure: unreadable, onSuccess: Arr.map(triggerOf) }),
-  );
+function triggerOf(cipher: Cipher): (row: Row) => Fails<StoredTrigger> {
+  const openToken = triggerTokenOf(cipher);
+  const openHeaders = openedHeaders(cipher);
+  return (row) =>
+    Effect.gen(function* openTrigger() {
+      const token = yield* openToken(row.token);
+      const headers = yield* openHeaders(row.headers);
+      const stored = withHeaders({ agent: row.agent_name, token, url: row.url }, headers);
+      return Option.match(resultOf(row), {
+        onNone: () => stored,
+        onSome: (lastResult) => ({ ...stored, lastResult }),
+      });
+    });
+}
+
+const decodeTriggerRows = Schema.decodeUnknownEffect(Schema.Array(TriggerRow));
+
+function triggersOf(cipher: Cipher): (rows: readonly unknown[]) => Fails<readonly StoredTrigger[]> {
+  const open = triggerOf(cipher);
+  return (rows) =>
+    Effect.flatMap(Effect.mapError(decodeTriggerRows(rows), unreadable), (found) =>
+      Effect.forEach(found, open, { concurrency: 1 }),
+    );
+}
+
+function sealedHeaderJson(cipher: Cipher, headers: readonly TriggerHeader[]): Effect.Effect<string> {
+  return Effect.orDie(encodeHeaders(Arr.map(headers, ({ name, value }) => ({ name, value: cipher.seal(value) }))));
 }
 
 const COLUMNS = "agent_name, url, token, headers, last_at, last_status, last_error, last_skipped";
 
-function sqlTriggers(db: SqlDatabase): TriggersSection {
+function sqlTriggers({ cipher, db }: SealingDatabase): TriggersSection {
+  const read = triggersOf(cipher);
   return {
     clearTrigger: (agent) =>
       Effect.map(
@@ -145,11 +175,11 @@ function sqlTriggers(db: SqlDatabase): TriggersSection {
         Arr.isReadonlyArrayNonEmpty,
       ),
     findTrigger: (agent) =>
-      Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM triggers WHERE agent_name = ?`, agent), triggersOf).pipe(
+      Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM triggers WHERE agent_name = ?`, agent), read).pipe(
         Effect.map((found) => Option.getOrUndefined(Arr.head(found))),
       ),
     listTriggers: (agents) => {
-      const listed = Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM triggers ORDER BY agent_name`), triggersOf);
+      const listed = Effect.flatMap(db.all(`SELECT ${COLUMNS} FROM triggers ORDER BY agent_name`), read);
       return Effect.map(listed, Arr.filter(among(agents)));
     },
     recordTriggerResult: (agent, { at, error, skipped, status }) =>
@@ -162,14 +192,14 @@ function sqlTriggers(db: SqlDatabase): TriggersSection {
         agent,
       ),
     setTrigger: (agent, { headers = [], token, url }) =>
-      Effect.flatMap(Effect.orDie(encodeHeaders(headers)), (json) =>
+      Effect.flatMap(sealedHeaderJson(cipher, headers), (json) =>
         db.run(
           `INSERT INTO triggers (agent_name, url, token, headers) VALUES (?, ?, ?, ?)
          ON CONFLICT (agent_name) DO UPDATE SET url = excluded.url, token = excluded.token, headers = excluded.headers,
            last_at = NULL, last_status = NULL, last_error = NULL, last_skipped = NULL`,
           agent,
           url,
-          token,
+          cipher.seal(token),
           json,
         ),
       ),

@@ -25,6 +25,7 @@ interface Started {
 const WEB_TEST_BUILD = "node_modules/.cache/web-test-server";
 
 const adminToken = "web-test-admin-token-0123456789abcdef0123456789";
+const secretsKey = "7765622d74657374207365637265747320206b657920666f7220636f6f6b6f75";
 
 const webTestBoardUrl = "https://board.example.com";
 
@@ -69,6 +70,7 @@ export async function startWebTestCookout(): Promise<RunningWebTestCookout> {
   const server = await startPrinting(
     [
       `COOKOUT_ADMIN_TOKEN=${adminToken}`,
+      `COOKOUT_SECRETS_KEY=${secretsKey}`,
       "COOKOUT_PRESENCE_GRACE_SECONDS=0",
       "COOKOUT_ALLOW_LOCAL_TRIGGERS=true",
       `COOKOUT_PUBLIC_URL=${webTestBoardUrl}`,

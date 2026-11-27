@@ -44,6 +44,12 @@ async function addNewest({ at, ops }: Calling, { called, webhookCommand: command
   called();
 }
 
+function tellRefused({ refused }: CallRequest): void {
+  if (refused !== null) {
+    refused();
+  }
+}
+
 interface Sending {
   readonly data: JsonValue;
   readonly request: CallRequest;
@@ -58,6 +64,7 @@ async function sendCall(calling: Calling, { data, request }: Sending): Promise<v
     await addNewest(calling, request);
   } catch (error: unknown) {
     ops.update((page) => ({ ...page, call: callFailure({ error, webhookCommand: command }) }));
+    tellRefused(request);
   }
 }
 
@@ -67,6 +74,7 @@ async function callWebhookCommand(calling: Calling, request: CallRequest): Promi
   const parsed = parseData(request.data);
   if (parsed.status === "not-json") {
     ops.update((page) => ({ ...page, call: notJson(command) }));
+    tellRefused(request);
     return;
   }
   await sendCall(calling, { data: parsed.data, request });

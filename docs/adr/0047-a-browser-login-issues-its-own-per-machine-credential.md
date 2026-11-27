@@ -1,5 +1,7 @@
 # A browser login issues its own per-machine credential
 
+Superseded in part on 2026-11-27 by [ADR 0153](0153-every-credential-records-what-made-it-and-revoking-one-revokes-what-it-made.md): the Login credential a browser approval issues records the credential that approved it as its parent, and revoking that one revokes it.
+
 `cookout login` without `--token` logs a machine in by browser approval, like `gh auth login` (Matt, 2026-11-23, [#117](https://github.com/mattpocock/cookout/issues/117)):
 
 1. The CLI starts a login request with `POST /v1/login-requests`, which needs no token. The server answers a short user code (two groups of four consonants, such as `WDJB-MJHT`), a secret request ID, the approval page's path and an expiry 10 minutes away. The CLI prints the link and the code, and polls with the request ID.

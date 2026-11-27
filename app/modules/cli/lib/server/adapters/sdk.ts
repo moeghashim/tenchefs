@@ -1,14 +1,15 @@
-import type { AgentSessionState, AgentSessionStateFile, AgentSessionStateNeeds } from "../agent-session-state.ts";
-import type { CallFailure, CallFailureCode } from "./call-failure.ts";
+import type { AgentSessionStateFile, AgentSessionStateNeeds } from "../agent-session-state.ts";
 import type { CookoutConnection, HarnessSession } from "../../../../config/index.ts";
 import { Effect, Option, Predicate } from "effect";
-import { agentSessionExpired, agentSessionRevoked } from "../../../../agent-sessions/index.ts";
+import { approvalInHarness, loginMissing, notJoined, unknownAuth, wakeRunNoLogin } from "./call-failure.ts";
 import { boardUrlOrEmpty, loginFor } from "../logins.ts";
-import { cookoutAuth, cookoutSession, cookoutToken, harnessEnvironment } from "../../../../config/server.ts";
+import { cookoutAuth, cookoutSession, cookoutToken, harnessEnvironment, isWakeRun } from "../../../../config/server.ts";
 import { harnessIn, harnessSessionIn } from "../../../../config/index.ts";
-import { loginMissing, notJoined, unknownAuth } from "./call-failure.ts";
 import { noteIgnoredForProxy, throughProxy, toFailure, toFailureAt } from "./http.ts";
+import { onAgentSessionEnded, onSavedLoginEnded } from "./ended.ts";
+import type { CallFailure } from "./call-failure.ts";
 import type { CookoutClient } from "../../../../sdk/index.ts";
+import type { JoinedSession } from "./ended.ts";
 import { agentSessionStateFile } from "../agent-session-state.ts";
 import { baseUrlOf } from "../../../../http/client.ts";
 import { createCookoutClient } from "../../../../sdk/index.ts";
@@ -22,11 +23,6 @@ type CredentialSource =
   | "login"
   | "proxy"
   | "none";
-
-interface JoinedSession {
-  readonly file: AgentSessionStateFile;
-  readonly state: AgentSessionState;
-}
 
 interface Credential {
   readonly joined: Option.Option<JoinedSession>;
@@ -52,27 +48,6 @@ interface CliEnvironment {
 type Call<Value> = (client: CookoutClient) => Promise<Value>;
 
 const NOTHING = {};
-
-function isEnded(code: CallFailureCode): boolean {
-  return code === agentSessionRevoked || code === agentSessionExpired;
-}
-
-function onAgentSessionEnded({
-  joined,
-}: ClientWithAgentSessionState): (failure: CallFailure) => Effect.Effect<never, CallFailure> {
-  return (failure) =>
-    Effect.gen(function* forgetEndedAgentSession() {
-      if (!isEnded(failure.code) || Option.isNone(joined)) {
-        return yield* Effect.fail(failure);
-      }
-      yield* joined.value.file.remove;
-      const rejoin = `run \`cookout join --as ${joined.value.state.identity}\` to join again`;
-      return yield* Effect.fail({
-        ...failure,
-        message: `${failure.message} The stored agent session token was deleted; ${rejoin}.`,
-      });
-    });
-}
 
 const variables = Effect.orDie(
   Effect.all(
@@ -131,10 +106,16 @@ function joinedCredential(place: HarnessSession, url: string): Found<Option.Opti
 }
 
 function loginCredential(url: string): Found {
-  return Effect.map(
-    loginFor(baseUrlOf(url)),
-    Option.match({ onNone: () => NO_CREDENTIAL, onSome: (login) => given("login", login) }),
-  );
+  return Effect.gen(function* findLogin() {
+    const saved = yield* loginFor(baseUrlOf(url));
+    if (Option.isNone(saved)) {
+      return NO_CREDENTIAL;
+    }
+    if (yield* Effect.orDie(isWakeRun)) {
+      return yield* Effect.fail(wakeRunNoLogin);
+    }
+    return given("login", saved.value);
+  });
 }
 
 function tokenOr(env: CliEnvironment, otherwise: () => Found): Found {
@@ -219,7 +200,10 @@ function runWith<Value>(env: CliEnvironment, credential: Credential, run: Run<Va
     Effect.gen(function* runWithClient() {
       yield* throughProxy;
       const opened = yield* clientFor(env, credential);
-      return yield* run(opened).pipe(Effect.catch(onAgentSessionEnded(opened)));
+      return yield* run(opened).pipe(
+        Effect.catch(onAgentSessionEnded(opened)),
+        Effect.catch(onSavedLoginEnded({ source: opened.source, url: env.url })),
+      );
     }),
   );
 }
@@ -260,6 +244,25 @@ function callServer<Value>(call: Call<Value>): Found<Value> {
   return withClient(callClient(call));
 }
 
+function personsPlace({ harness = "" }: HarnessSession, wakeRun: boolean): Effect.Effect<void, CallFailure> {
+  if (harness !== "") {
+    return Effect.fail(approvalInHarness(`${harness}, a harness`));
+  }
+  if (wakeRun) {
+    return Effect.fail(approvalInHarness("a wake run"));
+  }
+  return Effect.void;
+}
+
+function callServerAsPerson<Value>(call: Call<Value>): Found<Value> {
+  return Effect.gen(function* callOutsideHarness() {
+    const env = yield* cliEnvironment;
+    const wakeRun = yield* Effect.orDie(isWakeRun);
+    yield* personsPlace(harnessSessionIn(env.markers), wakeRun);
+    return yield* callServer(call);
+  });
+}
+
 interface JoinPlace {
   readonly file: Option.Option<AgentSessionStateFile>;
   readonly place: HarnessSession;
@@ -280,6 +283,7 @@ export {
   type JoinPlace,
   callClient,
   callServer,
+  callServerAsPerson,
   joinPlace,
   withClient,
   withJoinClient,

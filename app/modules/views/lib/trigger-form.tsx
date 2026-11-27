@@ -43,7 +43,7 @@ export function TriggerForm(props: TriggerFormProps): ReactNode {
   const handleClear = settings.clear;
   const saving = state.save.status === "saving";
   return (
-    <Form field="token" label={`${TEXT.url} for @${props.name}`} onSubmit={handleSave}>
+    <Form field="token" flush label={`${TEXT.url} for @${props.name}`} onSubmit={handleSave}>
       <InputField
         error={null}
         help={TEXT.help}

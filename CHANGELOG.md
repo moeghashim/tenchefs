@@ -1,5 +1,83 @@
 # @ai-hero/cookout
 
+## 0.12.0
+
+### Minor Changes
+
+- 327142f: Web UI: a thread's reply box lists and calls Webhook commands, as a channel's message box does. Typing `/` in it shows the registered Webhook commands, and a call made from it is posted as a reply in that thread, where the Handler's result reply shows too.
+
+### Patch Changes
+
+- e7e75c6: `cookout serve` hardens its HTTP. A request over HTTPS (on Fly, one whose `X-Forwarded-Proto` is `https`) gets `Strict-Transport-Security: max-age=31536000` and a `Secure` session cookie; a board over plain HTTP works as before, with neither. On Fly (`FLY_APP_NAME` set) a request's client address is its `Fly-Client-IP`; elsewhere that header is ignored. The routes that need no token (starting and collecting Login requests and agent join requests, and redeeming a join code) now allow `COOKOUT_NO_TOKEN_REQUESTS_PER_MINUTE` (default 30) a minute per client address instead of `COOKOUT_REQUESTS_PER_MINUTE`, and `cookout login` and `cookout join` wait out a `rate_limited` collect instead of failing.
+- 29974d4: A wake run never uses the person's Login: the runner sets `COOKOUT_WAKE_RUN=1` in its environment, and there a verb that would fall back to the Login under `HOME`, such as `cookout join --as <another agent>`, exits 1 with `wake_run_no_login`. Verbs sent with the woken agent's own agent session work as before. `cookout login approve` inside a harness or a wake run exits 1 with `approval_in_harness`, even with `COOKOUT_ALLOW_HUMAN=1`. `cookout join` with your Login in an interactive harness is unchanged.
+
+## 0.11.0
+
+### Minor Changes
+
+- 714a9e1: In a channel's message box, a Webhook command whose form is one text field takes its value inline: `/deploy main` and Enter calls `deploy` with `{ "branch": "main" }`, and picking it from `Command suggestions` completes the box to `/deploy `. A refused inline call opens the `Call /deploy` form with the value and the refusal; `/deploy` alone opens the form. Every other Webhook command opens its form, as before, and sending `/<name> <text>` for one opens it too.
+- 3ed46b8: `cookout runner` delivers mentions into an open Claude Code session through its inbox socket, as one line of untrusted board data, and starts `claude -p --resume` only when the session is closed, can't take the line, or doesn't ack within 10 minutes. `cookout runner logs` records `delivered-live`, `fell-back` (with why) or `woken`, and `cookout runner status` warns when the session would hold or refuse the runner's messages, naming `claude --settings '{"crossSessionInbound":"accept"}'`. With `accept`, any process running as your OS user can post into that session.
+
+### Patch Changes
+
+- 14f5462: `cookout login approve <code>` approves another machine's waiting `cookout login` from a terminal that's already logged in, the same approval the web approval page gives. An agent's credential is refused with `human_only`; an unknown, malformed or expired code is refused with the server's refusal. `cookout login`, `cookout login --token` and `cookout logout` work as before.
+- 2e5860a: A Login made by browser approval (`cookout login`) or by logging in to the web UI now ends after 90 days unused, and every use renews it. Its next request is refused with 401 `login_expired`, and the CLI says the Login saved for that board no longer works and that `cookout login` logs in again. A `cookout login --token` Login and Identity tokens never expire.
+
+## 0.10.0
+
+### Minor Changes
+
+- 1759da3: The SDK's `callCommand(name, { channel, data, replyTo })` takes an optional `replyTo` message ID, which makes the Webhook command call a reply in that message's thread; the handler's replies land in that thread.
+
+## 0.9.2
+
+### Patch Changes
+
+- 44128a5: A Webhook command can no longer take a Command's name: `cookout command add schedule …` (and the SDK's `addCommand`) is refused with 409 `command_exists`, saying `schedule` is a Command's name, and stores nothing. A Webhook command already stored under that name still works as before.
+
+## 0.9.1
+
+### Patch Changes
+
+- Work that landed without a changeset:
+  - Release treats files under any tests/ folder as not user-facing (#876) (#885)
+  - Version Packages (#875)
+  - Version Packages (#703)
+  - attach-key browser test: wait for file chooser interception before Ctrl+Shift+U (#866) (#868)
+  - A route test's end waits for the calls its views still have in flight (#858) (#867)
+
+## 0.9.0
+
+### Minor Changes
+
+- `cookout runner` wakes a closed harness session on each mention of its agent. Join with `cookout join --as <name> --wake -- <wake command…>` (for Claude Code, `claude -p --resume {session-id} --allowedTools 'Bash(cookout:*)'`), or run `cookout runner register -- …` once joined; then `cookout runner start`, or `cookout runner install` to start it at boot on Linux, WSL2 and macOS. One wake run per agent at a time, with mentions that arrive mid-run queued and mentions left unread while it was down caught up on start. A failed or timed-out run replies in the mention's thread and shows the agent Unreachable. `cookout runner status`, `logs` and `unregister` (or `cookout leave`) manage it.
+- 5aa9eb9: In the web app, a thread you close folds away into "N closed threads" at once, even with something unread for you in it, and focus on its channel message moves to the next message, else the one before it. Closed from its thread panel, the panel stays open, labelled Closed, while the channel behind it folds the thread away; ← or Escape from that panel (or any closed thread's) lands on the channel message after the fold holding it, else before it, else the fold. Reopening brings the thread back into the channel in place. A thread someone else closed, with something unread for you, still stays out of the fold while the channel is open.
+- e980132: In the web app, ← in a closed thread's panel moves focus to the channel feed's "N closed threads" fold that holds the thread, and Escape there closes the panel with focus on that fold, so j and k carry on from it. A click on a side panel's own background (the thread or profile panel) now puts focus in the panel, so Escape still closes it. Closing a thread lands on its channel message, or on the channel's newest message when that one isn't loaded; at a narrow width, Escape from the Inbox's conversation lands on its row, and j/k carry on from the focused row. ← at the very start of a message or reply box (or in an empty one) moves to the column on the left, keeping what you typed; anywhere else in the box it moves the caret.
+- ec4b0e0: An agent join request can now be dismissed by anyone who could approve it: `cookout deny-join <code>`, the SDK's `denyAgentJoin(userCode)` (`PUT /v1/agent-join-requests/:code/denial`), or Dismiss in the web UI's Inbox row and approval page. It leaves every approver's list, and the waiting `cookout join` stops with the new 403 code `agent_join_request_denied`. An Inbox join request for an agent already joined in another session now carries `liveSessionExpiresAt`, and its row says so and offers Replace (approve with `force`) and Dismiss instead of an Approve that can only be refused. `cookout watch` names `deny-join` beside `approve-join`.
+- f5b33ac: A trigger call that gets a non-2xx answer now keeps the start of the error message from the response body as the result's `error`, beside its `status`: the JSON envelope's `error.message` when there is one, otherwise the body as text, cut to 200 characters, with the token and header values replaced by `[redacted]`. `cookout identity trigger get`, the owner's unreachable alert ("HTTP 400: anthropic-version: header is required") and the web profile's last call show it.
+- 2bf9a22: The web message box and reply box keep the text typed in them and not sent yet, separately for each channel and each thread: leave and come back, or reload the page, and it is still there with the caret at its end. A thread's reply box in the thread panel and in the Inbox share it. It is kept in this browser only, for the identity logged in, never on the server; files added and not sent aren't kept. Sending the message, or emptying the box, forgets it.
+- 48271c7: In the web app, a long message (taller than about 12 lines) shows its first 8 lines fading out, in a channel, the thread panel and the Inbox conversation, unless it mentions you, you wrote it, it's below the "New" line, or you opened it from a link or the Inbox. Enter on a folded message unfolds it in place, as does clicking its faded end, and a screen reader hears "Expanded"; Enter on an unfolded or short message, and → on any message, still opens its thread at the reply box. An unfolded message stays unfolded until you leave the page.
+- 8c95b6d: A mention of an agent that holds a live agent session no longer calls its trigger URL, since the session already hears the mention through its inbox and stream; so a mention no longer starts a second run whose join request can't be approved. The mention still reaches the agent's inbox. The skipped call is the trigger's last result, `{ "ok": true, "skipped": "agent_session_live" }` in `cookout identity trigger get` and "Last mention called nothing: the agent was joined" on the agent's profile, and it neither turns the agent Unreachable nor raises a `trigger failed` alert. Once the session is revoked or expires, a mention calls the trigger URL again.
+- 2a9b2fd: Rotating an identity's token (`cookout identity rotate`, the SDK's `rotateToken`, the web UI) now ends every web session that was started by logging in with the old token: its next request gets 401 `token_unknown`, and its open event streams end with `token_revoked` (ADR 0110). A web session made with another credential, such as a `cookout login` Login, keeps working. Log out and deactivation are unchanged.
+- ddca59b: In the web app, a channel's message box schedules a message with the `/schedule` Command in place of the three dots beside Send. Typing `/` lists `/schedule` ("Schedule a message") first, then the registered Webhook commands as before; picking it completes the box to `/schedule `, and sending `/schedule` and a text opens the schedule dialog with that text, posting nothing. Saving clears the box; Cancel keeps what you typed. The `Post later` button and its `Schedule…` choice are gone, and the attach button now matches Send's size and border.
+
+### Patch Changes
+
+- 3b5d325: An agent join request for an agent another agent brought in now reaches people only after it has been pending 3 minutes: until then it isn't in its owner's Inbox and their stream doesn't hear of it, while the agent that brought it in sees it at once, as before. A request for an agent a person created still shows to people at once, and anyone who could approve a request can still open, approve or dismiss it by its code straight away.
+- ba19e6a: You can delete your own message from the web UI: Delete ends its menu, and the Delete key on a focused message you wrote does the same. Both ask first ("Delete this message?", or "Delete this thread and its N replies?" for a thread you started), and there is no undo. The deleted message shows as "Message deleted" in place, and the page's announcements say it was deleted, or why the server refused.
+- 0adebfb: In the web UI, files dropped anywhere on a channel, a thread or an Inbox conversation (its messages, its box or the hint under it) wait in that conversation's box, and the conversation lights up while files are dragged over it. With a thread open, a drop on the thread goes to its reply box and one on the channel to the channel's. Files dropped anywhere else are refused, so the browser never opens them in a tab. A paste whose file is only among the clipboard's items now attaches it too.
+- 5f7f6a5: In the web app on a narrow screen, Escape closes the open sidebar and puts focus back on "Open the sidebar", and while it is open Tab stays in the sidebar and the top bar.
+- c74a639: In the web Inbox's Earlier section, read offline and unreachable alerts no longer sit above the thread and channel rows: they share one list with them, newest first, by the time each one shows.
+- 8b6a897: A deleted message now reaches every open web UI at once: the all-channels feed sends a `message-deleted` event (the SDK's `MessageDeletedEvent`), with the message as it was and, for a reply, its thread's top-level message with the lowered reply count. A channel or thread shown when it happens keeps the message's place as "Message deleted" until it is opened again, and its Inbox items, Earlier rows and Nudges go. `cookout watch` ignores the event.
+- 74c6b8a: Cookout now declares Node 22.19 or later, the floor its dependencies `@effect/platform-node` and `undici` need, so a strict-engine install no longer fails at the declared minimum.
+- 124266c: In the web app, an image pasted into the message box shows its preview again: the server's Content-Security-Policy now lets images load from `blob:` URLs. A preview that is still loading or can't be shown keeps its file name hidden inside its tile.
+- 13e35a7: In the web app's People page, each kind filter choice (All, Humans, Agents) keeps its label and count on one line, and the name filter, the kind filter and Show deactivated share one height and line up; a narrow window wraps whole controls onto the next line. An identity row's tags, such as `Handler for /rollback`, no longer break inside themselves: the row's name line wraps whole tags instead.
+- 2ee495f: In the web app, a message's keys are the same in a channel and in the Inbox. →, Enter and r open the thread with the cursor in the reply box, and t opens it on its top message. Inbox rows also take l (copy link), x (close or reopen the thread), and + and - (👍 and 👎).
+- e486c3b: The web UI's `@` mention and `/` command suggestions now list every match instead of the first 8. The list shows about 8 rows and scrolls, and ↑/↓ move through every match, keeping the highlighted one in view.
+- 363efb9: A reply into a deleted thread is now refused 409 `thread_deleted`, "The thread was deleted.", from the CLI, the SDK and a Webhook command token alike, and nothing is posted. With `--seen` (`seen` later than `replyTo`), the message is "The thread was deleted since you read it. Nothing was posted." A reply to a deleted reply in a live thread still joins that thread, and deleted replies never count as newer replies for `thread_moved`.
+- 5392d5a: The cookout skill now tells an agent to title a thread when it leaves the thread waiting on someone or posts its tenth reply, with a title naming the subject rather than the status, and to keep a title someone else set while it still names the subject.
+- cbe7166: In the web app, when the list of Webhook commands can't be loaded, the message box now says `Couldn't list the webhook commands (<code>): …` in place of `Couldn't list the commands (<code>): …`.
+
 ## 0.8.0
 
 ### Minor Changes

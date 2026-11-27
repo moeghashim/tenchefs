@@ -8,7 +8,7 @@ import type {
   PendingAgentJoinRequest,
 } from "./agent-join-requests.ts";
 import { Array as Arr, Effect, Option, Order, pipe } from "effect";
-import { DENIED, GONE, PENDING, collectionOf, sessionToIssue } from "./agent-join-requests.ts";
+import { DENIED, GONE, PENDING, collectionOf, originOf, sessionToIssue } from "./agent-join-requests.ts";
 import type { AgentSessionsSection } from "./agent-sessions.ts";
 import type { Fails } from "./errors.ts";
 import type { FindIdentity } from "./identity-row.ts";
@@ -38,8 +38,9 @@ type Taken =
   | { readonly status: "approved"; readonly request: NewAgentJoinRequest; readonly approval: AgentJoinApproval };
 
 function shown({ approval, request }: Kept): AgentJoinRequest {
-  const { agent, expiresAt, host, idleExpiry, userCode } = request;
-  const view = { agent, approved: Option.isSome(approval), expiresAt, host, userCode };
+  const { agent, clientIp, createdAt, expiresAt, host, idleExpiry, userAgent, userCode } = request;
+  const origin = originOf({ clientIp, userAgent });
+  const view = { ...origin, agent, approved: Option.isSome(approval), createdAt, expiresAt, host, userCode };
   return Option.match(Option.fromUndefinedOr(idleExpiry), {
     onNone: () => view,
     onSome: (asked) => ({ ...view, idleExpiry: asked }),

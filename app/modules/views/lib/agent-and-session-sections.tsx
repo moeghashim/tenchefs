@@ -1,19 +1,21 @@
 import type { Identities } from "../../composer/index.ts";
 import type { IdentityName } from "../../sdk/index.ts";
-import { LogOutButton } from "./log-out-button.tsx";
 import { MyAgents } from "./my-agents.tsx";
 import { PageSection } from "../../design-system/layout.tsx";
 import type { ReactNode } from "react";
+import type { SessionList } from "../../board/index.ts";
+import { SessionsSection } from "./sessions-section.tsx";
 import type { SettingsSection } from "../../paths/index.ts";
 import { hrefOf } from "../../paths/index.ts";
 
-const TEXT = { agents: "My agents", session: "Session" } as const;
+const TEXT = { agents: "My agents", session: "Sessions" } as const;
 
 interface AgentAndSessionSectionsProps {
   readonly identities: Identities;
   readonly me: IdentityName;
   readonly onLogOut: () => void;
   readonly section: SettingsSection | null;
+  readonly sessionList: SessionList;
 }
 
 export function AgentAndSessionSections(props: AgentAndSessionSectionsProps): ReactNode {
@@ -32,7 +34,7 @@ export function AgentAndSessionSections(props: AgentAndSessionSectionsProps): Re
         href={hrefOf({ name: "settings", section: "session" })}
         label={TEXT.session}
       >
-        <LogOutButton onLogOut={props.onLogOut} />
+        <SessionsSection onLogOut={props.onLogOut} sessionList={props.sessionList} />
       </PageSection>
     </>
   );

@@ -13,12 +13,21 @@ const LEFT = "ArrowLeft";
 const UP = "ArrowUp";
 const START = 0;
 const THIRD = 3;
+const LAST = -1;
 
 function textArea(element: unknown): HTMLTextAreaElement {
   if (!(element instanceof HTMLTextAreaElement)) {
     throw new TypeError("The box is no text area");
   }
   return element;
+}
+
+function newestInConversation(): HTMLElement {
+  const newest = inConversation().getAllByRole("article").at(LAST);
+  if (!(newest instanceof HTMLElement)) {
+    throw new TypeError("The conversation has no message");
+  }
+  return newest;
 }
 
 function messageBox(): HTMLTextAreaElement {
@@ -135,15 +144,20 @@ it("← at a thread reply box's first character focuses the thread's channel mes
   close();
 });
 
-it("← in the Inbox's empty reply box focuses the selected row", { timeout: 5000 }, async () => {
+it("← in the Inbox's empty reply box focuses the conversation's newest message, and ← again its row", {
+  timeout: 5000,
+}, async () => {
   expect.hasAssertions();
 
   const { address, unmount } = await firstRowSelected({ channel: "web-box-left-inbox", section: "Earlier" });
   pressed("r");
   const reply = textArea(inConversation().getByRole("textbox", { name: "Reply" }));
   const handled = pressedIn(reply, LEFT);
+  const newest = newestInConversation();
+  const onNewest = globalThis.document.activeElement === newest;
+  const handledAgain = !fireEvent.keyDown(newest, { key: LEFT });
 
-  expect([handled, focusedHref()]).toStrictEqual([true, address]);
+  expect([handled, onNewest, handledAgain, focusedHref()]).toStrictEqual([true, true, true, address]);
 
   unmount();
 });

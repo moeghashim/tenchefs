@@ -12,6 +12,7 @@ const FORBIDDEN = 403;
 const TOO_MANY = 429;
 const LIFETIME_MINUTES = 10;
 const THREE = 3;
+const SOME_TEXT: unknown = expect.any(String);
 const host = { host: "ada-laptop" };
 
 interface Started {
@@ -54,17 +55,18 @@ it.effect("a login request is pending until a human approves it, then gives a cr
     const shown = yield* answer(() => ada.client.getLoginRequest(started.userCode));
     const collected = yield* approvedLogin({ ada, cookout, started });
 
-    expect([started.approvalPath, started.expiresAt]).toStrictEqual([
-      `/#/approve/${started.userCode}`,
-      "2026-01-01T00:10:00.000Z",
-    ]);
+    expect([started.approvalPath, started.expiresAt]).toStrictEqual(["/#/approve", "2026-01-01T00:10:00.000Z"]);
     expect([started.requestId, started.userCode]).toMatchObject([/^cookout_/u, /^[A-Z0-9]{4}-[A-Z0-9]{4}$/u]);
     expect(pending).toStrictEqual({ status: "pending" });
     expect(shown.loginRequest).toStrictEqual({
       ...host,
       approved: false,
+      clientIp: SOME_TEXT,
+      createdAt: "2026-01-01T00:00:00.000Z",
       expiresAt: started.expiresAt,
+      kind: "terminal",
       userCode: started.userCode,
+      where: host.host,
     });
     expect(collected).toMatchObject({ identity: ada.identity, status: "approved" });
   }).pipe(Effect.provide(testCookout())),
@@ -150,7 +152,7 @@ it.effect("starting and collecting login requests is rate limited per address", 
     const limited = yield* refusal(() => anonymous.collectLogin(any));
 
     expect(limited).toMatchObject({ code: "rate_limited", status: TOO_MANY });
-  }).pipe(Effect.provide(testCookout({ requestsPerMinute: 2 }))),
+  }).pipe(Effect.provide(testCookout({ noTokenRequestsPerMinute: 2 }))),
 );
 
 it.effect("a login request names a host of 1-100 characters", () =>

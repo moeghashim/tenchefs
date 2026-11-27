@@ -1,6 +1,7 @@
 import type { ChannelName, Message, MessageId, ReadReceipt, Reply, TopLevelMessage } from "../../sdk/index.ts";
 import type { Failure, PostState } from "./failure.ts";
 import type { PageLoaded, ReadState, ThreadLoaded } from "./message-states.ts";
+import type { CallState } from "./webhook-command-call.ts";
 import type { MessagesHeld } from "./messages-table.ts";
 import type { ThreadPlace } from "./threads-part.ts";
 import { beforeKey } from "./messages-part.ts";
@@ -25,6 +26,8 @@ interface ThreadMessagesLoaded {
   readonly receipts: readonly ReadReceipt[];
   readonly read: ReadState;
   readonly reply: PostState;
+  readonly call: CallState;
+  readonly callData: string;
   readonly deleted: ReadonlySet<MessageId>;
 }
 
@@ -104,8 +107,9 @@ function threadAnswer(held: MessagesHeld, thread: ThreadLoaded): ThreadMessagesL
   if (parent === null) {
     return null;
   }
-  const { deleted, read, reply } = thread;
-  return { deleted, parent, read, receipts: [], replies: repliesOf(held, thread.replies), reply, status: "loaded" };
+  const { call, callData, deleted, read, reply } = thread;
+  const replies = repliesOf(held, thread.replies);
+  return { call, callData, deleted, parent, read, receipts: [], replies, reply, status: "loaded" };
 }
 
 function threadMessages(place: ThreadPlace): (held: MessagesHeld) => ThreadMessagesState {

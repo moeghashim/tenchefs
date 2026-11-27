@@ -27,20 +27,31 @@ function readTextAt({ file, fs }: BesideLocation): Effect.Effect<Option.Option<s
   }).pipe(Effect.mapError(failure));
 }
 
+interface WatchedFolder {
+  readonly folder: string;
+  readonly fs: FileSystem.FileSystem;
+}
+
+function folderChanges({ folder, fs }: WatchedFolder): Stream.Stream<unknown> {
+  return Stream.unwrap(
+    Effect.gen(function* watchFolder() {
+      const ready = yield* Deferred.make<boolean>();
+      function onReady(): void {
+        Deferred.doneUnsafe(ready, Effect.succeed(true));
+      }
+      return Stream.merge(fs.watch(folder, { onReady }), Stream.fromEffect(Deferred.await(ready)));
+    }),
+  ).pipe(Stream.orDie);
+}
+
 function untilGoneAt({ file, folder, fs }: BesideLocation): Effect.Effect<void> {
   const gone = Effect.map(fs.exists(file), (exists) => !exists);
-  return Effect.gen(function* waitUntilGone() {
-    const ready = yield* Deferred.make<boolean>();
-    function onReady(): void {
-      Deferred.doneUnsafe(ready, Effect.succeed(true));
-    }
-    const checks = Stream.merge(fs.watch(folder, { onReady }), Stream.fromEffect(Deferred.await(ready)));
-    yield* checks.pipe(
-      Stream.mapEffect(() => gone),
-      Stream.takeUntil(Function.identity),
-      Stream.runDrain,
-    );
-  }).pipe(Effect.orDie);
+  return folderChanges({ folder, fs }).pipe(
+    Stream.mapEffect(() => gone),
+    Stream.takeUntil(Function.identity),
+    Stream.runDrain,
+    Effect.orDie,
+  );
 }
 
 function fileBeside(location: BesideLocation): PlainFileBeside {
@@ -52,4 +63,4 @@ function fileBeside(location: BesideLocation): PlainFileBeside {
   };
 }
 
-export { fileBeside };
+export { fileBeside, folderChanges };

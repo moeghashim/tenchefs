@@ -105,14 +105,9 @@ it("logged out, and on an approval page, the title says what the page is for", {
   const loggedOut = await loggedOutTitle();
   const { client } = await newIdentity({ kind: "human", name: "web-title-approver" });
   const close = openAt({ client, hash: "#/approve/ABCD-EFGH" });
-  const approving = await shownTitle("Approve a login · cookout");
-  const joining = await titleAt("#/approve-join/ABCD-EFGH");
+  const approving = await shownTitle("Approve a device · cookout");
 
-  expect([loggedOut, approving, joining]).toStrictEqual([
-    "Log in · cookout",
-    "Approve a login · cookout",
-    "Approve an agent · cookout",
-  ]);
+  expect([loggedOut, approving]).toStrictEqual(["Log in · cookout", "Approve a device · cookout"]);
 
   close();
 });

@@ -196,7 +196,7 @@ it.effect(
     Effect.gen(function* printsDefect() {
       const database = yield* freshDatabasePath;
       const crash = Layer.effectDiscard(Effect.die(new Error("the disk caught fire")));
-      const failed = yield* runServe({ database, storage: (setting) => Layer.provide(storageLayer(setting), crash) });
+      const failed = yield* runServe({ database, storage: (opening) => Layer.provide(storageLayer(opening), crash) });
 
       expect(failed).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });
       expect(failed.stderr).toMatch(
@@ -210,7 +210,7 @@ it.effect("cookout serve that crashes while starting with something other than a
   Effect.gen(function* printsBareDefect() {
     const database = yield* freshDatabasePath;
     const crash = Layer.effectDiscard(Effect.die("the disk caught fire"));
-    const failed = yield* runServe({ database, storage: (setting) => Layer.provide(storageLayer(setting), crash) });
+    const failed = yield* runServe({ database, storage: (opening) => Layer.provide(storageLayer(opening), crash) });
 
     expect(failed).toMatchObject({
       exitCode: EXIT_FAILURE,
@@ -253,7 +253,7 @@ it.effect("cookout serve whose start fails quoting DATABASE_URL prints only its 
     const crash = Layer.effectDiscard(Effect.die(new Error(`could not reach ${POSTGRES_URL}`)));
     const failed = yield* runServe({
       env: { DATABASE_URL: POSTGRES_URL },
-      storage: (setting) => Layer.provide(storageLayer(setting), crash),
+      storage: (opening) => Layer.provide(storageLayer(opening), crash),
     });
 
     expect(failed).toMatchObject({ exitCode: EXIT_FAILURE, stdout: "" });

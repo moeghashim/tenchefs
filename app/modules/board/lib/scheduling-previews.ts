@@ -1,4 +1,4 @@
-import type { ChannelName, IsoTime, Refusal } from "../../sdk/index.ts";
+import type { ChannelName, IsoTime, MessageId, Refusal } from "../../sdk/index.ts";
 import type {
   CreateScheduledMessageRequest,
   EditScheduledMessageRequest,
@@ -25,6 +25,7 @@ type ScheduleSaveState =
 interface SchedulingSnapshot {
   readonly open: boolean;
   readonly channel: ChannelName | null;
+  readonly thread: MessageId | null;
   readonly editing: ScheduledMessageId | null;
   readonly text: string;
   readonly kind: ScheduleKind;
@@ -75,6 +76,7 @@ function closedIn(timeZone: string): SchedulingSnapshot {
     save: IDLE,
     scheduled: null,
     text: "",
+    thread: null,
     time: "",
     timeZone,
   };
@@ -164,7 +166,7 @@ function createSaving(held: Held): (saved: () => void) => void {
   async function sent(request: CreateScheduledMessageRequest, editing: ScheduledMessageId | null): Promise<void> {
     if (editing === null) {
       const scheduled = await options.create(request);
-      publish({ ...closedIn(options.timeZone), scheduled });
+      publish({ ...closedIn(options.timeZone), scheduled, thread: current().thread });
       return;
     }
     const { channel: _channel, ...edited } = request;

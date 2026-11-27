@@ -1,7 +1,7 @@
 import type { ChannelName, MessageId } from "../../sdk/index.ts";
+import type { ComponentProps, ReactNode } from "react";
 import type { Composer } from "./thread-draft.ts";
 import type { PanelEdgeParts } from "../../design-system/layout.tsx";
-import type { ReactNode } from "react";
 import { SidePanel } from "../../design-system/layout.tsx";
 import { ThreadContent } from "./thread-content.tsx";
 import { ThreadGone } from "./thread-gone.tsx";
@@ -26,6 +26,7 @@ interface ThreadProps {
   readonly linked: MessageId | null;
   readonly unread: Unread;
   readonly me: string;
+  readonly scheduling: ComponentProps<typeof ThreadContent>["scheduling"];
 }
 
 export function ThreadView(props: ThreadProps): ReactNode {
@@ -58,9 +59,11 @@ export function ThreadView(props: ThreadProps): ReactNode {
           channel={channel}
           closing={closing}
           draft={draft}
+          keymap={props.keymap}
           linked={props.linked}
           me={props.me}
           readPosition={readPosition}
+          scheduling={props.scheduling}
           state={state}
           thread={thread}
           unread={props.unread}

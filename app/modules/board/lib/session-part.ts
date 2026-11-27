@@ -15,6 +15,7 @@ interface SessionPart {
   readonly hide: () => void;
   readonly back: () => void;
   readonly logIn: (token: string) => void;
+  readonly loggedIn: (identity: Identity) => void;
   readonly logOut: () => void;
   readonly shown: (identities: Identities) => SessionState;
 }
@@ -153,6 +154,9 @@ function createSessionPart(options: SessionPartOptions): SessionPart {
     },
     logOut: () => {
       queue = after(queue, logOut);
+    },
+    loggedIn: (identity) => {
+      held.put({ identity, status: "logged-in" });
     },
     show: () => {
       readers += ONE;

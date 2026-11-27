@@ -13,3 +13,5 @@
 
 - **Keep an opened closed thread unfolded in its channel, so the keys land on its message**: rejected. A closed thread stays folded while its panel is open (the closed-thread panel tests pin it), and unfolding it on open would move the feed under the reader.
 - **Bind Escape on the page's body to close an open panel**: rejected. It would close the panel from anywhere, against ADR 0100's rule that the thread panel covers its `aside` only.
+
+Superseded in part on 2026-11-27 by [ADR 0152](0152-left-steps-back-one-column-at-a-time-in-the-inbox.md): ← from the Inbox's reply box lands on the conversation's newest message, and ← on a message in the conversation lands on its row (mattpocock/cookout#928).

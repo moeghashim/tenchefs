@@ -44,6 +44,10 @@ it.effect.each([
   { args: ["join", "--as", "brigid", "--", "claude"], how: "a wake command without --wake" },
   { args: ["join", "--as", "brigid", "--print-env", "--wake", "--", "claude"], how: "--wake with --print-env" },
   { args: ["runner", "register"], how: "runner register with no wake command" },
+  {
+    args: ["runner", "register", "--timeout", "0", "--", "claude"],
+    how: "runner register with a timeout under a minute",
+  },
 ])("$how is refused as usage", ({ args }: { readonly args: readonly string[] }) =>
   Effect.gen(function* refusedAsUsage() {
     const on = yield* wakeBoard;

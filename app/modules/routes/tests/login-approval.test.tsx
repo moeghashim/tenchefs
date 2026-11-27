@@ -1,47 +1,110 @@
 import { anonymousClient, newIdentity, sessionOf } from "./identities.ts";
+import { createAgentJoinApprovals, createLoginApprovals } from "../../board/index.ts";
 import { expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
 import { alertSaying } from "./alerts.ts";
-import { createLoginApprovals } from "../../board/index.ts";
 import { inPane } from "./regions.ts";
 import { openAt } from "./render.tsx";
 
 const host = { host: "ada-laptop" };
 
-async function shownThenApproved(): Promise<readonly unknown[]> {
-  const code = await screen.findByLabelText("Code");
-  const shown = [
-    code.textContent,
-    screen.getByText(/^Requested by ada-laptop/u).textContent,
-    screen.queryByRole("navigation", { name: "Sidebar" }),
-  ];
-  fireEvent.click(inPane().getByRole("button", { name: "Approve" }));
-  await screen.findByText(/^Approved\./u);
-  return shown;
+async function emptyCodeField(): Promise<HTMLInputElement> {
+  const field = await screen.findByLabelText<HTMLInputElement>("Code");
+  return field;
 }
 
-it("logged in, the approval page shows the code and host, and Approve lets the terminal collect", {
-  timeout: 5000,
-}, async () => {
-  expect.hasAssertions();
+function typeCode(code: string): void {
+  fireEvent.change(screen.getByLabelText("Code"), { target: { value: code } });
+  fireEvent.click(inPane().getByRole("button", { name: "Show" }));
+}
 
-  const human = await newIdentity({ kind: "human", name: "web-approve-ada" });
+async function detailsShown(): Promise<readonly (string | null)[]> {
+  const kind = await screen.findByText(/^Kind: /u);
+  return [
+    kind.textContent,
+    screen.getByText(/^From: /u).textContent,
+    screen.getByText(/^IP address: /u).textContent,
+    screen.getByText(/^Started: /u).textContent,
+  ];
+}
+
+async function detailsAfterTyping(code: string): Promise<readonly (string | null)[]> {
+  await emptyCodeField();
+  typeCode(code);
+  const details = await detailsShown();
+  return details;
+}
+
+async function approved(): Promise<void> {
+  fireEvent.click(inPane().getByRole("button", { name: "Approve" }));
+  await screen.findByText(/^Approved\./u);
+}
+
+interface OpenedLogin {
+  readonly close: () => void;
+  readonly started: Awaited<ReturnType<ReturnType<typeof anonymousClient>["startLogin"]>>;
+}
+
+async function openedWithCode(name: string): Promise<OpenedLogin> {
+  const human = await newIdentity({ kind: "human", name });
   const started = await anonymousClient().startLogin(host);
   const close = openAt({
     client: human.client,
     hash: `#/approve/${started.userCode}`,
     loginApprovals: createLoginApprovals(human.client),
   });
+  return { close, started };
+}
 
-  const shown = await shownThenApproved();
+it("a path holding a code opens an empty code field and shows no request", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { close } = await openedWithCode("web-approve-empty");
+  const field = await emptyCodeField();
+  const before = [field.value, inPane().queryByRole("button", { name: "Approve" }), screen.queryByText(/^Kind: /u)];
+  close();
+
+  expect(before).toStrictEqual(["", null, null]);
+});
+
+it("typing the code shows the request's details, and Approve approves it", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const { close, started } = await openedWithCode("web-approve-ada");
+  const details = await detailsAfterTyping(started.userCode);
+  await approved();
   const collected = await anonymousClient().collectLogin(started.requestId);
   close();
 
-  expect(shown).toStrictEqual([started.userCode, `Requested by ada-laptop, until ${started.expiresAt}.`, null]);
+  expect(details).toStrictEqual([
+    "Kind: terminal login",
+    "From: ada-laptop",
+    expect.stringMatching(/^IP address: \S+$/u),
+    expect.stringMatching(/^Started: (?:just now|\d+ seconds ago)$/u),
+  ]);
+  expect(screen.queryByRole("navigation", { name: "Sidebar" })).toBeNull();
   expect(collected).toMatchObject({ identity: { name: "web-approve-ada" }, status: "approved" });
 });
 
-it("logged out, the approval page asks for a login first, then shows the request", { timeout: 5000 }, async () => {
+it("a code typed in lower case, without its dash, finds the request too", { timeout: 5000 }, async () => {
+  expect.hasAssertions();
+
+  const human = await newIdentity({ kind: "human", name: "web-approve-casual" });
+  const started = await anonymousClient().startLogin(host);
+  const close = openAt({ client: human.client, hash: "#/approve", loginApprovals: createLoginApprovals(human.client) });
+
+  await emptyCodeField();
+  typeCode(started.userCode.replace("-", "").toLowerCase());
+  const shown = await screen.findByText(/^From: /u);
+
+  expect(shown.textContent).toBe("From: ada-laptop");
+
+  close();
+});
+
+it("logged out, the approval page asks for a login first, then opens the empty code field", {
+  timeout: 5000,
+}, async () => {
   expect.hasAssertions();
 
   const human = await newIdentity({ kind: "human", name: "web-approve-later" });
@@ -56,37 +119,70 @@ it("logged out, the approval page asks for a login first, then shows the request
   await screen.findByRole("form", { name: "Log in" });
   fireEvent.change(screen.getByLabelText("Token"), { target: { value: human.token } });
   fireEvent.click(inPane().getByRole("button", { name: "Log in" }));
-  const code = await screen.findByLabelText("Code");
+  const field = await emptyCodeField();
 
-  expect(code.textContent).toBe(started.userCode);
+  expect(field.value).toBe("");
 
   close();
 });
 
-it("a user code with no live login request says why it can't be shown", { timeout: 5000 }, async () => {
+it("a mistyped code says no request has it, and shows no Approve", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const human = await newIdentity({ kind: "human", name: "web-approve-gone" });
   const close = openAt({
+    agentJoinApprovals: createAgentJoinApprovals(human.client),
     client: human.client,
-    hash: "#/approve/ZZZZ-ZZZZ",
+    hash: "#/approve",
     loginApprovals: createLoginApprovals(human.client),
   });
 
-  const alert = await alertSaying("Couldn't show this login");
+  await emptyCodeField();
+  typeCode("ZZZZ-ZZZZ");
+  const alert = await alertSaying("No live request has the code ZZZZ-ZZZZ");
 
-  expect(alert.textContent).toMatch(/^Couldn't show this login \(login_request_not_found\)/u);
+  expect(alert.textContent).toMatch(/Check it against the new device/u);
+  expect(inPane().queryByRole("button", { name: "Approve" })).toBeNull();
 
   close();
 });
 
-it("an approval link that isn't a user code shows nothing here", { timeout: 5000 }, async () => {
+it("text that isn't a code says what a code looks like, and shows no Approve", { timeout: 5000 }, async () => {
   expect.hasAssertions();
 
   const human = await newIdentity({ kind: "human", name: "web-approve-bad-code" });
   const close = openAt({ client: human.client, hash: "#/approve/not-a-code" });
 
-  await expect(screen.findByText("Nothing here")).resolves.toBeDefined();
+  await emptyCodeField();
+  typeCode("not-a-code");
+  const alert = await alertSaying("not-a-code isn't a code");
+
+  expect(alert.textContent).toBe("not-a-code isn't a code: a code looks like WDJB-MJHT.");
+  expect(inPane().queryByRole("button", { name: "Approve" })).toBeNull();
+
+  close();
+});
+
+async function openedAsAgent(): Promise<OpenedLogin> {
+  await newIdentity({ kind: "human", name: "web-approve-owner" });
+  const agent = await newIdentity({ kind: "agent", name: "web-approve-agent", owner: "web-approve-owner" });
+  const started = await anonymousClient().startLogin(host);
+  const close = openAt({ client: agent.client, hash: "#/approve", loginApprovals: createLoginApprovals(agent.client) });
+  return { close, started };
+}
+
+it("for an agent, the approval page says it can't show a login request, and shows no Approve", {
+  timeout: 5000,
+}, async () => {
+  expect.hasAssertions();
+
+  const { close, started } = await openedAsAgent();
+  await emptyCodeField();
+  typeCode(started.userCode);
+  const alert = await alertSaying("Couldn't show this login");
+
+  expect(alert.textContent).toMatch(/^Couldn't show this login \(human_only\)/u);
+  expect(inPane().queryByRole("button", { name: "Approve" })).toBeNull();
 
   close();
 });

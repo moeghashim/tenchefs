@@ -25,7 +25,11 @@ async function withCommand(channel: string): Promise<string> {
   await adminClient().addCommand({
     description: "Ship a branch",
     name: command,
-    schema: { properties: { branch: { minLength: 1, type: "string" } }, required: ["branch"], type: "object" },
+    schema: {
+      properties: { branch: { minLength: 1, type: "string" }, count: { type: "integer" } },
+      required: ["branch"],
+      type: "object",
+    },
     url: "http://127.0.0.1:9/command",
   });
   return command;

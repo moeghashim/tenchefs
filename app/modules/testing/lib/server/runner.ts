@@ -13,9 +13,12 @@ interface FakeWakeSettings {
   readonly hang?: boolean;
   readonly log: string;
   readonly print?: string;
-  readonly printRepeat?: number;
   readonly succeedAfter?: string;
   readonly reply?: string;
+  readonly runs?: readonly {
+    readonly args: readonly string[];
+    readonly env: Readonly<Record<string, string>>;
+  }[];
   readonly sdkReply?: string;
   readonly tokenFile?: string;
   readonly touch?: string;
@@ -43,6 +46,10 @@ function fakeWakeCommand(settings: FakeWakeSettings): Effect.Effect<readonly str
     const text = yield* Effect.orDie(encodeSettings(settings));
     return [process.execPath, fake, SESSION_ID_PLACEHOLDER, text];
   });
+}
+
+function printingWakeCommand(bytes: number): readonly string[] {
+  return ["sh", "-c", `cat > /dev/null; head -c ${String(bytes)} /dev/zero`];
 }
 
 function lineOf(line: readonly unknown[]): unknown {
@@ -93,4 +100,4 @@ function startRunner(
   });
 }
 
-export { type FakeWakeSettings, type StartedRunner, fakeWakeCommand, startRunner };
+export { type FakeWakeSettings, type StartedRunner, fakeWakeCommand, printingWakeCommand, startRunner };

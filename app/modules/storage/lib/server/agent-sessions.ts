@@ -1,6 +1,7 @@
 import { DateTime, Option } from "effect";
 import type { Identity, IdentityName, TokenHash } from "../../../identities/index.ts";
 import type { Effect } from "effect";
+import type { EndedCredential } from "./credential-lineage.ts";
 import type { IsoTime } from "../../../time/index.ts";
 import type { StorageUnavailable } from "./errors.ts";
 import { isoTimeOf } from "../../../time/server.ts";
@@ -33,6 +34,7 @@ interface AgentAt {
 interface IssueAgentSession {
   readonly session: StoredAgentSession;
   readonly force: boolean;
+  readonly parent?: TokenHash | undefined;
 }
 
 type IssueAgentSessionResult = { readonly status: "issued" } | { readonly status: "live"; readonly expiresAt: IsoTime };
@@ -52,9 +54,9 @@ type UseAgentSessionResult =
 interface AgentSessionsSection {
   readonly issueAgentSession: (request: IssueAgentSession) => Fails<IssueAgentSessionResult>;
   readonly useAgentSession: (request: UseAgentSession) => Fails<UseAgentSessionResult>;
-  readonly revokeAgentSession: (hash: TokenHash) => Fails<void>;
+  readonly revokeAgentSession: (hash: TokenHash, now: IsoTime) => Fails<void>;
   readonly findLiveAgentSession: (at: AgentAt) => Fails<Option.Option<LiveAgentSession>>;
-  readonly revokeLiveAgentSession: (at: AgentAt) => Fails<boolean>;
+  readonly revokeLiveAgentSession: (at: AgentAt) => Fails<readonly EndedCredential[]>;
 }
 
 interface Session {

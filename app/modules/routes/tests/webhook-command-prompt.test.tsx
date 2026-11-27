@@ -10,7 +10,6 @@ import { expect, it } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { adminClient } from "./identities.ts";
 import { inPane } from "./regions.ts";
-import { openAt } from "./render.tsx";
 
 const fieldsSchema = {
   properties: {
@@ -174,26 +173,6 @@ it("text starting with / that names no registered Webhook command posts as a mes
   expect(messages.map(({ data = "no data", text }) => [text, data])).toStrictEqual([
     ["/shrug at the build", "no data"],
   ]);
-
-  close();
-});
-
-it("a thread's reply box offers no Webhook commands", { timeout: 5000 }, async () => {
-  expect.hasAssertions();
-
-  await channelWithWebhookCommand({ channel: "web-command-thread", webhookCommand: { name: "web-call-thread" } });
-  const { message } = await adminClient().createMessage({ channel: "web-command-thread", text: "The parent" });
-  const close = openAt({ client: adminClient(), hash: `#/channels/web-command-thread/threads/${String(message.id)}` });
-
-  fireEvent.change(await screen.findByRole("textbox", { name: "Reply" }), { target: { value: "/web-call-th" } });
-  type("/web-call-th");
-  await screen.findByRole("listbox", { name: "Command suggestions" });
-
-  expect(
-    within(screen.getByRole("form", { name: "Reply to the thread" })).queryByRole("list", {
-      name: "Command suggestions",
-    }),
-  ).toBeNull();
 
   close();
 });

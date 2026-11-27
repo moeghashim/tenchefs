@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Path } from "effect";
 import { expect, it } from "@effect/vitest";
-import { freshDatabasePath, messageId, openStore } from "../../../testing/server.ts";
+import { freshDatabasePath, messageId, openStore, testSecretsCipher } from "../../../testing/server.ts";
 import { NodeServices } from "@effect/platform-node";
 import { sqliteStorage } from "../../server.ts";
 
@@ -22,7 +22,7 @@ const copiedDatabase = Effect.gen(function* copyFixture() {
 it.effect("the read receipts backfill marks the messages read positions already passed as seen, with no time", () =>
   Effect.gen(function* backfill() {
     const path = yield* copiedDatabase;
-    const { storage } = yield* openStore(sqliteStorage(path));
+    const { storage } = yield* openStore(sqliteStorage({ cipher: testSecretsCipher, path }));
 
     const receipts = yield* storage.listReadReceipts([MENTION, REPLY]);
 

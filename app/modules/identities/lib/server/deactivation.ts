@@ -15,8 +15,8 @@ import type {
   StorageUnavailable,
 } from "../../../storage/server.ts";
 import { Effect, Predicate } from "effect";
+import { endBelowDeactivated, identityNotFound, nameParam } from "./routes.ts";
 import { identityDeactivatePath, identityReactivatePath } from "../../index.ts";
-import { identityNotFound, nameParam } from "./routes.ts";
 import { HttpServerResponse } from "effect/http";
 import type { IdentityChanges } from "./auth.ts";
 import type { Refusal } from "../../../http/index.ts";
@@ -101,6 +101,7 @@ const deactivateRoute: Route<Caller | Storage | IdentityChanges> = {
       yield* announced(answer.identity);
       const caller = yield* Caller;
       yield* tokensEnded({ by: caller.name, cause: "deactivated", identity: name, tokens: ALL_TOKENS });
+      yield* endBelowDeactivated(name);
       return yield* HttpServerResponse.schemaJson(DeactivateIdentityResponseSchema)(answer);
     }),
   method: "POST",

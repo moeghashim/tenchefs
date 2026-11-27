@@ -63,6 +63,7 @@ export function ChannelPanes(props: ChannelPanesProps): ReactNode {
             keymap={props.keymap}
             linked={route.message ?? null}
             me={me}
+            scheduling={props.scheduling}
             thread={route.thread}
             unread={unread}
           />

@@ -12,9 +12,12 @@
  * a thread ID that isn't a message ID, says there is nothing here.
  * While the board store says the live stream's link to the server is down, a
  * "Reconnecting…" bar shows at the top of the workspace.
- * `#/approve/<user code>` is the approval page for a login request, a page of
- * its own outside the workspace (after the login view, if logged out), and
- * `#/approve-join/<user code>` the same for an agent join request. Any
+ * `#/approve` is the approval page for a login request or an agent join
+ * request, a page of its own outside the workspace (after the login view, if
+ * logged out): it opens with an empty code field, and typing the code the new
+ * device shows finds its request and shows the details to check before
+ * Approve. `#/approve/<anything>` and `#/approve-join/<anything>` open the same
+ * empty field, so a link can't choose the request. Any
  * workspace route's hash can end in `?profile=<name>`, which opens that
  * identity's profile panel beside it (replacing a thread's panel); Escape or
  * its close link closes it. Clicking a name, a message's author or an
@@ -50,8 +53,11 @@ function currentHash(): string {
   return globalThis.location.hash;
 }
 
-/** What the web UI reads: the stores, each made with the SDK client it talks through. The app makes the new-channel form's, the scheduling dialog's and the scheduled messages list's page-only stores from `boardStore`. */
-export type CookoutAppProps = Omit<Stores, "channelCreation" | "scheduleList" | "scheduling">;
+/** What the web UI reads: the stores, each made with the SDK client it talks through. The app makes the new-channel form's, the scheduling dialog's, the scheduled messages list's and the Settings sessions list's page-only stores from `boardStore`. */
+export type CookoutAppProps = Omit<
+  Stores,
+  "approvalCode" | "channelCreation" | "scheduleList" | "scheduling" | "sessionList"
+>;
 
 /**
  * The whole web UI: the view for the page's location hash, redrawn when it changes.

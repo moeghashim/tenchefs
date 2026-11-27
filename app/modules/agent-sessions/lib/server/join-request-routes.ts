@@ -1,4 +1,4 @@
-import { AddressLimit, Caller } from "../../../identities/server.ts";
+import { AddressLimit, Caller, requestOriginOf } from "../../../identities/server.ts";
 import {
   AgentJoinCollectedResponseSchema,
   AgentJoinRequestResponseSchema,
@@ -8,7 +8,6 @@ import {
   DenyAgentJoinResponseSchema,
   StartAgentJoinRequestSchema,
 } from "./wire.ts";
-import { Effect, Function, Option } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import {
   agentJoinRequestApprovalPath,
@@ -18,8 +17,10 @@ import {
   collectAgentJoinRequestPath,
 } from "../../index.ts";
 import { AgentSessions } from "./service.ts";
+import { Effect } from "effect";
 import type { Refusal } from "../../../http/index.ts";
 import type { Route } from "../../../http/server.ts";
+import { clientAddress } from "../../../http/server.ts";
 import { isUserCode } from "../../../logins/index.ts";
 import { token } from "../../../identities/index.ts";
 
@@ -32,8 +33,8 @@ function withinAddressLimit<Value, Failure, Needs>(
 ): Effect.Effect<Value, Failure | Refusal, Needs | AddressLimit | HttpServerRequest.HttpServerRequest> {
   return Effect.gen(function* admitAddressThenRun() {
     const limit = yield* AddressLimit;
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    yield* limit.admit(Option.getOrElse(request.remoteAddress, Function.constant("unknown")));
+    const address = yield* clientAddress;
+    yield* limit.admit(address);
     return yield* effect;
   });
 }
@@ -51,8 +52,10 @@ const startRoute: Route<AgentSessions | AddressLimit> = {
     withinAddressLimit(
       Effect.gen(function* startAgentJoinRequest() {
         const body = yield* HttpServerRequest.schemaBodyJson(StartAgentJoinRequestSchema, ALL_ERRORS);
+        const { headers } = yield* HttpServerRequest.HttpServerRequest;
+        const origin = requestOriginOf({ clientIp: yield* clientAddress, headers });
         const agentSessions = yield* AgentSessions;
-        const started = yield* agentSessions.startJoin(body);
+        const started = yield* agentSessions.startJoin({ ...body, ...origin });
         return yield* HttpServerResponse.schemaJson(AgentJoinRequestStartedResponseSchema)(started, {
           status: CREATED,
         });

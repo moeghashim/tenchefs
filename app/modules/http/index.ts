@@ -71,6 +71,8 @@ export const errorCodes = [
   "thread_moved",
   "thread_deleted",
   "attachment_not_found",
+  "login_expired",
+  "session_not_found",
   ...scheduledMessageErrorCodes,
   "not_found",
   "method_not_allowed",

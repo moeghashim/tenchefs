@@ -39,7 +39,12 @@ const UNIT_FILE = [".config", "systemd", "user", UNIT];
 
 const linux: Platform = {
   file: UNIT_FILE,
-  install: ["loginctl enable-linger", "systemctl --user daemon-reload", `systemctl --user enable --now ${UNIT}`],
+  install: [
+    "loginctl show-user 501 -p Linger",
+    "loginctl enable-linger",
+    "systemctl --user daemon-reload",
+    `systemctl --user enable --now ${UNIT}`,
+  ],
   name: "Linux",
   options: { osRelease: "6.8.0-45-generic\n", platform: "linux" },
   uninstall: [`systemctl --user disable --now ${UNIT}`, "systemctl --user daemon-reload"],
@@ -165,13 +170,13 @@ it.effect("the launchd plist runs at load, is kept alive, and logs to a file und
   }).pipe(Effect.provide(commandLineServices)),
 );
 
-it.effect("on WSL2, install prints the Windows logon task that starts WSL", () =>
+it.effect("on WSL2, install prints the admin logon task and the no-admin startup shortcut", () =>
   Effect.gen(function* logonTask() {
     const { result } = yield* installedOn(wsl.options, UNIT_FILE);
 
     expect(result).toMatchObject({ exitCode: EXIT_SUCCESS, stdoutJson: { platform: "wsl2" } });
-    expect(result.stdoutJson).toHaveProperty("windowsLogonTask");
-    expect(result.stdout).toContain("wsl.exe");
+    expect(result.stdout).toContain("Run as administrator, run: schtasks /create");
+    expect(result.stdout).toContain("shell:startup whose target is wsl.exe --exec sleep infinity");
   }).pipe(Effect.provide(commandLineServices)),
 );
 

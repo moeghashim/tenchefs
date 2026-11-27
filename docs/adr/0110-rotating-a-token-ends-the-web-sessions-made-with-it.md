@@ -1,5 +1,7 @@
 # Rotating a token ends the web sessions made with it
 
+Superseded on 2026-11-27 by [ADR 0153](0153-every-credential-records-what-made-it-and-revoking-one-revokes-what-it-made.md): rotating a token now revokes it and everything below it in the lineage, of any kind, and `made_with` became each session's parent.
+
 2026-11-25 (mattpocock/cookout#608). Supersedes the rotation part of [ADR 0103](0103-a-web-login-issues-its-own-login-credential.md): there, a web session survived a rotation of the identity's token, like any other Login credential. Matt decided otherwise on 2026-11-25 (board thread 4932, msg 4937, "Strongly agree"): rotating a token also ends every web session that was started with that token. Rotation is how a leaked token is shut out, so a web session made with the leaked token must end too.
 
 ## Decision

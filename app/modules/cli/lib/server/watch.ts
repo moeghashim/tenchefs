@@ -3,7 +3,7 @@ import { Command, Flag } from "effect/cli";
 import { Effect, Option, Stream } from "effect";
 import type { Heard, WatchedEvent } from "./watch-connection.ts";
 import { printLine, textLine } from "./watch-lines.ts";
-import { source, start } from "./watch-connection.ts";
+import { quietly, source, start } from "./watch-connection.ts";
 import { startUpLine, stopped, untilStopped } from "./watch-stages.ts";
 import type { AgentSessionStateNeeds } from "./agent-session-state.ts";
 import type { CommandFailed } from "./output.ts";
@@ -25,7 +25,7 @@ function printItems({
   stop,
 }: Watching): (opened: ClientWithAgentSessionState) => Effect.Effect<void, CallFailure> {
   return (opened) => {
-    const starting = { from: Option.none(), listening: { opened, runner: false } };
+    const starting = { from: Option.none(), listening: { onRetry: quietly, opened, runner: false } };
     return Effect.scoped(
       Effect.flatMap(start(starting), (first: Stream.Stream<readonly Heard[], CallFailure>) =>
         source({ ...starting, first }).pipe(

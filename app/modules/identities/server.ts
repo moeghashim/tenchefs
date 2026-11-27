@@ -1,12 +1,11 @@
 /**
- * Identities on the backend: bearer auth, issuing tokens,
- * the admin identity's token from the setting, `GET /v1/whoami` and the web UI's
- * session cookie. A token is
- * never stored: only its hash, made by `Secrets`, goes into `Storage`.
+ * Identities on the backend: bearer auth, issuing tokens, the admin identity's token from the setting, `GET /v1/whoami`
+ * and the web UI's session cookie. A token is never stored: only its hash, made by `Secrets`, goes into `Storage`.
  */
 import {
   AgentSessionSent,
   Caller,
+  CredentialSent,
   HarnessSent,
   LoginCredentialSent,
   WebhookCommandThread,
@@ -20,7 +19,17 @@ import { Context, Effect, Layer, Option, Schema } from "effect";
 import type { Credentials, IdentityChanges, IssuedToken, Principal } from "./lib/server/auth.ts";
 import type { Gate, Route } from "../http/server.ts";
 import type { IdentityName, Token } from "./index.ts";
-import { humanAdmin, identityAdminRoutes, loginRoutes, openLoginRoutes, responseSchemas } from "./lib/server/routes.ts";
+import {
+  humanAdmin,
+  identityAdminRoutes,
+  loginLinkRoutes,
+  loginRoutes,
+  now,
+  openLoginLinkRoutes,
+  openLoginRoutes,
+  responseSchemas,
+  sessionRoutes,
+} from "./lib/server/routes.ts";
 import { HttpServerRequest } from "effect/http";
 import type { Refusal } from "../http/index.ts";
 import { Secrets } from "../secrets/server.ts";
@@ -38,6 +47,16 @@ export { AgentSessionSent } from "./lib/server/auth.ts";
 /** The hash of the Login credential the request was sent with, if it was: a web session's cookie holds one (ADR 0103). */
 export { LoginCredentialSent } from "./lib/server/auth.ts";
 /**
+ * The hash of the credential the request was sent with, whatever its kind (Identity token, session, agent session):
+ * what the request makes (a session, an agent session, a join code, an approval) records it as its parent (ADR 0153).
+ */
+export { CredentialSent } from "./lib/server/auth.ts";
+/**
+ * Ends with `login_expired` once the request's Login credential has gone 90 days unused, for an open stream to end
+ * with; never for any other token.
+ */
+export { sentLoginCredentialEnded } from "./lib/server/login-ends.ts";
+/**
  * The one thread a request may reply in when it carries a command token, and none for any other token. `Messages`
  * posts such a request only as a reply in this thread.
  */
@@ -52,7 +71,8 @@ export type IdentitiesService = {
   /**
    * The identity behind a request's `Authorization` header or, without one, its session cookie, and for a command
    * token the thread of its call. An agent session token's use moves its expiry on. Refuses with 401 `token_missing`,
-   * `token_unknown`, `token_revoked`, `token_expired`, `agent_session_revoked` or `agent_session_expired`.
+   * `token_unknown`, `token_revoked`, `token_expired`, `login_expired`, `agent_session_revoked` or
+   * `agent_session_expired`. A Login credential's use moves its expiry on to 90 days later.
    */
   readonly authenticate: (credentials: Credentials) => Effect.Effect<Principal, Refusal | StorageUnavailable>;
   /** A new token and its hash. Creating an identity and rotating a token both issue one. */
@@ -77,10 +97,8 @@ export const identitiesLayer: Layer.Layer<Identities, never, Storage | Secrets> 
 );
 
 /**
- * The gate every route but `/v1/health` sits behind: authenticates the
- * request's bearer token or, without one, its session cookie, and provides
- * its identity as `Caller`. Refuses
- * with 401 `token_missing`, `token_unknown`, `token_revoked` or `token_expired`. A command token gets 403
+ * The gate every route but `/v1/health` sits behind: authenticates the request's bearer token or, without one, its
+ * session cookie, and provides its identity as `Caller`. Refuses with 401 `token_missing`, `token_unknown`, `token_revoked`, `token_expired` or `login_expired`. A command token gets 403
  * `outside_command_thread` on every route but `POST /v1/messages`, and its thread as `CommandThread`. A human's
  * token sent with `cookout-harness` gets 403 `agent_as_human` on every route but join (`POST /v1/agent-session`);
  * an agent's provides the tool as `HarnessSent`.
@@ -93,9 +111,8 @@ export const requireToken: Gate<
   Effect.gen(function* () {
     const identities = yield* Identities;
     const request = yield* HttpServerRequest.HttpServerRequest;
-    const { agentSession, identity, loginCredential, webhookCommandThread } = yield* identities.authenticate(
-      credentialsOf(request),
-    );
+    const { agentSession, credential, identity, loginCredential, webhookCommandThread } =
+      yield* identities.authenticate(credentialsOf(request));
     const harness = yield* harnessOf({ headers: request.headers, identity, target: request });
     if (Option.isSome(webhookCommandThread)) {
       yield* requireWebhookCommandRoute(request);
@@ -106,6 +123,7 @@ export const requireToken: Gate<
       Effect.provideService(HarnessSent, harness),
       Effect.provideService(AgentSessionSent, agentSession),
       Effect.provideService(LoginCredentialSent, loginCredential),
+      Effect.provideService(CredentialSent, Option.fromUndefinedOr(credential)),
     );
   });
 
@@ -126,7 +144,7 @@ export interface AdminSettings {
  * applied, and makes it an admin: it creates a human admin on a store without one, and gives it back its admin flag
  * if another admin removed it. `cookout serve` runs it at every boot with `COOKOUT_ADMIN_TOKEN` and
  * `COOKOUT_ADMIN_NAME` (Matt, 2026-11-23, mattpocock/cookout#85 and #107), so a token lost or leaked stops working,
- * with the web sessions made with it, once the setting changes and the server restarts. With the setting unchanged, a
+ * with every session below it (ADR 0153), once the setting changes and the server restarts. With the setting unchanged, a
  * token rotated since and its web sessions survive any number of restarts (ADR 0130). A new name leaves the identity
  * the token belonged to in place, still an admin, with no working token.
  *
@@ -149,7 +167,7 @@ export function adminTokenSet(
       const admin = yield* humanAdmin(adminName);
       const applied = yield* storage.applyAdminSetting(admin, hash);
       yield* Effect.when(
-        storage.revokeLoginCredentialsMadeWithRevokedTokens(admin.name),
+        Effect.flatMap(now, (at) => storage.revokeBelowRevokedTokens(admin.name, at)),
         Effect.succeed(applied === "applied"),
       );
       return yield* storage.setAdmin(admin.name, true);
@@ -159,25 +177,38 @@ export function adminTokenSet(
 
 /**
  * The identity routes, for the server's route list: whoami, logging the web
- * UI in and out, create, list and rotate, and making and removing admins. They need `Caller`, which
+ * UI in and out, create, list and rotate, making and removing admins, and listing and revoking a person's sessions
+ * (ADR 0153). They need `Caller`, which
  * `requireToken` provides.
  */
 export const identityRoutes: readonly Route<Caller | Storage | Secrets | IdentityChanges>[] = [
   ...callerRoutes,
   ...identityAdminRoutes,
   ...loginRoutes,
+  ...loginLinkRoutes,
+  ...sessionRoutes,
 ];
 
 /**
- * The routes that need no token: starting a login request and collecting it (ADR 0047). The server puts its
- * per-address request limit in front of them.
+ * The routes that need no token: starting a login request and collecting it (ADR 0047), and redeeming a login link
+ * (#912). The server puts its per-address request limit in front of them.
  */
-export const openIdentityRoutes: typeof openLoginRoutes = openLoginRoutes;
+export const openIdentityRoutes: typeof openLoginRoutes = [...openLoginRoutes, ...openLoginLinkRoutes];
 
 /**
- * The request limit of the address a request to one of `openIdentityRoutes` comes from: `Limits` provides it.
+ * The request limit of the client address a request to one of the no-token routes comes from (`Limits` provides it),
+ * and the step that takes one request from it.
  */
 export { AddressLimit } from "./lib/server/routes.ts";
+
+/**
+ * The client IP and User-Agent (its first 500 characters) a Login or agent join request starts from, to store with
+ * it (#905), from the request's client address and headers.
+ */
+export { requestOriginOf } from "./lib/server/login-support.ts";
+
+/** The wire fields of what a person sees about a Login or agent join request before Approve (#905). */
+export { approvalRequestDetailsFields } from "./lib/server/login-wire.ts";
 
 /** `PUT /v1/identities/:name/owner`, an admin transferring an agent to another human. It needs `Caller`. */
 export { transferRoutes } from "./lib/server/transfer.ts";
@@ -245,7 +276,12 @@ export { avatarRoutes } from "./lib/server/avatars.ts";
  * `identity` event. Deleting an identity publishes it on its own hub, which the live stream sends on as an
  * `identity-deleted` event.
  */
-export { IdentityChanges, THE_COOKOUT, identityChangesLayer } from "./lib/server/changes.ts";
+export {
+  IdentityChanges,
+  THE_COOKOUT,
+  endingsOf,
+  identityChangesLayer,
+} from "./lib/server/changes.ts";
 
 /**
  * Tokens a request just ended (`leave`, a revoke, a rotation, a deactivation), told through `IdentityChanges` so the

@@ -69,6 +69,7 @@ const DROP_ROWS = [
   "DELETE FROM tokens WHERE identity_name = ?",
   "DELETE FROM agent_session_tokens WHERE identity_name = ?",
   "DELETE FROM login_credentials WHERE identity_name = ?",
+  "DELETE FROM login_links WHERE identity_name = ?",
   "DELETE FROM login_requests WHERE approved_by = ?",
   "DELETE FROM message_mentions WHERE identity_name = ?",
   "DELETE FROM follows WHERE identity_name = ?",

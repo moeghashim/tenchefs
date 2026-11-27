@@ -82,7 +82,9 @@ it("a read position drops the items it covers from For you and the counts, and m
   }).toStrictEqual({ counts: { activity: 1, forYou: 0 }, earlier: [first.id], items: [second.id] });
 });
 
-it("a thread closing changes its Inbox entry and reads its Nudge", { timeout: 10_000 }, async () => {
+it("a thread closing changes its Inbox entry and takes its Nudge out, unread or under Earlier", {
+  timeout: 10_000,
+}, async () => {
   expect.hasAssertions();
 
   const { channel, reader } = await subscribedIn("web-inbox-closing");
@@ -93,10 +95,28 @@ it("a thread closing changes its Inbox entry and reads its Nudge", { timeout: 10
   hand.send({ parent: topLevel(closed), type: "thread" });
   const { items, nudges } = loadedInbox(store.snapshot());
 
-  expect({ closed: items.map((item) => typeof item.parent.closedAt), nudges }).toStrictEqual({
+  expect({
+    closed: items.map((item) => typeof item.parent.closedAt),
+    history: nudgesOf(store.snapshot()),
+    nudges,
+  }).toStrictEqual({
     closed: ["string"],
+    history: { nudges: [], status: "loaded" },
     nudges: [],
   });
+});
+
+it("a reply in a nudged thread takes its Nudge out, unread or under Earlier", { timeout: 10_000 }, async () => {
+  expect.hasAssertions();
+
+  const { channel, reader } = await subscribedIn("web-inbox-nudge-reply");
+  const parent = topLevel(await posted(channel.name));
+  const { hand, store } = await watching(reader);
+  hand.send(nudgeOn({ channel, parent }));
+  const { message } = await adminClient().createMessage({ channel: channel.name, replyTo: parent.id, text: "on it" });
+  hand.send({ message, type: "message" });
+
+  expect(nudgesOf(store.snapshot())).toStrictEqual({ nudges: [], status: "loaded" });
 });
 
 const deletions: readonly (readonly [string, Deleting])[] = [
